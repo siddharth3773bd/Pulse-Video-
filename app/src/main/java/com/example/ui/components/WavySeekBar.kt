@@ -6,10 +6,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -98,8 +97,7 @@ fun WavySeekBar(
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .minimumInteractiveComponentSize()
+            .height(48.dp)
             .semantics {
                 progressBarRangeInfo = ProgressBarRangeInfo(activeProgress, 0f..1f)
                 setProgress { targetValue ->
