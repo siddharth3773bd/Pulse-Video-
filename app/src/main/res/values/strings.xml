@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">Videos</string>
+    <string name="header_videos">Videos</string>
+    <string name="header_folders">Folders</string>
+    <string name="header_audio">Audio</string>
+    <string name="header_me">Me</string>
+    <string name="search_videos_placeholder">Search videos, folders, or series</string>
+    <string name="select_all">Select all</string>
+    <string name="deselect_all">Deselect all</string>
+    <string name="other_videos">Other Videos</string>
+    <string name="action_share">Share</string>
+    <string name="action_add_to">Add to</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_select">Select</string>
+    <string name="action_details">Details</string>
+    <string name="action_close">Close</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_copy">Copy</string>
+    <string name="smart_groups_title">Smart Groups</string>
+    <string name="smart_groups_subtitle">Auto-bundle series &amp; sort episodes</string>
+    <string name="view_mode_label">View mode</string>
+    <string name="layout_label">Layout</string>
+    <string name="sort_label">Sort</string>
+    <string name="dynamic_color_seed">Dynamic Color Seed</string>
+    <string name="amoled_pure_black">AMOLED Pure Black</string>
+    <string name="amoled_pure_black_desc">Force background and surface to pure black in dark mode</string>
+    <string name="show_resolution">Show Resolution</string>
+    <string name="show_resolution_desc">Show 8K, 4K, 1440p, 1080p, 720p, SD badge</string>
+    <string name="add_to_playlist">Add to playlist</string>
+    <string name="rename_video">Rename video</string>
+</resources>

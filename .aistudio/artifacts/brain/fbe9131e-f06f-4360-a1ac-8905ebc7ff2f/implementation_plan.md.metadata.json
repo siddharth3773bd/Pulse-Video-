@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan for replacing the unnatural Material LinearWavyProgressIndicator seek bar with an Echo Music / Android 16 style continuous sine-wave Canvas WavySeekBar featuring smooth amplitude flattening on pause, phase freezing, a symmetric gap around the tall vertical pill stick handle, and replacing the stacked bars in the Audio mini-player while leaving all settings sliders untouched.",
+  "updatedAt":  "2026-10-23T22:52:14.095205502Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
