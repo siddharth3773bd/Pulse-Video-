@@ -38,7 +38,9 @@ data class AudioPlaybackState(
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
-    val isEnded: Boolean = false
+    val isEnded: Boolean = false,
+    val shuffleEnabled: Boolean = false,
+    val repeatMode: Int = Player.REPEAT_MODE_OFF
 )
 
 class AudioPlaybackManager private constructor(context: Context) {
@@ -162,8 +164,8 @@ class AudioPlaybackManager private constructor(context: Context) {
             }
 
             withController { controller ->
-                controller.repeatMode = Player.REPEAT_MODE_OFF
-                controller.shuffleModeEnabled = shuffle
+                // Keep the user's repeat / shuffle choice; only force shuffle on when asked to.
+                if (shuffle) controller.shuffleModeEnabled = true
                 controller.setMediaItems(initialMediaItems, safeStartIndex, 0L)
                 controller.prepare()
                 controller.play()
@@ -278,6 +280,25 @@ class AudioPlaybackManager private constructor(context: Context) {
         }
     }
 
+    fun toggleShuffle() {
+        withController { controller ->
+            controller.shuffleModeEnabled = !controller.shuffleModeEnabled
+            syncFromController()
+        }
+    }
+
+    /** Cycles repeat: off -> repeat all -> repeat one -> off. */
+    fun cycleRepeat() {
+        withController { controller ->
+            controller.repeatMode = when (controller.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
+            syncFromController()
+        }
+    }
+
     fun pause() {
         mediaController?.let { controller ->
             if (controller.isPlaying || controller.playWhenReady) {
@@ -378,7 +399,9 @@ class AudioPlaybackManager private constructor(context: Context) {
                 isPlaying = controller.isPlaying,
                 positionMs = pos,
                 durationMs = dur,
-                isEnded = ended
+                isEnded = ended,
+                shuffleEnabled = controller.shuffleModeEnabled,
+                repeatMode = controller.repeatMode
             )
         }
     }

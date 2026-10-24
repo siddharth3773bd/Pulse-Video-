@@ -29,6 +29,14 @@ enum class LibraryTab(val id: String, val label: String) {
         }
 }
 
+/** Buttons that can sit in the bottom tray of the Now Playing screen. */
+enum class NowPlayingAction(val id: String, val label: String) {
+    SHUFFLE("shuffle", "Shuffle"),
+    REPEAT("repeat", "Repeat"),
+    LYRICS("lyrics", "Lyrics"),
+    INFO("info", "Song info")
+}
+
 enum class LibraryNavMode(val id: String) {
     TAB_ROW("tab_row"),
     COMPACT("compact")
@@ -50,8 +58,15 @@ data class LibraryPreferences(
     val navMode: LibraryNavMode = LibraryNavMode.TAB_ROW,
     val songSort: LibrarySongSort = LibrarySongSort.DEFAULT,
     val songAscending: Boolean = true,
-    val groupAscending: Boolean = true
+    val groupAscending: Boolean = true,
+    val trayOrder: List<NowPlayingAction> = NowPlayingAction.entries,
+    val hiddenTray: Set<NowPlayingAction> = emptySet(),
+    val likedIds: Set<String> = emptySet()
 ) {
+    /** Tray buttons in the user's order with hidden ones removed. */
+    val visibleTray: List<NowPlayingAction>
+        get() = trayOrder.filter { it !in hiddenTray }
+
     /** Tabs in the user's order with hidden ones removed. Never empty. */
     val visibleTabs: List<LibraryTab>
         get() = tabOrder.filter { it !in hiddenTabs }.ifEmpty { listOf(tabOrder.firstOrNull() ?: LibraryTab.SONGS) }

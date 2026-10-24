@@ -62,6 +62,7 @@ import com.example.model.LibraryNavMode
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
+import com.example.model.NowPlayingAction
 import com.example.ui.theme.LocalM3Palette
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import kotlinx.coroutines.Dispatchers
@@ -128,6 +129,7 @@ fun LibrarySettingsSheet(
     navMode: LibraryNavMode,
     onOpenNavigation: () -> Unit,
     onOpenManageTabs: () -> Unit,
+    onOpenTray: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val palette = LocalM3Palette.current
@@ -194,6 +196,147 @@ fun LibrarySettingsSheet(
                     color = palette.onSurfaceVariant,
                     fontFamily = PlusJakartaSansFontFamily,
                     fontSize = 13.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Surface(
+            onClick = onOpenTray,
+            shape = RoundedCornerShape(24.dp),
+            color = palette.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = "Now Playing buttons",
+                    color = palette.onSurface,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Choose and reorder the buttons in the bottom tray.",
+                    color = palette.onSurfaceVariant,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Now Playing tray buttons
+// ---------------------------------------------------------------------------------------------
+
+@Composable
+fun NowPlayingTraySheet(
+    order: List<NowPlayingAction>,
+    hidden: Set<NowPlayingAction>,
+    onChange: (List<NowPlayingAction>, Set<NowPlayingAction>) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val palette = LocalM3Palette.current
+    LibrarySheet(onDismiss = onDismiss) {
+        SheetTitle(
+            title = "Now Playing buttons",
+            subtitle = "Use the arrows to reorder. Switch buttons on or off. The tray holds up to 5 buttons."
+        )
+
+        order.forEachIndexed { index, action ->
+            val isVisible = action !in hidden
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = palette.surfaceContainerHigh,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        IconButton(
+                            onClick = {
+                                if (index > 0) {
+                                    val next = order.toMutableList()
+                                    val moved = next.removeAt(index)
+                                    next.add(index - 1, moved)
+                                    onChange(next, hidden)
+                                }
+                            },
+                            enabled = index > 0,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Move ${action.label} up",
+                                tint = palette.onSurfaceVariant.copy(alpha = if (index > 0) 1f else 0.3f)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                if (index < order.lastIndex) {
+                                    val next = order.toMutableList()
+                                    val moved = next.removeAt(index)
+                                    next.add(index + 1, moved)
+                                    onChange(next, hidden)
+                                }
+                            },
+                            enabled = index < order.lastIndex,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Move ${action.label} down",
+                                tint = palette.onSurfaceVariant.copy(alpha = if (index < order.lastIndex) 1f else 0.3f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = nowPlayingActionIcon(action),
+                        contentDescription = null,
+                        tint = palette.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = action.label,
+                        color = palette.onSurface,
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = isVisible,
+                        onCheckedChange = { checked ->
+                            val nextHidden = if (checked) hidden - action else hidden + action
+                            onChange(order, nextHidden)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedTrackColor = palette.primary,
+                            checkedThumbColor = palette.onPrimary
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onReset) {
+                Text(
+                    text = "Reset to default",
+                    color = palette.primary,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
@@ -563,6 +706,14 @@ fun LibrarySortSheet(
 // ---------------------------------------------------------------------------------------------
 
 private data class AudioTech(val sampleRateHz: Int?, val bitrateBps: Int?)
+
+/** "48.0 kHz • 320 kbps • MP3" style label for the Now Playing screen. */
+suspend fun audioTechLabel(context: Context, track: AudioTrackItem): String {
+    val tech = readAudioTech(context, track.contentUri)
+    val rate = tech.sampleRateHz?.let { String.format(Locale.US, "%.1f kHz", it / 1000.0) }
+    val kbps = tech.bitrateBps?.let { "${it / 1000} kbps" }
+    return listOfNotNull(rate, kbps, track.ext.uppercase(Locale.US)).joinToString(" • ")
+}
 
 private suspend fun readAudioTech(context: Context, uri: Uri): AudioTech = withContext(Dispatchers.IO) {
     val extractor = MediaExtractor()

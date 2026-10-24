@@ -28,6 +28,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -107,6 +109,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -151,6 +155,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import com.example.data.MediaStoreScanner
+import com.example.ui.components.SongInfoSheet
+import com.example.ui.components.NowPlayingScreen
+import com.example.ui.components.AudioMiniPlayer
+import com.example.player.AudioPlaybackManager
+import com.example.model.LibraryPreferences
+import com.example.model.AudioTrackItem
+import com.example.data.AppPreferencesRepository
 import com.example.model.BottomTab
 import com.example.model.LayoutMode
 import com.example.model.MeSubPage
@@ -424,6 +435,25 @@ fun Material3VideoPlayerScreen(
     val contentGraphicsLayer = rememberGraphicsLayer()
     val pullToRefreshState = rememberPullToRefreshState()
 
+    // ---- Audio: mini player pill + Now Playing screen ----
+    val audioManager = remember(context) { AudioPlaybackManager.getInstance(context) }
+    val audioState by audioManager.state.collectAsStateWithLifecycle()
+    val libraryPrefs by remember(context) {
+        AppPreferencesRepository.observeLibraryPreferences(context)
+    }.collectAsStateWithLifecycle(initialValue = LibraryPreferences())
+    val audioUiScope = rememberCoroutineScope()
+    val miniTrack = uiState.playingAudio
+    var showNowPlaying by rememberSaveable { mutableStateOf(false) }
+    var nowPlayingInfoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
+    var lastNowPlayingTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
+    LaunchedEffect(miniTrack) {
+        if (miniTrack != null) {
+            lastNowPlayingTrack = miniTrack
+        } else {
+            showNowPlaying = false
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -539,6 +569,7 @@ fun Material3VideoPlayerScreen(
                                     audioProgress = uiState.audioProgress,
                                     amoledBlack = effectiveAmoled,
                                     headerBackground = outerChromeBg,
+                                    extraBottomPadding = if (uiState.playingAudio != null) 84.dp else 0.dp,
                                     onPlayQueue = { queue, startIndex, shuffle ->
                                         runWithNotificationPermissionCheck {
                                             viewModel.playAudioQueue(context, queue, startIndex, shuffle)
@@ -714,6 +745,71 @@ fun Material3VideoPlayerScreen(
                     onSetTabActive = { tab, active -> viewModel.setTabActive(tab, active, context) }
                 )
             }
+        }
+
+        // 3b. Pill mini player (Audio tab) above the floating navigation pill
+        if (uiState.bottomTab == BottomTab.AUDIO &&
+            uiState.hasAudioPermission &&
+            miniTrack != null &&
+            !showNowPlaying &&
+            !uiState.isSelectionMode &&
+            !uiState.isPillEditMode
+        ) {
+            AudioMiniPlayer(
+                track = miniTrack,
+                isPlaying = uiState.isAudioPlaying,
+                onOpen = { showNowPlaying = true },
+                onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
+                onSkipPrevious = { viewModel.skipAudioPrevious() },
+                onSkipNext = { viewModel.skipAudioNext() },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 96.dp)
+            )
+        }
+
+        // 3c. Now Playing screen (slides up over everything except the video player)
+        AnimatedVisibility(
+            visible = showNowPlaying && miniTrack != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val nowTrack = miniTrack ?: lastNowPlayingTrack
+            if (nowTrack != null) {
+                NowPlayingScreen(
+                    track = nowTrack,
+                    isPlaying = uiState.isAudioPlaying,
+                    positionMs = audioState.positionMs,
+                    durationMs = audioState.durationMs,
+                    shuffleEnabled = audioState.shuffleEnabled,
+                    repeatMode = audioState.repeatMode,
+                    liked = nowTrack.id in libraryPrefs.likedIds,
+                    trayActions = libraryPrefs.visibleTray,
+                    onClose = { showNowPlaying = false },
+                    onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
+                    onSeekTo = { viewModel.seekAudio(it) },
+                    onSkipPrevious = { viewModel.skipAudioPrevious() },
+                    onSkipNext = { viewModel.skipAudioNext() },
+                    onToggleShuffle = { audioManager.toggleShuffle() },
+                    onCycleRepeat = { audioManager.cycleRepeat() },
+                    onToggleLike = {
+                        val liked = nowTrack.id in libraryPrefs.likedIds
+                        audioUiScope.launch {
+                            AppPreferencesRepository.setTrackLiked(context, nowTrack.id, !liked)
+                        }
+                    },
+                    onOpenInfo = { nowPlayingInfoTrack = nowTrack },
+                    onLyrics = {
+                        android.widget.Toast.makeText(context, "Lyrics are coming soon", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+        }
+
+        nowPlayingInfoTrack?.let { infoTrack ->
+            SongInfoSheet(track = infoTrack, onDismiss = { nowPlayingInfoTrack = null })
         }
 
         // 4. Overlays, Menus, Bottom Sheets & Dialogs

@@ -73,6 +73,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -92,6 +94,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.AppPreferencesRepository
@@ -100,11 +103,15 @@ import com.example.model.LibraryNavMode
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
+import com.example.model.NowPlayingAction
 import com.example.ui.theme.LocalM3Palette
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import kotlinx.coroutines.launch
 
-private enum class LibrarySheetType { SETTINGS, NAV_MODE, MANAGE, JUMP, SORT }
+private enum class LibrarySheetType { SETTINGS, NAV_MODE, MANAGE, JUMP, SORT, TRAY }
+
+/** Bottom padding of every list so the last rows scroll above the nav pill (and the mini player). */
+private val LocalLibraryBottomPadding = compositionLocalOf { 132.dp }
 
 private data class AlbumGroup(
     val key: String,
@@ -198,7 +205,8 @@ fun AudioLibraryScreen(
     onSeekAudio: (Float) -> Unit,
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    extraBottomPadding: Dp = 0.dp
 ) {
     val palette = LocalM3Palette.current
     val context = LocalContext.current
@@ -292,6 +300,7 @@ fun AudioLibraryScreen(
         }
     }
 
+    CompositionLocalProvider(LocalLibraryBottomPadding provides (132.dp + extraBottomPadding)) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -322,7 +331,7 @@ fun AudioLibraryScreen(
                         showSort = showSort,
                         onShuffle = {
                             val pool = currentDetailTracks ?: sortedSongs
-                            if (pool.isNotEmpty()) onPlayQueue(pool, 0, true)
+                            if (pool.isNotEmpty()) onPlayQueue(pool, pool.indices.random(), true)
                         },
                         onSort = { sheet = LibrarySheetType.SORT }
                     )
@@ -371,6 +380,34 @@ fun AudioLibraryScreen(
                                     onSkipNext = onSkipNext
                                 )
                             }
+                            tab == LibraryTab.LIKED -> {
+                                val likedSongs = remember(sortedSongs, prefs.likedIds) {
+                                    sortedSongs.filter { it.id in prefs.likedIds }
+                                }
+                                if (likedSongs.isEmpty()) {
+                                    LibraryEmptyState(
+                                        icon = tab.icon,
+                                        title = "No liked songs yet",
+                                        subtitle = "Tap the heart on the Now Playing screen to like a song."
+                                    )
+                                } else {
+                                    SongsList(
+                                        songs = likedSongs,
+                                        playingAudio = playingAudio,
+                                        isAudioPlaying = isAudioPlaying,
+                                        audioProgress = audioProgress,
+                                        showNowPlayingCard = false,
+                                        rowColor = rowColor,
+                                        cardColor = palette.surfaceContainerHigh,
+                                        onPlay = playFromList,
+                                        onMore = { infoTrack = it },
+                                        onTogglePlayPause = onTogglePlayPause,
+                                        onSeekAudio = onSeekAudio,
+                                        onSkipPrevious = onSkipPrevious,
+                                        onSkipNext = onSkipNext
+                                    )
+                                }
+                            }
                             tab == LibraryTab.ALBUMS -> {
                                 AlbumsGrid(
                                     albums = albums,
@@ -414,6 +451,7 @@ fun AudioLibraryScreen(
             }
         }
     }
+    }
 
     // ---- Sheets -------------------------------------------------------------------------
     val saveTabs: (List<LibraryTab>, Set<LibraryTab>) -> Unit = { order, hidden ->
@@ -425,6 +463,20 @@ fun AudioLibraryScreen(
             navMode = prefs.navMode,
             onOpenNavigation = { sheet = LibrarySheetType.NAV_MODE },
             onOpenManageTabs = { sheet = LibrarySheetType.MANAGE },
+            onOpenTray = { sheet = LibrarySheetType.TRAY },
+            onDismiss = { sheet = null }
+        )
+        LibrarySheetType.TRAY -> NowPlayingTraySheet(
+            order = prefs.trayOrder,
+            hidden = prefs.hiddenTray,
+            onChange = { order, hidden ->
+                scope.launch { AppPreferencesRepository.updateLibraryTray(context, order, hidden) }
+            },
+            onReset = {
+                scope.launch {
+                    AppPreferencesRepository.updateLibraryTray(context, NowPlayingAction.entries, emptySet())
+                }
+            },
             onDismiss = { sheet = null }
         )
         LibrarySheetType.NAV_MODE -> LibraryNavigationSheet(
@@ -802,23 +854,9 @@ private fun SongsList(
         modifier = Modifier
             .fillMaxSize()
             .testTag("audio_library_view"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 132.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = LocalLibraryBottomPadding.current),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        if (showNowPlayingCard && playingAudio != null) {
-            item(key = "now_playing_card") {
-                NowPlayingCard(
-                    track = playingAudio,
-                    isPlaying = isAudioPlaying,
-                    progress = audioProgress,
-                    cardColor = cardColor,
-                    onTogglePlayPause = onTogglePlayPause,
-                    onSeekAudio = onSeekAudio,
-                    onSkipPrevious = onSkipPrevious,
-                    onSkipNext = onSkipNext
-                )
-            }
-        }
         itemsIndexed(songs, key = { _, t -> t.id }) { index, track ->
             val selected = playingAudio?.id == track.id
             SongRow(
@@ -828,119 +866,6 @@ private fun SongsList(
                 rowColor = rowColor,
                 onClick = { onPlay(songs, index) },
                 onMore = { onMore(track) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun NowPlayingCard(
-    track: AudioTrackItem,
-    isPlaying: Boolean,
-    progress: Float,
-    cardColor: Color,
-    onTogglePlayPause: () -> Unit,
-    onSeekAudio: (Float) -> Unit,
-    onSkipPrevious: () -> Unit,
-    onSkipNext: () -> Unit
-) {
-    val palette = LocalM3Palette.current
-    Card(
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 10.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(MaterialShapes.SoftBurst.toShape())
-                        .background(palette.secondaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.GraphicEq,
-                        contentDescription = "Now playing",
-                        tint = palette.onSecondaryContainer,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = track.title,
-                        color = palette.onSurface,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${track.artist} · ${track.album}",
-                        color = palette.onSurfaceVariant,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                IconButton(
-                    onClick = onSkipPrevious,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Previous",
-                        tint = palette.onSurface
-                    )
-                }
-                FilledIconToggleButton(
-                    checked = isPlaying,
-                    onCheckedChange = { onTogglePlayPause() },
-                    shapes = IconButtonDefaults.toggleableShapes(),
-                    colors = IconButtonDefaults.filledIconToggleButtonColors(
-                        containerColor = palette.secondaryContainer,
-                        contentColor = palette.onSecondaryContainer,
-                        checkedContainerColor = palette.primary,
-                        checkedContentColor = palette.onPrimary
-                    ),
-                    modifier = Modifier
-                        .size(48.dp)
-                        .minimumInteractiveComponentSize()
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause audio" else "Play audio"
-                    )
-                }
-                IconButton(
-                    onClick = onSkipNext,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Next",
-                        tint = palette.onSurface
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            WavySeekBar(
-                progress = progress.coerceIn(0f, 1f),
-                onSeekPreview = {},
-                onSeekFinished = onSeekAudio,
-                isPlaying = isPlaying,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("audio_seek_slider")
             )
         }
     }
@@ -961,9 +886,20 @@ private fun SongRow(
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "songRowBg"
     )
+    // The selected (current) song turns into a rounder "pill" with a circular cover.
+    val rowCorner by animateDpAsState(
+        targetValue = if (selected) 40.dp else 20.dp,
+        animationSpec = tween(260),
+        label = "songRowCorner"
+    )
+    val artCorner by animateDpAsState(
+        targetValue = if (selected) 25.dp else 12.dp,
+        animationSpec = tween(260),
+        label = "songArtCorner"
+    )
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(rowCorner),
         color = cardBg,
         modifier = Modifier
             .fillMaxWidth()
@@ -978,7 +914,7 @@ private fun SongRow(
                 placeholderBackground = palette.surfaceContainerHighest,
                 placeholderTint = palette.primary,
                 modifier = Modifier.size(50.dp),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(artCorner)
             )
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -1100,7 +1036,7 @@ private fun AlbumsGrid(
         modifier = Modifier
             .fillMaxSize()
             .testTag("library_albums_grid"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 132.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = LocalLibraryBottomPadding.current),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -1164,7 +1100,7 @@ private fun ArtistsList(
         modifier = Modifier
             .fillMaxSize()
             .testTag("library_artists_list"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 132.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = LocalLibraryBottomPadding.current),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(artists, key = { it.key }) { artist ->
@@ -1233,7 +1169,7 @@ private fun FoldersList(
         modifier = Modifier
             .fillMaxSize()
             .testTag("library_folders_list"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 132.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = LocalLibraryBottomPadding.current),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(folders, key = { it.key }) { folder ->

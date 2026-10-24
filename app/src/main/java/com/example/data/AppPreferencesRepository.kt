@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.model.BottomTab
 import com.example.model.DecoderMode
@@ -15,6 +16,7 @@ import com.example.model.LibraryNavMode
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
+import com.example.model.NowPlayingAction
 import com.example.model.MAX_HISTORY_ITEMS
 import com.example.model.PlaybackSettings
 import com.example.model.PlaylistItem
@@ -84,6 +86,9 @@ object AppPreferencesRepository {
     private val KEY_LIB_SONG_SORT = stringPreferencesKey("lib_song_sort")
     private val KEY_LIB_SONG_ASC = booleanPreferencesKey("lib_song_asc")
     private val KEY_LIB_GROUP_ASC = booleanPreferencesKey("lib_group_asc")
+    private val KEY_LIB_TRAY_ORDER = stringPreferencesKey("lib_tray_order")
+    private val KEY_LIB_TRAY_HIDDEN = stringPreferencesKey("lib_tray_hidden")
+    private val KEY_LIB_LIKED_IDS = stringSetPreferencesKey("lib_liked_ids")
 
     // Playlists & History
     private val KEY_PLAYLISTS_JSON = stringPreferencesKey("playlists_json")
@@ -158,13 +163,27 @@ object AppPreferencesRepository {
                 .orEmpty()
             // At least one tab must stay visible.
             val safeHidden = if (order.all { it in hidden }) emptySet() else hidden
+            val savedTray = prefs[KEY_LIB_TRAY_ORDER]
+                ?.split(",")
+                ?.mapNotNull { id -> NowPlayingAction.entries.find { it.id == id.trim() } }
+                ?.distinct()
+                .orEmpty()
+            val trayOrder = savedTray + NowPlayingAction.entries.filter { it !in savedTray }
+            val trayHidden = prefs[KEY_LIB_TRAY_HIDDEN]
+                ?.split(",")
+                ?.mapNotNull { id -> NowPlayingAction.entries.find { it.id == id.trim() } }
+                ?.toSet()
+                .orEmpty()
             LibraryPreferences(
                 tabOrder = order,
                 hiddenTabs = safeHidden,
                 navMode = LibraryNavMode.entries.find { it.id == prefs[KEY_LIB_NAV_MODE] } ?: LibraryNavMode.TAB_ROW,
                 songSort = LibrarySongSort.entries.find { it.id == prefs[KEY_LIB_SONG_SORT] } ?: LibrarySongSort.DEFAULT,
                 songAscending = prefs[KEY_LIB_SONG_ASC] ?: true,
-                groupAscending = prefs[KEY_LIB_GROUP_ASC] ?: true
+                groupAscending = prefs[KEY_LIB_GROUP_ASC] ?: true,
+                trayOrder = trayOrder,
+                hiddenTray = trayHidden,
+                likedIds = prefs[KEY_LIB_LIKED_IDS] ?: emptySet()
             )
         }
     }
@@ -174,6 +193,20 @@ object AppPreferencesRepository {
         context.appDataStore.edit {
             it[KEY_LIB_TAB_ORDER] = order.joinToString(",") { tab -> tab.id }
             it[KEY_LIB_HIDDEN_TABS] = safeHidden.joinToString(",") { tab -> tab.id }
+        }
+    }
+
+    suspend fun updateLibraryTray(context: Context, order: List<NowPlayingAction>, hidden: Set<NowPlayingAction>) {
+        context.appDataStore.edit {
+            it[KEY_LIB_TRAY_ORDER] = order.joinToString(",") { action -> action.id }
+            it[KEY_LIB_TRAY_HIDDEN] = hidden.joinToString(",") { action -> action.id }
+        }
+    }
+
+    suspend fun setTrackLiked(context: Context, trackId: String, liked: Boolean) {
+        context.appDataStore.edit {
+            val current = it[KEY_LIB_LIKED_IDS] ?: emptySet()
+            it[KEY_LIB_LIKED_IDS] = if (liked) current + trackId else current - trackId
         }
     }
 
