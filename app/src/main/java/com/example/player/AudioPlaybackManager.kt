@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.os.Bundle
+import android.os.SystemClock
 import android.os.Build
 import android.util.LruCache
 import android.util.Size
@@ -40,7 +41,11 @@ data class AudioPlaybackState(
     val durationMs: Long = 0L,
     val isEnded: Boolean = false,
     val shuffleEnabled: Boolean = false,
-    val repeatMode: Int = Player.REPEAT_MODE_OFF
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    /** Time left on the sleep timer in ms, 0 when no countdown is running. */
+    val sleepTimerRemainingMs: Long = 0L,
+    /** True when playback should pause at the end of the current song. */
+    val sleepAtEndOfSong: Boolean = false
 )
 
 class AudioPlaybackManager private constructor(context: Context) {
@@ -60,12 +65,23 @@ class AudioPlaybackManager private constructor(context: Context) {
 
     private val tracksById = LinkedHashMap<String, AudioTrackItem>()
 
+    // Sleep timer: lives here (not in the UI) so it keeps counting while the screen is off.
+    private var sleepTimerEndAtMs: Long = 0L
+    private var sleepAtEndOfSongArmed: Boolean = false
+
     private val artworkCache = object : LruCache<String, ByteArray>(60) {
         override fun sizeOf(key: String, value: ByteArray): Int = 1
     }
 
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // "End of song" sleep timer: the song finished on its own, so stop here.
+            if (sleepAtEndOfSongArmed &&
+                (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                    reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
+            ) {
+                fireSleepTimer(seekToStart = true)
+            }
             syncFromController()
         }
 
@@ -325,6 +341,8 @@ class AudioPlaybackManager private constructor(context: Context) {
             } catch (_: Throwable) {
             }
         }
+        sleepTimerEndAtMs = 0L
+        sleepAtEndOfSongArmed = false
         _state.value = AudioPlaybackState()
     }
 
@@ -369,10 +387,69 @@ class AudioPlaybackManager private constructor(context: Context) {
         positionPollJob?.cancel()
         positionPollJob = scope.launch {
             while (isActive) {
+                checkSleepTimer()
                 syncFromController()
                 delay(250L)
             }
         }
+    }
+
+    /** Starts a countdown; playback pauses when it reaches zero. Replaces any running timer. */
+    fun startSleepTimer(minutes: Int) {
+        val safeMinutes = minutes.coerceIn(1, 24 * 60)
+        sleepAtEndOfSongArmed = false
+        sleepTimerEndAtMs = SystemClock.elapsedRealtime() + safeMinutes * 60_000L
+        _state.update {
+            it.copy(sleepTimerRemainingMs = safeMinutes * 60_000L, sleepAtEndOfSong = false)
+        }
+        ensureControllerConnected()
+    }
+
+    /** Pauses playback when the current song ends. Replaces any running countdown. */
+    fun startSleepAtEndOfSong() {
+        sleepTimerEndAtMs = 0L
+        sleepAtEndOfSongArmed = true
+        _state.update { it.copy(sleepTimerRemainingMs = 0L, sleepAtEndOfSong = true) }
+        ensureControllerConnected()
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerEndAtMs = 0L
+        sleepAtEndOfSongArmed = false
+        _state.update { it.copy(sleepTimerRemainingMs = 0L, sleepAtEndOfSong = false) }
+    }
+
+    private fun checkSleepTimer() {
+        if (sleepTimerEndAtMs > 0L) {
+            val remaining = sleepTimerEndAtMs - SystemClock.elapsedRealtime()
+            if (remaining <= 0L) {
+                fireSleepTimer(seekToStart = false)
+            } else {
+                _state.update { it.copy(sleepTimerRemainingMs = remaining) }
+            }
+        }
+        if (sleepAtEndOfSongArmed) {
+            val controller = mediaController ?: return
+            val dur = controller.duration
+            if (controller.playbackState == Player.STATE_ENDED ||
+                (dur > 0L && controller.currentPosition >= dur - 300L)
+            ) {
+                fireSleepTimer(seekToStart = false)
+            }
+        }
+    }
+
+    private fun fireSleepTimer(seekToStart: Boolean) {
+        sleepTimerEndAtMs = 0L
+        sleepAtEndOfSongArmed = false
+        mediaController?.let { controller ->
+            try {
+                controller.pause()
+                if (seekToStart) controller.seekTo(0L)
+            } catch (_: Throwable) {
+            }
+        }
+        _state.update { it.copy(sleepTimerRemainingMs = 0L, sleepAtEndOfSong = false, isPlaying = false) }
     }
 
     private fun syncFromController() {
