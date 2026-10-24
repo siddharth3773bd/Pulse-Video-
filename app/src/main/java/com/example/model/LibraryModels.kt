@@ -34,7 +34,7 @@ enum class NowPlayingAction(val id: String, val label: String) {
     SHUFFLE("shuffle", "Shuffle"),
     REPEAT("repeat", "Repeat"),
     LYRICS("lyrics", "Lyrics"),
-    INFO("info", "Song info")
+    SLEEP("sleep", "Sleep timer")
 }
 
 enum class LibraryNavMode(val id: String) {
