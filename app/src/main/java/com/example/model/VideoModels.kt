@@ -48,7 +48,11 @@ data class AudioTrackItem(
     val durationLabel: String,
     val sizeBytes: Long,
     val sizeMB: Double,
-    val folder: String
+    val folder: String,
+    val albumId: Long = 0L,
+    val artistId: Long = 0L,
+    val dateAddedSec: Long = 0L,
+    val path: String = ""
 )
 
 @Immutable

@@ -158,7 +158,7 @@ import com.example.model.ThemeMode
 import com.example.model.VideoItem
 import com.example.model.ViewMode
 import com.example.ui.components.AddToPlaylistDialog
-import com.example.ui.components.AudioLibraryView
+import com.example.ui.components.AudioLibraryScreen
 import com.example.ui.components.ColorOsDetailsSheet
 import com.example.ui.components.ColorOsFloatingMenuOverlay
 import com.example.ui.components.ColorOsRenameDialog
@@ -443,7 +443,8 @@ fun Material3VideoPlayerScreen(
                 }
         ) {
             // 1. Top Header Bar (hidden when inside a Me sub-page, as each sub-page has its own Expressive header)
-            val hideMainHeader = uiState.bottomTab == BottomTab.ME && uiState.meSubPage != MeSubPage.NONE
+            val hideMainHeader = (uiState.bottomTab == BottomTab.ME && uiState.meSubPage != MeSubPage.NONE) ||
+                (uiState.bottomTab == BottomTab.AUDIO && uiState.hasAudioPermission)
             if (!hideMainHeader) {
                 M3ExpressiveHeader(
                     uiState = uiState,
@@ -531,19 +532,22 @@ fun Material3VideoPlayerScreen(
                                     }
                                 )
                             } else {
-                                AudioLibraryView(
+                                AudioLibraryScreen(
                                     tracks = uiState.audioTracks,
                                     playingAudio = uiState.playingAudio,
                                     isAudioPlaying = uiState.isAudioPlaying,
                                     audioProgress = uiState.audioProgress,
                                     amoledBlack = effectiveAmoled,
-                                    onPlayTrack = { track ->
+                                    headerBackground = outerChromeBg,
+                                    onPlayQueue = { queue, startIndex, shuffle ->
                                         runWithNotificationPermissionCheck {
-                                            viewModel.playAudioTrack(context, track)
+                                            viewModel.playAudioQueue(context, queue, startIndex, shuffle)
                                         }
                                     },
                                     onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
-                                    onSeekAudio = { viewModel.seekAudio(it) }
+                                    onSeekAudio = { viewModel.seekAudio(it) },
+                                    onSkipPrevious = { viewModel.skipAudioPrevious() },
+                                    onSkipNext = { viewModel.skipAudioNext() }
                                 )
                             }
                         }

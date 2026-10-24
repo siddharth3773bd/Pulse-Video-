@@ -11,6 +11,10 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.example.model.BottomTab
 import com.example.model.DecoderMode
 import com.example.model.LayoutMode
+import com.example.model.LibraryNavMode
+import com.example.model.LibraryPreferences
+import com.example.model.LibrarySongSort
+import com.example.model.LibraryTab
 import com.example.model.MAX_HISTORY_ITEMS
 import com.example.model.PlaybackSettings
 import com.example.model.PlaylistItem
@@ -73,6 +77,14 @@ object AppPreferencesRepository {
     private val KEY_DEFAULT_DECODER = stringPreferencesKey("pb_default_decoder")
     private val KEY_SHOW_REMAINING_TIME = booleanPreferencesKey("pb_show_remaining_time")
 
+    // Audio Library screen
+    private val KEY_LIB_TAB_ORDER = stringPreferencesKey("lib_tab_order")
+    private val KEY_LIB_HIDDEN_TABS = stringPreferencesKey("lib_hidden_tabs")
+    private val KEY_LIB_NAV_MODE = stringPreferencesKey("lib_nav_mode")
+    private val KEY_LIB_SONG_SORT = stringPreferencesKey("lib_song_sort")
+    private val KEY_LIB_SONG_ASC = booleanPreferencesKey("lib_song_asc")
+    private val KEY_LIB_GROUP_ASC = booleanPreferencesKey("lib_group_asc")
+
     // Playlists & History
     private val KEY_PLAYLISTS_JSON = stringPreferencesKey("playlists_json")
     private val KEY_HISTORY_JSON = stringPreferencesKey("history_entries_json")
@@ -128,6 +140,56 @@ object AppPreferencesRepository {
                 historyEntries = deserializeHistory(prefs[KEY_HISTORY_JSON])
             )
         }
+    }
+
+    fun observeLibraryPreferences(context: Context): Flow<LibraryPreferences> {
+        return context.appDataStore.data.map { prefs ->
+            val savedOrder = prefs[KEY_LIB_TAB_ORDER]
+                ?.split(",")
+                ?.mapNotNull { id -> LibraryTab.entries.find { it.id == id.trim() } }
+                ?.distinct()
+                .orEmpty()
+            // Keep the saved order, then append any tab that is missing so nothing is ever lost.
+            val order = savedOrder + LibraryTab.entries.filter { it !in savedOrder }
+            val hidden = prefs[KEY_LIB_HIDDEN_TABS]
+                ?.split(",")
+                ?.mapNotNull { id -> LibraryTab.entries.find { it.id == id.trim() } }
+                ?.toSet()
+                .orEmpty()
+            // At least one tab must stay visible.
+            val safeHidden = if (order.all { it in hidden }) emptySet() else hidden
+            LibraryPreferences(
+                tabOrder = order,
+                hiddenTabs = safeHidden,
+                navMode = LibraryNavMode.entries.find { it.id == prefs[KEY_LIB_NAV_MODE] } ?: LibraryNavMode.TAB_ROW,
+                songSort = LibrarySongSort.entries.find { it.id == prefs[KEY_LIB_SONG_SORT] } ?: LibrarySongSort.DEFAULT,
+                songAscending = prefs[KEY_LIB_SONG_ASC] ?: true,
+                groupAscending = prefs[KEY_LIB_GROUP_ASC] ?: true
+            )
+        }
+    }
+
+    suspend fun updateLibraryTabs(context: Context, order: List<LibraryTab>, hidden: Set<LibraryTab>) {
+        val safeHidden = if (order.all { it in hidden }) emptySet() else hidden
+        context.appDataStore.edit {
+            it[KEY_LIB_TAB_ORDER] = order.joinToString(",") { tab -> tab.id }
+            it[KEY_LIB_HIDDEN_TABS] = safeHidden.joinToString(",") { tab -> tab.id }
+        }
+    }
+
+    suspend fun updateLibraryNavMode(context: Context, mode: LibraryNavMode) {
+        context.appDataStore.edit { it[KEY_LIB_NAV_MODE] = mode.id }
+    }
+
+    suspend fun updateLibrarySongSort(context: Context, sort: LibrarySongSort, ascending: Boolean) {
+        context.appDataStore.edit {
+            it[KEY_LIB_SONG_SORT] = sort.id
+            it[KEY_LIB_SONG_ASC] = ascending
+        }
+    }
+
+    suspend fun updateLibraryGroupAscending(context: Context, ascending: Boolean) {
+        context.appDataStore.edit { it[KEY_LIB_GROUP_ASC] = ascending }
     }
 
     private fun parseActiveTabs(raw: String?): List<BottomTab> {

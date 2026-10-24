@@ -117,7 +117,6 @@ object MediaStoreScanner {
                 val widthCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH)
                 val heightCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT)
                 val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
-                @Suppress("DEPRECATION")
                 val dataCol = cursor.getColumnIndex(MediaStore.Video.Media.DATA)
                 val relPathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     cursor.getColumnIndex(MediaStore.Video.Media.RELATIVE_PATH)
@@ -216,7 +215,12 @@ object MediaStoreScanner {
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.SIZE,
-            MediaStore.Audio.Media.BUCKET_DISPLAY_NAME
+            MediaStore.Audio.Media.BUCKET_DISPLAY_NAME,
+            MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.ARTIST_ID,
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.RELATIVE_PATH
         )
 
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
@@ -241,6 +245,11 @@ object MediaStoreScanner {
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
                 val bucketCol = cursor.getColumnIndex(MediaStore.Audio.Media.BUCKET_DISPLAY_NAME)
+                val albumIdCol = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
+                val artistIdCol = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST_ID)
+                val dateAddedCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_ADDED)
+                val dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                val relPathCol = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
 
                 while (cursor.moveToNext()) {
                     val mediaId = cursor.getLong(idCol)
@@ -268,6 +277,10 @@ object MediaStoreScanner {
                         "Music"
                     }
 
+                    val absPath = if (dataCol >= 0) cursor.getString(dataCol).orEmpty() else ""
+                    val relPath = if (relPathCol >= 0) cursor.getString(relPathCol).orEmpty() else ""
+                    val fullPath = absPath.ifBlank { relPath + displayName }
+
                     result.add(
                         AudioTrackItem(
                             mediaId = mediaId,
@@ -282,7 +295,11 @@ object MediaStoreScanner {
                             durationLabel = formatDurationMs(durationMs),
                             sizeBytes = sizeBytes,
                             sizeMB = sizeMB,
-                            folder = folder
+                            folder = folder,
+                            albumId = if (albumIdCol >= 0) cursor.getLong(albumIdCol) else 0L,
+                            artistId = if (artistIdCol >= 0) cursor.getLong(artistIdCol) else 0L,
+                            dateAddedSec = if (dateAddedCol >= 0) cursor.getLong(dateAddedCol) else 0L,
+                            path = fullPath
                         )
                     )
                 }
