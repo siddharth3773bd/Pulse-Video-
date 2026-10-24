@@ -16,14 +16,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -34,6 +34,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -44,24 +46,29 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.AppBarWithSearch
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExpandedFullScreenContainedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.SearchBarValue
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberContainedSearchBarState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -79,12 +86,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -238,8 +245,12 @@ fun AudioLibraryScreen(
 
     var detailTabId by rememberSaveable { mutableStateOf<String?>(null) }
     var detailKey by rememberSaveable { mutableStateOf<String?>(null) }
-    var searchActive by rememberSaveable { mutableStateOf(false) }
-    var query by rememberSaveable { mutableStateOf("") }
+    // Official Material 3 Expressive search: an app bar that is a search pill and expands into a
+    // full-screen search (AppBarWithSearch + ExpandedFullScreenContainedSearchBar).
+    val textFieldState = rememberTextFieldState()
+    val searchBarState = rememberContainedSearchBarState()
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val query = textFieldState.text.toString()
     var sheet by remember { mutableStateOf<LibrarySheetType?>(null) }
     var infoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
 
@@ -273,13 +284,12 @@ fun AudioLibraryScreen(
         detailTabId = null
         detailKey = null
     }
-    val closeSearch = {
-        searchActive = false
-        query = ""
+    // Start each search fresh once the search screen is closed.
+    LaunchedEffect(searchBarState.currentValue) {
+        if (searchBarState.currentValue == SearchBarValue.Collapsed) textFieldState.clearText()
     }
 
-    BackHandler(enabled = searchActive) { closeSearch() }
-    BackHandler(enabled = !searchActive && inDetail) { closeDetail() }
+    BackHandler(enabled = inDetail) { closeDetail() }
 
     val background = headerBackground
 
@@ -300,62 +310,18 @@ fun AudioLibraryScreen(
                 .background(background)
                 .testTag("audio_library_screen")
         ) {
-            if (searchActive) {
-                LibrarySearchField(
-                    query = query,
-                    onQueryChange = { query = it },
-                    onClose = closeSearch
-                )
-                val results = remember(sortedSongs, query) {
-                    sortedSongs.filter { matchesQuery(it, query) }
-                }
-                when {
-                    query.isBlank() -> LibraryEmptyState(
-                        icon = Icons.Default.Search,
-                        title = "Search your music",
-                        subtitle = "Find songs by title, artist or album."
-                    )
-                    results.isEmpty() -> LibraryEmptyState(
-                        icon = Icons.Default.Search,
-                        title = "No results",
-                        subtitle = "Nothing matches “${query.trim()}”."
-                    )
-                    else -> SongsList(
-                        songs = results,
-                        playingAudio = playingAudio,
-                        background = background,
-                        onPlay = playFromList,
-                        onMore = { infoTrack = it }
-                    )
-                }
-            } else {
+            if (inDetail) {
                 TopAppBar(
                     title = {
                         Text(
-                            text = if (inDetail) detailTitleFor(currentTab) else "Music",
+                            text = detailTitleFor(currentTab),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     },
                     navigationIcon = {
-                        if (inDetail) {
-                            IconButton(onClick = closeDetail) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                            }
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = { searchActive = true },
-                            modifier = Modifier.testTag("library_search_button")
-                        ) {
-                            Icon(Icons.Default.Search, contentDescription = "Search")
-                        }
-                        IconButton(
-                            onClick = { sheet = LibrarySheetType.SETTINGS },
-                            modifier = Modifier.testTag("library_settings_button")
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Library settings")
+                        IconButton(onClick = closeDetail, shapes = IconButtonDefaults.shapes()) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -363,128 +329,210 @@ fun AudioLibraryScreen(
                         scrolledContainerColor = background
                     )
                 )
-
-                if (!inDetail && visibleTabs.size > 1) {
-                    PrimaryScrollableTabRow(
-                        selectedTabIndex = currentPage,
-                        containerColor = background,
-                        edgePadding = 16.dp
-                    ) {
-                        visibleTabs.forEachIndexed { index, tab ->
-                            Tab(
-                                selected = index == currentPage,
-                                onClick = { selectTab(tab) },
-                                text = { Text(text = tab.label, maxLines = 1) }
+            } else {
+                val appBarWithSearchColors = SearchBarDefaults.appBarWithSearchColors(
+                    searchBarColors = SearchBarDefaults.containedColors(state = searchBarState),
+                    appBarContainerColor = background
+                )
+                val inputField = @Composable {
+                    SearchBarDefaults.InputField(
+                        textFieldState = textFieldState,
+                        searchBarState = searchBarState,
+                        colors = appBarWithSearchColors.searchBarColors.inputFieldColors,
+                        onSearch = { keyboardController?.hide() },
+                        placeholder = {
+                            Text(
+                                text = "Search your music",
+                                modifier = Modifier.clearAndSetSemantics {}
                             )
+                        },
+                        leadingIcon = {
+                            if (searchBarState.currentValue == SearchBarValue.Expanded) {
+                                IconButton(
+                                    onClick = { scope.launch { searchBarState.animateToCollapsed() } },
+                                    shapes = IconButtonDefaults.shapes()
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            } else {
+                                Icon(Icons.Default.Search, contentDescription = null)
+                            }
+                        },
+                        trailingIcon = {
+                            if (searchBarState.currentValue == SearchBarValue.Expanded && query.isNotEmpty()) {
+                                IconButton(
+                                    onClick = { textFieldState.clearText() },
+                                    shapes = IconButtonDefaults.shapes()
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear search")
+                                }
+                            }
+                        },
+                        modifier = Modifier.testTag("library_search_field")
+                    )
+                }
+
+                AppBarWithSearch(
+                    state = searchBarState,
+                    inputField = inputField,
+                    colors = appBarWithSearchColors,
+                    actions = {
+                        IconButton(
+                            onClick = { sheet = LibrarySheetType.SETTINGS },
+                            shapes = IconButtonDefaults.shapes(),
+                            modifier = Modifier.testTag("library_settings_button")
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = "Library settings")
                         }
                     }
+                )
+                ExpandedFullScreenContainedSearchBar(
+                    state = searchBarState,
+                    inputField = inputField,
+                    colors = appBarWithSearchColors.searchBarColors
+                ) {
+                    val results = remember(sortedSongs, query) {
+                        sortedSongs.filter { matchesQuery(it, query) }
+                    }
+                    when {
+                        query.isBlank() -> LibraryEmptyState(
+                            icon = Icons.Default.Search,
+                            title = "Search your music",
+                            subtitle = "Find songs by title, artist or album."
+                        )
+                        results.isEmpty() -> LibraryEmptyState(
+                            icon = Icons.Default.Search,
+                            title = "No results",
+                            subtitle = "Nothing matches “${query.trim()}”."
+                        )
+                        else -> SongsList(
+                            songs = results,
+                            playingAudio = playingAudio,
+                            onPlay = playFromList,
+                            onMore = { infoTrack = it },
+                            bottomPadding = WindowInsets.navigationBars.asPaddingValues()
+                                .calculateBottomPadding() + 16.dp
+                        )
+                    }
                 }
+            }
 
-                // One slim action row: count on the left, Shuffle and Sort on the right.
-                val detail = currentDetailTracks
-                when {
-                    detail != null -> LibraryActionRow(
-                        label = songCountLabel(detail.size),
-                        onShuffle = { shuffle(detail) }.takeIf { detail.isNotEmpty() },
-                        onSort = null
-                    )
-                    currentTab == LibraryTab.SONGS -> LibraryActionRow(
-                        label = songCountLabel(sortedSongs.size),
-                        onShuffle = { shuffle(sortedSongs) }.takeIf { sortedSongs.isNotEmpty() },
-                        onSort = { sheet = LibrarySheetType.SORT }
-                    )
-                    currentTab == LibraryTab.LIKED -> LibraryActionRow(
-                        label = songCountLabel(likedSongs.size),
-                        onShuffle = { shuffle(likedSongs) }.takeIf { likedSongs.isNotEmpty() },
-                        onSort = null
-                    )
-                    currentTab == LibraryTab.ALBUMS -> LibraryActionRow(
-                        label = albumCountLabel(albums.size),
-                        onShuffle = null,
-                        onSort = { sheet = LibrarySheetType.SORT }
-                    )
-                    currentTab == LibraryTab.ARTISTS -> LibraryActionRow(
-                        label = artistCountLabel(artists.size),
-                        onShuffle = null,
-                        onSort = { sheet = LibrarySheetType.SORT }
-                    )
-                    else -> Unit
+            if (!inDetail && visibleTabs.size > 1) {
+                PrimaryScrollableTabRow(
+                    selectedTabIndex = currentPage,
+                    containerColor = background,
+                    edgePadding = 16.dp
+                ) {
+                    visibleTabs.forEachIndexed { index, tab ->
+                        Tab(
+                            selected = index == currentPage,
+                            onClick = { selectTab(tab) },
+                            text = { Text(text = tab.label, maxLines = 1) }
+                        )
+                    }
                 }
+            }
 
-                HorizontalPager(
-                    state = pagerState,
-                    key = { index -> visibleTabs.getOrNull(index)?.id ?: index.toString() },
-                    userScrollEnabled = !inDetail,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) { page ->
-                    val tab = visibleTabs.getOrNull(page)
-                    if (tab != null) {
-                        val pageDetail = detailTracksFor(tab)
-                        when {
-                            pageDetail != null -> SongsList(
-                                songs = pageDetail,
-                                playingAudio = playingAudio,
-                                background = background,
-                                onPlay = playFromList,
-                                onMore = { infoTrack = it }
-                            )
-                            tab == LibraryTab.SONGS -> {
-                                if (sortedSongs.isEmpty()) {
-                                    LibraryEmptyState(
-                                        icon = Icons.Default.MusicNote,
-                                        title = "No audio files found",
-                                        subtitle = "Music files stored on your device will appear here."
-                                    )
-                                } else {
-                                    SongsList(
-                                        songs = sortedSongs,
-                                        playingAudio = playingAudio,
-                                        background = background,
-                                        onPlay = playFromList,
-                                        onMore = { infoTrack = it }
-                                    )
-                                }
+            // One slim action row: count on the left, Shuffle and Sort on the right.
+            val detail = currentDetailTracks
+            when {
+                detail != null -> LibraryActionRow(
+                    label = songCountLabel(detail.size),
+                    onShuffle = { shuffle(detail) }.takeIf { detail.isNotEmpty() },
+                    onSort = null
+                )
+                currentTab == LibraryTab.SONGS -> LibraryActionRow(
+                    label = songCountLabel(sortedSongs.size),
+                    onShuffle = { shuffle(sortedSongs) }.takeIf { sortedSongs.isNotEmpty() },
+                    onSort = { sheet = LibrarySheetType.SORT }
+                )
+                currentTab == LibraryTab.LIKED -> LibraryActionRow(
+                    label = songCountLabel(likedSongs.size),
+                    onShuffle = { shuffle(likedSongs) }.takeIf { likedSongs.isNotEmpty() },
+                    onSort = null
+                )
+                currentTab == LibraryTab.ALBUMS -> LibraryActionRow(
+                    label = albumCountLabel(albums.size),
+                    onShuffle = null,
+                    onSort = { sheet = LibrarySheetType.SORT }
+                )
+                currentTab == LibraryTab.ARTISTS -> LibraryActionRow(
+                    label = artistCountLabel(artists.size),
+                    onShuffle = null,
+                    onSort = { sheet = LibrarySheetType.SORT }
+                )
+                else -> Unit
+            }
+
+            HorizontalPager(
+                state = pagerState,
+                key = { index -> visibleTabs.getOrNull(index)?.id ?: index.toString() },
+                userScrollEnabled = !inDetail,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) { page ->
+                val tab = visibleTabs.getOrNull(page)
+                if (tab != null) {
+                    val pageDetail = detailTracksFor(tab)
+                    when {
+                        pageDetail != null -> SongsList(
+                            songs = pageDetail,
+                            playingAudio = playingAudio,
+                            onPlay = playFromList,
+                            onMore = { infoTrack = it }
+                        )
+                        tab == LibraryTab.SONGS -> {
+                            if (sortedSongs.isEmpty()) {
+                                LibraryEmptyState(
+                                    icon = Icons.Default.MusicNote,
+                                    title = "No audio files found",
+                                    subtitle = "Music files stored on your device will appear here."
+                                )
+                            } else {
+                                SongsList(
+                                    songs = sortedSongs,
+                                    playingAudio = playingAudio,
+                                    onPlay = playFromList,
+                                    onMore = { infoTrack = it }
+                                )
                             }
-                            tab == LibraryTab.LIKED -> {
-                                if (likedSongs.isEmpty()) {
-                                    LibraryEmptyState(
-                                        icon = tab.icon,
-                                        title = "No liked songs yet",
-                                        subtitle = "Tap the heart on the Now Playing screen to like a song."
-                                    )
-                                } else {
-                                    SongsList(
-                                        songs = likedSongs,
-                                        playingAudio = playingAudio,
-                                        background = background,
-                                        onPlay = playFromList,
-                                        onMore = { infoTrack = it }
-                                    )
-                                }
-                            }
-                            tab == LibraryTab.ALBUMS -> AlbumsGrid(
-                                albums = albums,
-                                onOpen = { album ->
-                                    detailTabId = LibraryTab.ALBUMS.id
-                                    detailKey = album.key
-                                }
-                            )
-                            tab == LibraryTab.ARTISTS -> ArtistsList(
-                                artists = artists,
-                                background = background,
-                                onOpen = { artist ->
-                                    detailTabId = LibraryTab.ARTISTS.id
-                                    detailKey = artist.key
-                                }
-                            )
-                            else -> LibraryEmptyState(
-                                icon = tab.icon,
-                                title = "Coming soon",
-                                subtitle = "${tab.label} will be available in a future update."
-                            )
                         }
+                        tab == LibraryTab.LIKED -> {
+                            if (likedSongs.isEmpty()) {
+                                LibraryEmptyState(
+                                    icon = tab.icon,
+                                    title = "No liked songs yet",
+                                    subtitle = "Tap the heart on the Now Playing screen to like a song."
+                                )
+                            } else {
+                                SongsList(
+                                    songs = likedSongs,
+                                    playingAudio = playingAudio,
+                                    onPlay = playFromList,
+                                    onMore = { infoTrack = it }
+                                )
+                            }
+                        }
+                        tab == LibraryTab.ALBUMS -> AlbumsGrid(
+                            albums = albums,
+                            onOpen = { album ->
+                                detailTabId = LibraryTab.ALBUMS.id
+                                detailKey = album.key
+                            }
+                        )
+                        tab == LibraryTab.ARTISTS -> ArtistsList(
+                            artists = artists,
+                            onOpen = { artist ->
+                                detailTabId = LibraryTab.ARTISTS.id
+                                detailKey = artist.key
+                            }
+                        )
+                        else -> LibraryEmptyState(
+                            icon = tab.icon,
+                            title = "Coming soon",
+                            subtitle = "${tab.label} will be available in a future update."
+                        )
                     }
                 }
             }
@@ -557,46 +605,8 @@ fun AudioLibraryScreen(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Search + action row
+// Action row
 // ---------------------------------------------------------------------------------------------
-
-/** Official Material 3 search input field, shown in place of the top app bar while searching. */
-@Composable
-private fun LibrarySearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClose: () -> Unit
-) {
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-
-    SearchBarDefaults.InputField(
-        query = query,
-        onQueryChange = onQueryChange,
-        onSearch = {},
-        expanded = true,
-        onExpandedChange = {},
-        placeholder = { Text("Search songs, artists, albums") },
-        leadingIcon = {
-            IconButton(onClick = onClose) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
-            }
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Close, contentDescription = "Clear search")
-                }
-            }
-        },
-        modifier = Modifier
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .focusRequester(focusRequester)
-            .testTag("library_search_field")
-    )
-}
 
 @Composable
 private fun LibraryActionRow(
@@ -636,6 +646,7 @@ private fun LibraryActionRow(
         if (onSort != null) {
             IconButton(
                 onClick = onSort,
+                shapes = IconButtonDefaults.shapes(),
                 modifier = Modifier.testTag("library_sort_button")
             ) {
                 Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
@@ -648,30 +659,36 @@ private fun LibraryActionRow(
 // Songs
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Material 3 Expressive segmented list: rows sit in rounded containers separated by the official
+ * gap, with position-aware corners (ListItemDefaults.segmentedShapes).
+ */
 @Composable
 private fun SongsList(
     songs: List<AudioTrackItem>,
     playingAudio: AudioTrackItem?,
-    background: Color,
     onPlay: (List<AudioTrackItem>, Int) -> Unit,
-    onMore: (AudioTrackItem) -> Unit
+    onMore: (AudioTrackItem) -> Unit,
+    bottomPadding: Dp = LocalLibraryBottomPadding.current
 ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("audio_library_view"),
         contentPadding = PaddingValues(
-            start = 8.dp,
-            end = 8.dp,
+            start = 16.dp,
+            end = 16.dp,
             top = 4.dp,
-            bottom = LocalLibraryBottomPadding.current
-        )
+            bottom = bottomPadding
+        ),
+        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
     ) {
         itemsIndexed(songs, key = { _, t -> t.id }) { index, track ->
             SongRow(
                 track = track,
+                index = index,
+                count = songs.size,
                 selected = playingAudio?.id == track.id,
-                background = background,
                 onClick = { onPlay(songs, index) },
                 onMore = { onMore(track) }
             )
@@ -679,19 +696,21 @@ private fun SongsList(
     }
 }
 
-/** Official Material 3 Expressive list item; the current song uses the list item's selected state. */
+/** Official segmented list item; the current song uses the list item's selected state. */
 @Composable
 private fun SongRow(
     track: AudioTrackItem,
+    index: Int,
+    count: Int,
     selected: Boolean,
-    background: Color,
     onClick: () -> Unit,
     onMore: () -> Unit
 ) {
     val palette = LocalM3Palette.current
-    ListItem(
+    SegmentedListItem(
         selected = selected,
         onClick = onClick,
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
         leadingContent = {
             AudioArt(
                 uri = track.contentUri,
@@ -709,14 +728,11 @@ private fun SongRow(
             )
         },
         trailingContent = {
-            IconButton(onClick = onMore) {
+            IconButton(onClick = onMore, shapes = IconButtonDefaults.shapes()) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Song info")
             }
         },
-        colors = ListItemDefaults.colors(
-            containerColor = background,
-            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-        ),
+        colors = segmentedListColors(),
         modifier = Modifier.testTag("audio_track_row_${track.mediaId}")
     ) {
         Text(
@@ -726,6 +742,13 @@ private fun SongRow(
         )
     }
 }
+
+/** Container colours used by the official segmented-list samples. */
+@Composable
+private fun segmentedListColors() = ListItemDefaults.colors(
+    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+)
 
 // ---------------------------------------------------------------------------------------------
 // Albums / Artists
@@ -799,7 +822,6 @@ private fun AlbumsGrid(
 @Composable
 private fun ArtistsList(
     artists: List<ArtistGroup>,
-    background: Color,
     onOpen: (ArtistGroup) -> Unit
 ) {
     val palette = LocalM3Palette.current
@@ -816,15 +838,17 @@ private fun ArtistsList(
             .fillMaxSize()
             .testTag("library_artists_list"),
         contentPadding = PaddingValues(
-            start = 8.dp,
-            end = 8.dp,
+            start = 16.dp,
+            end = 16.dp,
             top = 4.dp,
             bottom = LocalLibraryBottomPadding.current
-        )
+        ),
+        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
     ) {
-        items(artists, key = { it.key }) { artist ->
-            ListItem(
+        itemsIndexed(artists, key = { _, a -> a.key }) { index, artist ->
+            SegmentedListItem(
                 onClick = { onOpen(artist) },
+                shapes = ListItemDefaults.segmentedShapes(index = index, count = artists.size),
                 leadingContent = {
                     AudioArt(
                         uri = artist.tracks.first().contentUri,
@@ -841,10 +865,7 @@ private fun ArtistsList(
                         contentDescription = null
                     )
                 },
-                colors = ListItemDefaults.colors(
-                    containerColor = background,
-                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
+                colors = segmentedListColors()
             ) {
                 Text(
                     text = artist.name,

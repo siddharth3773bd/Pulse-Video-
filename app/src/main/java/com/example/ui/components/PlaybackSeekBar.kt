@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,8 +76,12 @@ fun PlaybackSeekBar(
 
     val primaryColor = MaterialTheme.colorScheme.primary
 
+    // New Material 3 Slider API: the slider reads its position from a SliderState.
+    val sliderState = remember { SliderState(value = shownValue) }
+    sliderState.value = shownValue
+
     Slider(
-        value = shownValue,
+        state = sliderState,
         onValueChange = { v ->
             dragValue = v
             onSeekPreview(v)
@@ -86,7 +91,6 @@ fun PlaybackSeekBar(
             dragValue = null
             onSeekFinished(target)
         },
-        valueRange = 0f..1f,
         interactionSource = interactionSource,
         thumb = { Spacer(modifier = Modifier.size(0.dp)) },
         track = { sliderState ->

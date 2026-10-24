@@ -86,6 +86,7 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
@@ -1756,10 +1757,11 @@ private fun CustomSeedColorPickerDialog(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                    val hueSliderState = remember { SliderState(value = hue, steps = 0, trackRange = 0f..360f) }
+                    hueSliderState.value = hue
                     Slider(
-                        value = hue,
+                        state = hueSliderState,
                         onValueChange = { hue = it },
-                        valueRange = 0f..360f,
                         colors = SliderDefaults.colors(
                             thumbColor = currentColor,
                             activeTrackColor = currentColor
@@ -1789,10 +1791,11 @@ private fun CustomSeedColorPickerDialog(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                    val saturationSliderState = remember { SliderState(value = saturation, steps = 0, trackRange = 0f..1f) }
+                    saturationSliderState.value = saturation
                     Slider(
-                        value = saturation,
+                        state = saturationSliderState,
                         onValueChange = { saturation = it },
-                        valueRange = 0f..1f,
                         colors = SliderDefaults.colors(
                             thumbColor = currentColor,
                             activeTrackColor = currentColor
@@ -1822,10 +1825,11 @@ private fun CustomSeedColorPickerDialog(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
+                    val brightnessSliderState = remember { SliderState(value = brightness, steps = 0, trackRange = 0.15f..1f) }
+                    brightnessSliderState.value = brightness
                     Slider(
-                        value = brightness,
+                        state = brightnessSliderState,
                         onValueChange = { brightness = it },
-                        valueRange = 0.15f..1f,
                         colors = SliderDefaults.colors(
                             thumbColor = currentColor,
                             activeTrackColor = currentColor
@@ -1956,16 +1960,16 @@ private fun VideoPlaybackSettingsSubPage(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
+                    val skipSliderState = remember(4) { SliderState(value = settings.skipDurationSec.toFloat(), steps = 4, trackRange = 5f..30f) }
+                    skipSliderState.value = settings.skipDurationSec.toFloat()
                     Slider(
-                        value = settings.skipDurationSec.toFloat(),
+                        state = skipSliderState,
                         onValueChange = { rawValue ->
                             val snapped = ((rawValue / 5f).roundToInt() * 5).coerceIn(5, 30)
                             if (snapped != settings.skipDurationSec) {
                                 onUpdateSettings { it.copy(skipDurationSec = snapped) }
                             }
                         },
-                        valueRange = 5f..30f,
-                        steps = 4,
                         colors = SliderDefaults.colors(
                             thumbColor = palette.primary,
                             activeTrackColor = palette.primary,

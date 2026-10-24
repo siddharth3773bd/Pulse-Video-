@@ -55,6 +55,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -705,11 +706,11 @@ private fun SleepTimerSheet(
             )
             Spacer(modifier = Modifier.height(8.dp))
             // Official Material 3 slider, snapping in 5-minute steps (5..120 = 23 stops).
+            val sleepSliderState = remember(22) { SliderState(value = minutes, steps = 22, trackRange = 5f..120f) }
+            sleepSliderState.value = minutes
             Slider(
-                value = minutes,
+                state = sleepSliderState,
                 onValueChange = { minutes = (it / 5f).let { v -> Math.round(v) * 5f }.coerceIn(5f, 120f) },
-                valueRange = 5f..120f,
-                steps = 22,
                 colors = SliderDefaults.colors(
                     thumbColor = palette.primary,
                     activeTrackColor = palette.primary,

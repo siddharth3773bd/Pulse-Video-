@@ -52,6 +52,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -698,7 +699,7 @@ fun ColorOsFloatingMenuOverlay(
                 val textColor = if (isError) palette.error else palette.onSurface
                 val iconColor = if (isError) palette.error else palette.onSurfaceVariant
 
-                DropdownMenuItem(
+                SelectableDropdownMenuItem(
                     selected = false,
                     onClick = action,
                     shapes = MenuDefaults.itemShape(index = index, count = menuItems.size),
@@ -711,7 +712,7 @@ fun ColorOsFloatingMenuOverlay(
                             fontWeight = FontWeight.Medium
                         )
                     },
-                    trailingIcon = {
+                    trailingContent = {
                         Icon(
                             imageVector = icon,
                             contentDescription = label,
