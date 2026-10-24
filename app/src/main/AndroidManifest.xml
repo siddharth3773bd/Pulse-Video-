@@ -34,11 +34,49 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.MyApplication">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- "Open with" for video files chosen in a file manager -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="application/x-matroska" />
+            </intent-filter>
+        </activity>
+
+        <!-- Small bottom pop-up player for audio files chosen in a file manager -->
+        <activity
+            android:name=".ui.popup.AudioPopupActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MyApplication.Popup">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+                <data android:mimeType="application/x-flac" />
             </intent-filter>
         </activity>
 

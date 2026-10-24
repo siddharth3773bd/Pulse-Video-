@@ -140,11 +140,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
 import com.example.data.MediaStoreScanner
 import com.example.model.BottomTab
 import com.example.model.LayoutMode
@@ -173,9 +178,17 @@ import com.example.viewmodel.VideoPlayerViewModel
 import com.example.viewmodel.VideoUiState
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var externalViewModel: VideoPlayerViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Same instance that the compose viewModel() call below returns for this activity.
+        externalViewModel = androidx.lifecycle.ViewModelProvider(this)[VideoPlayerViewModel::class.java]
+        if (savedInstanceState == null) {
+            handleExternalVideoIntent(intent)
+        }
         setContent {
             val viewModel: VideoPlayerViewModel = viewModel()
             val context = LocalContext.current
@@ -196,6 +209,51 @@ class MainActivity : ComponentActivity() {
                     viewModel = viewModel
                 )
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleExternalVideoIntent(intent)
+    }
+
+    /**
+     * "Open with" support: a video chosen in a file manager plays in the normal full-screen player.
+     * When the player is closed the activity finishes so the user returns to the file manager.
+     */
+    private fun handleExternalVideoIntent(intent: Intent?) {
+        if (intent == null || intent.action != Intent.ACTION_VIEW) return
+        val uri = intent.data ?: return
+        val mime = intent.type ?: try {
+            contentResolver.getType(uri)
+        } catch (_: Throwable) {
+            null
+        }
+        if (mime != null && !mime.startsWith("video/") && mime != "application/x-matroska") return
+
+        lifecycleScope.launch {
+            val item = withContext(Dispatchers.IO) {
+                try {
+                    com.example.player.ExternalMedia.buildVideoItem(applicationContext, uri)
+                } catch (_: Throwable) {
+                    null
+                }
+            }
+            if (item == null) {
+                android.widget.Toast.makeText(
+                    this@MainActivity,
+                    "Can't open this video file",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                finish()
+                return@launch
+            }
+            externalViewModel.playVideo(item, this@MainActivity)
+            // Wait until the player has actually opened, then close the app when it is closed again.
+            externalViewModel.uiState.first { it.playingVideo != null }
+            externalViewModel.uiState.first { it.playingVideo == null }
+            finish()
         }
     }
 }
