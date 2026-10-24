@@ -3,6 +3,7 @@ package com.example.ui.components
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.view.WindowManager
 import android.media.AudioManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -123,6 +124,17 @@ fun VideoPlayerModal(
 
     var surfaceWidthPx by remember { mutableIntStateOf(1) }
     var surfaceHeightPx by remember { mutableIntStateOf(1) }
+
+    // Keep the screen awake while a video is playing; let it time out normally when paused.
+    val keepScreenOn = playerState.isPlaying
+    DisposableEffect(activity, keepScreenOn) {
+        if (keepScreenOn) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     // Apply forced screen orientation setting
     DisposableEffect(activity, playbackSettings.forceOrientation) {

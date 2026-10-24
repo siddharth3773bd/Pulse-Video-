@@ -91,6 +91,9 @@ class AudioPopupActivity : ComponentActivity() {
 
     private var currentUri by mutableStateOf<Uri?>(null)
 
+    /** True while this pop-up itself launches something (Open app, permission dialog) so leaving is not a "close". */
+    internal var suppressStopOnLeave = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -115,6 +118,7 @@ class AudioPopupActivity : ComponentActivity() {
                     },
                     onFailed = { finish() },
                     onOpenApp = {
+                        suppressStopOnLeave = true
                         try {
                             startActivity(
                                 Intent(this@AudioPopupActivity, MainActivity::class.java).addFlags(
@@ -128,6 +132,14 @@ class AudioPopupActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /** Pressing Home or opening Recents counts as closing the pop-up: stop the music. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (suppressStopOnLeave || isFinishing || isChangingConfigurations) return
+        AudioPlaybackManager.getInstance(applicationContext).stopAndClear()
+        finish()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -158,9 +170,10 @@ private fun AudioPopupContent(
     var dragFraction by remember { mutableStateOf<Float?>(null) }
 
     // Ask for notification permission once (playback works even when denied).
+    val popupActivity = context as? AudioPopupActivity
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { }
+    ) { popupActivity?.suppressStopOnLeave = false }
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -169,9 +182,11 @@ private fun AudioPopupContent(
             val sp = context.getSharedPreferences("popup_prefs", android.content.Context.MODE_PRIVATE)
             if (!sp.getBoolean("asked_notifications", false)) {
                 sp.edit().putBoolean("asked_notifications", true).apply()
+                popupActivity?.suppressStopOnLeave = true
                 try {
                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } catch (_: Throwable) {
+                    popupActivity?.suppressStopOnLeave = false
                 }
             }
         }
