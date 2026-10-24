@@ -278,6 +278,32 @@ fun Material3VideoPlayerScreen(
         viewModel.refreshPermissionsAndScan(context)
     }
 
+    var notificationPermissionAsked by remember { mutableStateOf(false) }
+    var pendingAudioActionAfterNotifPerm by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        val action = pendingAudioActionAfterNotifPerm
+        pendingAudioActionAfterNotifPerm = null
+        action?.invoke()
+    }
+
+    val runWithNotificationPermissionCheck: (() -> Unit) -> Unit = { audioAction ->
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            !notificationPermissionAsked &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionAsked = true
+            pendingAudioActionAfterNotifPerm = audioAction
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            audioAction()
+        }
+    }
+
     // System confirmation dialog launcher for Rename (createWriteRequest) and Delete (createDeleteRequest)
     lateinit var launchIntentSender: (android.content.IntentSender) -> Unit
     val mediaIntentSenderLauncher = rememberLauncherForActivityResult(
@@ -453,7 +479,11 @@ fun Material3VideoPlayerScreen(
                                     isAudioPlaying = uiState.isAudioPlaying,
                                     audioProgress = uiState.audioProgress,
                                     amoledBlack = effectiveAmoled,
-                                    onPlayTrack = { viewModel.playAudioTrack(context, it) },
+                                    onPlayTrack = { track ->
+                                        runWithNotificationPermissionCheck {
+                                            viewModel.playAudioTrack(context, track)
+                                        }
+                                    },
                                     onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
                                     onSeekAudio = { viewModel.seekAudio(it) }
                                 )
@@ -673,7 +703,7 @@ fun Material3VideoPlayerScreen(
             )
         }
 
-        if (uiState.sortSheetOpen && uiState.bottomTab != BottomTab.FOLDERS) {
+        if (uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS) {
             SortAndViewBottomSheet(
                 smartGroups = uiState.smartGroups,
                 viewMode = uiState.viewMode,
@@ -1016,7 +1046,7 @@ private fun M3ExpressiveHeader(
                                     modifier = Modifier.size(21.dp)
                                 )
                             }
-                            if (uiState.bottomTab != BottomTab.FOLDERS) {
+                            if (uiState.bottomTab == BottomTab.VIDEOS) {
                                 IconButton(
                                     onClick = onOpenSortSheet,
                                     shapes = IconButtonDefaults.shapes(),

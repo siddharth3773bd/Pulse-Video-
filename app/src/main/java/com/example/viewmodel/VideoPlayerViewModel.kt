@@ -25,6 +25,7 @@ import com.example.model.ThemeMode
 import com.example.model.VideoHistoryEntry
 import com.example.model.VideoItem
 import com.example.model.ViewMode
+import com.example.player.AudioPlaybackManager
 import com.example.player.ExoPlayerController
 import com.example.player.PlayerController
 import kotlin.math.abs
@@ -161,7 +162,7 @@ class VideoPlayerViewModel : ViewModel() {
     private var scanJob: Job? = null
     private var audioProgressJob: Job? = null
     private var videoPlayerController: ExoPlayerController? = null
-    private var audioPlayerController: ExoPlayerController? = null
+    private var audioPlaybackManager: AudioPlaybackManager? = null
     private var prefsInitialized = false
     private var savedAppContext: Context? = null
     private var lastSavedHistoryMs: Long = 0L
@@ -179,11 +180,12 @@ class VideoPlayerViewModel : ViewModel() {
         }
     }
 
-    private fun getOrCreateAudioController(context: Context): PlayerController {
-        val existing = audioPlayerController
+    private fun getOrCreateAudioPlaybackManager(context: Context): AudioPlaybackManager {
+        val existing = audioPlaybackManager
         if (existing != null) return existing
-        return ExoPlayerController(context.applicationContext).also {
-            audioPlayerController = it
+        return AudioPlaybackManager.getInstance(context.applicationContext).also { manager ->
+            audioPlaybackManager = manager
+            observeAudioPlaybackManager(manager)
         }
     }
 
@@ -191,6 +193,7 @@ class VideoPlayerViewModel : ViewModel() {
         val appContext = context.applicationContext
         savedAppContext = appContext
         getOrCreatePlayerController(appContext)
+        getOrCreateAudioPlaybackManager(appContext)
         if (!prefsInitialized) {
             prefsInitialized = true
             viewModelScope.launch {
@@ -253,6 +256,9 @@ class VideoPlayerViewModel : ViewModel() {
                 MediaStoreScanner.scanAudio(context)
             } else {
                 emptyList()
+            }
+            if (scannedAudio.isNotEmpty()) {
+                getOrCreateAudioPlaybackManager(context).registerTracksCatalog(scannedAudio)
             }
             val allFolders = scannedVideos
                 .map { it.path.substringBeforeLast("/", it.folder) }
@@ -920,7 +926,7 @@ class VideoPlayerViewModel : ViewModel() {
         startPositionMs: Long,
         context: Context? = null
     ) {
-        stopAudioPlayer()
+        pauseAudioSession()
         val state = _uiState.value
         if (context != null) {
             val controller = getOrCreatePlayerController(context)
@@ -1074,79 +1080,108 @@ class VideoPlayerViewModel : ViewModel() {
             toggleAudioPlayPause()
             return
         }
-        stopAudioPlayer()
+        val visibleTracks = _uiState.value.audioTracks.ifEmpty { listOf(track) }
+        val startIndex = visibleTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+        playAudioQueue(
+            context = context,
+            tracks = visibleTracks,
+            startIndex = startIndex,
+            shuffle = false
+        )
+    }
+
+    fun playAudioQueue(
+        context: Context,
+        tracks: List<AudioTrackItem>,
+        startIndex: Int,
+        shuffle: Boolean = false
+    ) {
+        if (tracks.isEmpty()) return
         try {
-            val controller = getOrCreateAudioController(context)
-            controller.prepareMedia(
-                uri = track.contentUri,
-                filePath = null,
-                startPositionMs = 0L,
-                autoPlay = true,
-                decoderMode = DecoderMode.AUTO
-            )
+            val manager = getOrCreateAudioPlaybackManager(context)
+            val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
+            val targetTrack = tracks[safeIndex]
             _uiState.update {
                 it.copy(
-                    playingAudio = track,
+                    playingAudio = targetTrack,
                     isAudioPlaying = true,
                     audioProgress = 0f
                 )
             }
-            startAudioProgressPolling()
+            manager.playQueue(
+                tracks = tracks,
+                startIndex = safeIndex,
+                shuffle = shuffle
+            )
         } catch (_: Exception) {
             triggerToast("Unable to play audio track")
         }
     }
 
-    private fun startAudioProgressPolling() {
+    private fun observeAudioPlaybackManager(manager: AudioPlaybackManager) {
         audioProgressJob?.cancel()
         audioProgressJob = viewModelScope.launch {
-            val controller = audioPlayerController ?: return@launch
-            controller.state.collect { pState ->
-                val dur = pState.durationMs.takeIf { it > 0L } ?: _uiState.value.playingAudio?.durationMs ?: 1L
-                val prog = if (pState.isEnded) {
-                    1f
+            manager.state.collect { aState ->
+                val currentTrack = aState.currentTrack
+                if (currentTrack != null) {
+                    val dur = aState.durationMs.takeIf { it > 0L } ?: currentTrack.durationMs.coerceAtLeast(1L)
+                    val prog = if (aState.isEnded) {
+                        1f
+                    } else {
+                        (aState.positionMs.toFloat() / dur.coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
+                    }
+                    _uiState.update {
+                        it.copy(
+                            playingAudio = currentTrack,
+                            isAudioPlaying = aState.isPlaying && !aState.isEnded,
+                            audioProgress = prog
+                        )
+                    }
                 } else {
-                    (pState.positionMs.toFloat() / dur.coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
-                }
-                _uiState.update {
-                    it.copy(
-                        isAudioPlaying = pState.isPlaying && !pState.isEnded,
-                        audioProgress = prog
-                    )
+                    _uiState.update {
+                        it.copy(isAudioPlaying = false)
+                    }
                 }
             }
         }
     }
 
     fun toggleAudioPlayPause() {
-        val controller = audioPlayerController ?: return
-        controller.togglePlayPause()
+        val manager = audioPlaybackManager ?: savedAppContext?.let { getOrCreateAudioPlaybackManager(it) } ?: return
+        manager.togglePlayPause()
     }
 
     fun seekAudio(progress: Float) {
         val clamped = progress.coerceIn(0f, 1f)
-        val controller = audioPlayerController
-        if (controller != null) {
-            val dur = controller.state.value.durationMs.takeIf { it > 0L }
+        val manager = audioPlaybackManager ?: savedAppContext?.let { getOrCreateAudioPlaybackManager(it) }
+        if (manager != null) {
+            val dur = manager.state.value.durationMs.takeIf { it > 0L }
                 ?: _uiState.value.playingAudio?.durationMs
                 ?: 1L
-            controller.seekTo((clamped * dur.coerceAtLeast(1L)).toLong())
+            manager.seekTo((clamped * dur.coerceAtLeast(1L)).toLong())
         }
         _uiState.update { it.copy(audioProgress = clamped) }
     }
 
-    private fun stopAudioPlayer() {
-        audioProgressJob?.cancel()
-        audioPlayerController?.release()
+    fun skipAudioNext() {
+        val manager = audioPlaybackManager ?: savedAppContext?.let { getOrCreateAudioPlaybackManager(it) } ?: return
+        manager.skipNext()
+    }
+
+    fun skipAudioPrevious() {
+        val manager = audioPlaybackManager ?: savedAppContext?.let { getOrCreateAudioPlaybackManager(it) } ?: return
+        manager.skipPrevious()
+    }
+
+    private fun pauseAudioSession() {
+        audioPlaybackManager?.pause()
         _uiState.update { it.copy(isAudioPlaying = false) }
     }
 
     override fun onCleared() {
         super.onCleared()
-        stopAudioPlayer()
+        audioProgressJob?.cancel()
         videoPlayerController?.destroy()
-        audioPlayerController?.destroy()
         videoPlayerController = null
-        audioPlayerController = null
     }
 }
