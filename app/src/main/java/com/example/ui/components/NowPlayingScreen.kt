@@ -47,6 +47,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
@@ -312,17 +313,15 @@ fun NowPlayingScreen(
             }
         }
 
-        // ---- Seek bar (official Material 3 Slider) + times + technical chip ----
+        // ---- Seek bar (stock Material 3 Expressive Slider) + times + technical chip ----
         Spacer(modifier = Modifier.height(12.dp))
-        WavySeekBar(
+        PlaybackSeekBar(
             progress = fraction,
             onSeekPreview = { dragFraction = it },
             onSeekFinished = { target ->
                 dragFraction = null
                 onSeekTo(target)
             },
-            isPlaying = isPlaying,
-            valueLabel = { f -> formatDurationMs((f * safeDuration).toLong()) },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("audio_seek_slider")
@@ -377,7 +376,7 @@ fun NowPlayingScreen(
 
         // ---- Main controls: official Expressive ButtonGroup ----
         // ButtonGroup + animateWidth springs the pressed button wider and squeezes its
-        // neighbours; IconButtonDefaults shapes morph the corners on press / play state.
+        // neighbours; IconButtonDefaults shapes morph the corners on press.
         Spacer(modifier = Modifier.height(16.dp))
         val previousInteraction = remember { MutableInteractionSource() }
         val playPauseInteraction = remember { MutableInteractionSource() }
@@ -424,18 +423,15 @@ fun NowPlayingScreen(
                     )
                 }
             )
-            // Toggleable shapes: round when paused, rounded square while playing, squishes on press.
+            // Official icon button shapes: stays a round pill, squishes on press.
             customItem(
                 buttonGroupContent = {
-                    FilledIconToggleButton(
-                        checked = isPlaying,
-                        onCheckedChange = { onTogglePlayPause() },
-                        shapes = IconButtonDefaults.toggleableShapes(),
-                        colors = IconButtonDefaults.filledIconToggleButtonColors(
+                    FilledIconButton(
+                        onClick = onTogglePlayPause,
+                        shapes = IconButtonDefaults.shapes(),
+                        colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = palette.primary,
-                            contentColor = palette.onPrimary,
-                            checkedContainerColor = palette.primary,
-                            checkedContentColor = palette.onPrimary
+                            contentColor = palette.onPrimary
                         ),
                         interactionSource = playPauseInteraction,
                         modifier = Modifier
@@ -521,11 +517,7 @@ fun NowPlayingScreen(
                 overflowIndicator = { menuState ->
                     ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(palette.onPrimaryContainer.copy(alpha = 0.08f))
-                    .padding(6.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
                 verticalAlignment = Alignment.CenterVertically
             ) {

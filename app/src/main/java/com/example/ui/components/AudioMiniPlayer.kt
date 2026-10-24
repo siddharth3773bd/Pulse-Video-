@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledIconToggleButton
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -158,15 +158,12 @@ fun AudioMiniPlayer(
                 )
                 customItem(
                     buttonGroupContent = {
-                        FilledIconToggleButton(
-                            checked = isPlaying,
-                            onCheckedChange = { onTogglePlayPause() },
-                            shapes = IconButtonDefaults.toggleableShapes(),
-                            colors = IconButtonDefaults.filledIconToggleButtonColors(
+                        FilledIconButton(
+                            onClick = onTogglePlayPause,
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = palette.primary,
-                                contentColor = palette.onPrimary,
-                                checkedContainerColor = palette.primary,
-                                checkedContentColor = palette.onPrimary
+                                contentColor = palette.onPrimary
                             ),
                             interactionSource = playPauseInteraction,
                             modifier = Modifier
