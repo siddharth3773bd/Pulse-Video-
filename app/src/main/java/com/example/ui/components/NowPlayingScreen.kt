@@ -44,7 +44,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
@@ -373,89 +375,162 @@ fun NowPlayingScreen(
             )
         }
 
-        // ---- Main controls: official Expressive shape-morphing buttons ----
+        // ---- Main controls: official Expressive ButtonGroup ----
+        // ButtonGroup + animateWidth springs the pressed button wider and squeezes its
+        // neighbours; IconButtonDefaults shapes morph the corners on press / play state.
         Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp),
+        val previousInteraction = remember { MutableInteractionSource() }
+        val playPauseInteraction = remember { MutableInteractionSource() }
+        val nextInteraction = remember { MutableInteractionSource() }
+        ButtonGroup(
+            overflowIndicator = { menuState ->
+                ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
+            },
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FilledTonalIconButton(
-                onClick = onSkipPrevious,
-                shapes = IconButtonDefaults.shapes(),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = palette.secondaryContainer,
-                    contentColor = palette.onSecondaryContainer
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(72.dp)
-                    .testTag("now_playing_previous")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.SkipPrevious,
-                    contentDescription = "Previous",
-                    modifier = Modifier.size(30.dp)
-                )
-            }
-            // Toggleable shapes: round when paused, squircle while playing, squishes on press.
-            FilledIconToggleButton(
-                checked = isPlaying,
-                onCheckedChange = { onTogglePlayPause() },
-                shapes = IconButtonDefaults.toggleableShapes(),
-                colors = IconButtonDefaults.filledIconToggleButtonColors(
-                    containerColor = palette.primary,
-                    contentColor = palette.onPrimary,
-                    checkedContainerColor = palette.primary,
-                    checkedContentColor = palette.onPrimary
-                ),
-                modifier = Modifier
-                    .weight(1.25f)
-                    .height(80.dp)
-                    .testTag("now_playing_play_pause")
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-            FilledTonalIconButton(
-                onClick = onSkipNext,
-                shapes = IconButtonDefaults.shapes(),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = palette.secondaryContainer,
-                    contentColor = palette.onSecondaryContainer
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(72.dp)
-                    .testTag("now_playing_next")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.SkipNext,
-                    contentDescription = "Next",
-                    modifier = Modifier.size(30.dp)
-                )
-            }
+            customItem(
+                buttonGroupContent = {
+                    FilledTonalIconButton(
+                        onClick = onSkipPrevious,
+                        shapes = IconButtonDefaults.shapes(),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = palette.secondaryContainer,
+                            contentColor = palette.onSecondaryContainer
+                        ),
+                        interactionSource = previousInteraction,
+                        modifier = Modifier
+                            .weight(1f)
+                            .animateWidth(previousInteraction)
+                            .height(72.dp)
+                            .testTag("now_playing_previous")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipPrevious,
+                            contentDescription = "Previous",
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                },
+                menuContent = { menuState ->
+                    DropdownMenuItem(
+                        text = { Text("Previous") },
+                        leadingIcon = { Icon(Icons.Default.SkipPrevious, contentDescription = null) },
+                        onClick = {
+                            onSkipPrevious()
+                            menuState.dismiss()
+                        }
+                    )
+                }
+            )
+            // Toggleable shapes: round when paused, rounded square while playing, squishes on press.
+            customItem(
+                buttonGroupContent = {
+                    FilledIconToggleButton(
+                        checked = isPlaying,
+                        onCheckedChange = { onTogglePlayPause() },
+                        shapes = IconButtonDefaults.toggleableShapes(),
+                        colors = IconButtonDefaults.filledIconToggleButtonColors(
+                            containerColor = palette.primary,
+                            contentColor = palette.onPrimary,
+                            checkedContainerColor = palette.primary,
+                            checkedContentColor = palette.onPrimary
+                        ),
+                        interactionSource = playPauseInteraction,
+                        modifier = Modifier
+                            .weight(1.25f)
+                            .animateWidth(playPauseInteraction)
+                            .height(80.dp)
+                            .testTag("now_playing_play_pause")
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                },
+                menuContent = { menuState ->
+                    DropdownMenuItem(
+                        text = { Text(if (isPlaying) "Pause" else "Play") },
+                        leadingIcon = {
+                            Icon(
+                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            onTogglePlayPause()
+                            menuState.dismiss()
+                        }
+                    )
+                }
+            )
+            customItem(
+                buttonGroupContent = {
+                    FilledTonalIconButton(
+                        onClick = onSkipNext,
+                        shapes = IconButtonDefaults.shapes(),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = palette.secondaryContainer,
+                            contentColor = palette.onSecondaryContainer
+                        ),
+                        interactionSource = nextInteraction,
+                        modifier = Modifier
+                            .weight(1f)
+                            .animateWidth(nextInteraction)
+                            .height(72.dp)
+                            .testTag("now_playing_next")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "Next",
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                },
+                menuContent = { menuState ->
+                    DropdownMenuItem(
+                        text = { Text("Next") },
+                        leadingIcon = { Icon(Icons.Default.SkipNext, contentDescription = null) },
+                        onClick = {
+                            onSkipNext()
+                            menuState.dismiss()
+                        }
+                    )
+                }
+            )
         }
 
-        // ---- Bottom tray: official connected button group ----
+        // ---- Bottom tray: official connected ButtonGroup ----
+        // Same official container as the main controls: pressing a toggle springs it wider
+        // and squeezes its neighbours (ButtonGroup + animateWidth).
         var showSleepSheet by remember { mutableStateOf(false) }
         val sleepActive = sleepTimerRemainingMs > 0L || sleepAtEndOfSong
+        // The running sleep timer morphs into a wider pill that shows the countdown.
+        val sleepWeight by animateFloatAsState(
+            targetValue = if (sleepActive) 2f else 1f,
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+            label = "trayWeight_sleep"
+        )
+        val trayInteractions = remember { mutableMapOf<NowPlayingAction, MutableInteractionSource>() }
         if (trayActions.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
-            Row(
+            ButtonGroup(
+                overflowIndicator = { menuState ->
+                    ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(32.dp))
                     .background(palette.onPrimaryContainer.copy(alpha = 0.08f))
                     .padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 trayActions.forEachIndexed { index, action ->
+                    val interaction = trayInteractions.getOrPut(action) { MutableInteractionSource() }
                     val active = when (action) {
                         NowPlayingAction.SHUFFLE -> shuffleEnabled
                         NowPlayingAction.REPEAT -> repeatMode != Player.REPEAT_MODE_OFF
@@ -467,57 +542,68 @@ fun NowPlayingScreen(
                             Icons.Default.RepeatOne
                         else -> nowPlayingActionIcon(action)
                     }
-                    val shapes = when {
-                        trayActions.size == 1 -> ToggleButtonDefaults.shapes()
-                        index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        index == trayActions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                    }
-                    // The running sleep timer morphs into a wider pill that shows the countdown.
-                    val weight by animateFloatAsState(
-                        targetValue = if (action == NowPlayingAction.SLEEP && sleepActive) 2f else 1f,
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        label = "trayWeight_${action.id}"
-                    )
-                    ToggleButton(
-                        checked = active,
-                        onCheckedChange = {
-                            when (action) {
-                                NowPlayingAction.SHUFFLE -> onToggleShuffle()
-                                NowPlayingAction.REPEAT -> onCycleRepeat()
-                                NowPlayingAction.LYRICS -> onLyrics()
-                                NowPlayingAction.SLEEP -> showSleepSheet = true
-                            }
-                        },
-                        shapes = shapes,
-                        colors = ToggleButtonDefaults.toggleButtonColors(
-                            containerColor = palette.onPrimaryContainer.copy(alpha = 0.10f),
-                            contentColor = palette.onPrimaryContainer,
-                            checkedContainerColor = palette.primary,
-                            checkedContentColor = palette.onPrimary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                        modifier = Modifier
-                            .weight(weight)
-                            .height(60.dp)
-                            .testTag("now_playing_tray_${action.id}")
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = action.label,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        if (action == NowPlayingAction.SLEEP && sleepActive) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (sleepAtEndOfSong) "End" else formatCountdown(sleepTimerRemainingMs),
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
+                    val onTrayAction: () -> Unit = {
+                        when (action) {
+                            NowPlayingAction.SHUFFLE -> onToggleShuffle()
+                            NowPlayingAction.REPEAT -> onCycleRepeat()
+                            NowPlayingAction.LYRICS -> onLyrics()
+                            NowPlayingAction.SLEEP -> showSleepSheet = true
                         }
                     }
+                    customItem(
+                        buttonGroupContent = {
+                            val shapes = when {
+                                trayActions.size == 1 -> ToggleButtonDefaults.shapes()
+                                index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                index == trayActions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                            }
+                            ToggleButton(
+                                checked = active,
+                                onCheckedChange = { onTrayAction() },
+                                shapes = shapes,
+                                colors = ToggleButtonDefaults.toggleButtonColors(
+                                    containerColor = palette.onPrimaryContainer.copy(alpha = 0.10f),
+                                    contentColor = palette.onPrimaryContainer,
+                                    checkedContainerColor = palette.primary,
+                                    checkedContentColor = palette.onPrimary
+                                ),
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                                interactionSource = interaction,
+                                modifier = Modifier
+                                    .weight(if (action == NowPlayingAction.SLEEP) sleepWeight else 1f)
+                                    .animateWidth(interaction)
+                                    .height(60.dp)
+                                    .testTag("now_playing_tray_${action.id}")
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = action.label,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                if (action == NowPlayingAction.SLEEP && sleepActive) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (sleepAtEndOfSong) "End" else formatCountdown(sleepTimerRemainingMs),
+                                        fontFamily = PlusJakartaSansFontFamily,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        },
+                        menuContent = { menuState ->
+                            DropdownMenuItem(
+                                text = { Text(action.label) },
+                                leadingIcon = { Icon(icon, contentDescription = null) },
+                                onClick = {
+                                    onTrayAction()
+                                    menuState.dismiss()
+                                }
+                            )
+                        }
+                    )
                 }
             }
         }

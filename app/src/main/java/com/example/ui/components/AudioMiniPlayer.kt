@@ -1,6 +1,9 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.example.ui.components
 
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +20,10 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -25,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,43 +117,112 @@ fun AudioMiniPlayer(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            // Official Expressive ButtonGroup: shape-morphing icon buttons that spring wider on press.
+            val previousInteraction = remember { MutableInteractionSource() }
+            val playPauseInteraction = remember { MutableInteractionSource() }
+            val nextInteraction = remember { MutableInteractionSource() }
+            ButtonGroup(
+                overflowIndicator = { menuState ->
+                    ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
+                },
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = onSkipPrevious,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
-                        contentColor = palette.onPrimaryContainer
-                    ),
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
-                }
-                FilledIconButton(
-                    onClick = onTogglePlayPause,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = palette.primary,
-                        contentColor = palette.onPrimary
-                    ),
-                    modifier = Modifier.size(52.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play"
-                    )
-                }
-                IconButton(
-                    onClick = onSkipNext,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
-                        contentColor = palette.onPrimaryContainer
-                    ),
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Next")
-                }
+                customItem(
+                    buttonGroupContent = {
+                        IconButton(
+                            onClick = onSkipPrevious,
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
+                                contentColor = palette.onPrimaryContainer
+                            ),
+                            interactionSource = previousInteraction,
+                            modifier = Modifier
+                                .animateWidth(previousInteraction)
+                                .size(42.dp)
+                        ) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
+                        }
+                    },
+                    menuContent = { menuState ->
+                        DropdownMenuItem(
+                            text = { Text("Previous") },
+                            leadingIcon = { Icon(Icons.Default.SkipPrevious, contentDescription = null) },
+                            onClick = {
+                                onSkipPrevious()
+                                menuState.dismiss()
+                            }
+                        )
+                    }
+                )
+                customItem(
+                    buttonGroupContent = {
+                        FilledIconToggleButton(
+                            checked = isPlaying,
+                            onCheckedChange = { onTogglePlayPause() },
+                            shapes = IconButtonDefaults.toggleableShapes(),
+                            colors = IconButtonDefaults.filledIconToggleButtonColors(
+                                containerColor = palette.primary,
+                                contentColor = palette.onPrimary,
+                                checkedContainerColor = palette.primary,
+                                checkedContentColor = palette.onPrimary
+                            ),
+                            interactionSource = playPauseInteraction,
+                            modifier = Modifier
+                                .animateWidth(playPauseInteraction)
+                                .size(52.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play"
+                            )
+                        }
+                    },
+                    menuContent = { menuState ->
+                        DropdownMenuItem(
+                            text = { Text(if (isPlaying) "Pause" else "Play") },
+                            leadingIcon = {
+                                Icon(
+                                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                onTogglePlayPause()
+                                menuState.dismiss()
+                            }
+                        )
+                    }
+                )
+                customItem(
+                    buttonGroupContent = {
+                        IconButton(
+                            onClick = onSkipNext,
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
+                                contentColor = palette.onPrimaryContainer
+                            ),
+                            interactionSource = nextInteraction,
+                            modifier = Modifier
+                                .animateWidth(nextInteraction)
+                                .size(42.dp)
+                        ) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Next")
+                        }
+                    },
+                    menuContent = { menuState ->
+                        DropdownMenuItem(
+                            text = { Text("Next") },
+                            leadingIcon = { Icon(Icons.Default.SkipNext, contentDescription = null) },
+                            onClick = {
+                                onSkipNext()
+                                menuState.dismiss()
+                            }
+                        )
+                    }
+                )
             }
         }
     }
