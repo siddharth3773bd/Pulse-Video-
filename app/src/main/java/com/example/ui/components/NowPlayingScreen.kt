@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.example.ui.components
 
 import androidx.activity.compose.BackHandler
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,7 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -37,6 +40,23 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.FilledIconToggleButton
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.mutableFloatStateOf
+import java.util.Locale
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -94,7 +114,7 @@ fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) 
     NowPlayingAction.SHUFFLE -> Icons.Default.Shuffle
     NowPlayingAction.REPEAT -> Icons.Default.Repeat
     NowPlayingAction.LYRICS -> LyricsIcon
-    NowPlayingAction.INFO -> Icons.Default.Info
+    NowPlayingAction.SLEEP -> Icons.Default.Bedtime
 }
 
 /**
@@ -119,8 +139,12 @@ fun NowPlayingScreen(
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onToggleLike: () -> Unit,
-    onOpenInfo: () -> Unit,
     onLyrics: () -> Unit,
+    sleepTimerRemainingMs: Long,
+    sleepAtEndOfSong: Boolean,
+    onStartSleepTimer: (Int) -> Unit,
+    onSleepAtEndOfSong: () -> Unit,
+    onCancelSleepTimer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalM3Palette.current
@@ -286,7 +310,7 @@ fun NowPlayingScreen(
             }
         }
 
-        // ---- Seek bar + times + technical chip ----
+        // ---- Seek bar (official Material 3 Slider) + times + technical chip ----
         Spacer(modifier = Modifier.height(12.dp))
         WavySeekBar(
             progress = fraction,
@@ -296,6 +320,7 @@ fun NowPlayingScreen(
                 onSeekTo(target)
             },
             isPlaying = isPlaying,
+            valueLabel = { f -> formatDurationMs((f * safeDuration).toLong()) },
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("audio_seek_slider")
@@ -311,20 +336,30 @@ fun NowPlayingScreen(
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 val chip = techLabel
                 if (!chip.isNullOrBlank()) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = palette.onPrimaryContainer.copy(alpha = 0.12f)
+                    // Slim, low-contrast pill so it reads as metadata, not a button.
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(palette.onPrimaryContainer.copy(alpha = 0.08f))
+                            .padding(horizontal = 10.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = chip,
-                            color = palette.onPrimaryContainer,
+                            color = palette.onPrimaryContainer.copy(alpha = 0.8f),
                             fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 0.2.sp,
                             maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -338,12 +373,8 @@ fun NowPlayingScreen(
             )
         }
 
-        // ---- Main controls ----
+        // ---- Main controls: official Expressive shape-morphing buttons ----
         Spacer(modifier = Modifier.height(16.dp))
-        val playCorner by animateDpAsState(
-            targetValue = if (isPlaying) 26.dp else 40.dp,
-            label = "nowPlayingPlayCorner"
-        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -351,103 +382,139 @@ fun NowPlayingScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
+            FilledTonalIconButton(
                 onClick = onSkipPrevious,
-                shape = RoundedCornerShape(40.dp),
-                color = palette.secondaryContainer,
+                shapes = IconButtonDefaults.shapes(),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = palette.secondaryContainer,
+                    contentColor = palette.onSecondaryContainer
+                ),
                 modifier = Modifier
                     .weight(1f)
                     .height(72.dp)
+                    .testTag("now_playing_previous")
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Previous",
-                        tint = palette.onSecondaryContainer,
-                        modifier = Modifier.size(30.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.SkipPrevious,
+                    contentDescription = "Previous",
+                    modifier = Modifier.size(30.dp)
+                )
             }
-            Surface(
-                onClick = onTogglePlayPause,
-                shape = RoundedCornerShape(playCorner),
-                color = palette.primary,
+            // Toggleable shapes: round when paused, squircle while playing, squishes on press.
+            FilledIconToggleButton(
+                checked = isPlaying,
+                onCheckedChange = { onTogglePlayPause() },
+                shapes = IconButtonDefaults.toggleableShapes(),
+                colors = IconButtonDefaults.filledIconToggleButtonColors(
+                    containerColor = palette.primary,
+                    contentColor = palette.onPrimary,
+                    checkedContainerColor = palette.primary,
+                    checkedContentColor = palette.onPrimary
+                ),
                 modifier = Modifier
                     .weight(1.25f)
                     .height(80.dp)
                     .testTag("now_playing_play_pause")
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = palette.onPrimary,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    modifier = Modifier.size(36.dp)
+                )
             }
-            Surface(
+            FilledTonalIconButton(
                 onClick = onSkipNext,
-                shape = RoundedCornerShape(40.dp),
-                color = palette.secondaryContainer,
+                shapes = IconButtonDefaults.shapes(),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = palette.secondaryContainer,
+                    contentColor = palette.onSecondaryContainer
+                ),
                 modifier = Modifier
                     .weight(1f)
                     .height(72.dp)
+                    .testTag("now_playing_next")
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Next",
-                        tint = palette.onSecondaryContainer,
-                        modifier = Modifier.size(30.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.SkipNext,
+                    contentDescription = "Next",
+                    modifier = Modifier.size(30.dp)
+                )
             }
         }
 
-        // ---- Bottom tray (customizable) ----
+        // ---- Bottom tray: official connected button group ----
+        var showSleepSheet by remember { mutableStateOf(false) }
+        val sleepActive = sleepTimerRemainingMs > 0L || sleepAtEndOfSong
         if (trayActions.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(30.dp))
-                    .background(palette.onPrimaryContainer.copy(alpha = 0.10f))
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(palette.onPrimaryContainer.copy(alpha = 0.08f))
                     .padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
             ) {
-                trayActions.forEach { action ->
+                trayActions.forEachIndexed { index, action ->
                     val active = when (action) {
                         NowPlayingAction.SHUFFLE -> shuffleEnabled
                         NowPlayingAction.REPEAT -> repeatMode != Player.REPEAT_MODE_OFF
-                        else -> false
+                        NowPlayingAction.SLEEP -> sleepActive
+                        NowPlayingAction.LYRICS -> false
                     }
                     val icon = when {
                         action == NowPlayingAction.REPEAT && repeatMode == Player.REPEAT_MODE_ONE ->
                             Icons.Default.RepeatOne
                         else -> nowPlayingActionIcon(action)
                     }
-                    val onClick = when (action) {
-                        NowPlayingAction.SHUFFLE -> onToggleShuffle
-                        NowPlayingAction.REPEAT -> onCycleRepeat
-                        NowPlayingAction.LYRICS -> onLyrics
-                        NowPlayingAction.INFO -> onOpenInfo
+                    val shapes = when {
+                        trayActions.size == 1 -> ToggleButtonDefaults.shapes()
+                        index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        index == trayActions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                     }
-                    Surface(
-                        onClick = onClick,
-                        shape = RoundedCornerShape(24.dp),
-                        color = if (active) palette.primary else palette.onPrimaryContainer.copy(alpha = 0.10f),
+                    // The running sleep timer morphs into a wider pill that shows the countdown.
+                    val weight by animateFloatAsState(
+                        targetValue = if (action == NowPlayingAction.SLEEP && sleepActive) 2f else 1f,
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        label = "trayWeight_${action.id}"
+                    )
+                    ToggleButton(
+                        checked = active,
+                        onCheckedChange = {
+                            when (action) {
+                                NowPlayingAction.SHUFFLE -> onToggleShuffle()
+                                NowPlayingAction.REPEAT -> onCycleRepeat()
+                                NowPlayingAction.LYRICS -> onLyrics()
+                                NowPlayingAction.SLEEP -> showSleepSheet = true
+                            }
+                        },
+                        shapes = shapes,
+                        colors = ToggleButtonDefaults.toggleButtonColors(
+                            containerColor = palette.onPrimaryContainer.copy(alpha = 0.10f),
+                            contentColor = palette.onPrimaryContainer,
+                            checkedContainerColor = palette.primary,
+                            checkedContentColor = palette.onPrimary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(weight)
                             .height(60.dp)
                             .testTag("now_playing_tray_${action.id}")
                     ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = action.label,
-                                tint = if (active) palette.onPrimary else palette.onPrimaryContainer,
-                                modifier = Modifier.size(24.dp)
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = action.label,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        if (action == NowPlayingAction.SLEEP && sleepActive) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (sleepAtEndOfSong) "End" else formatCountdown(sleepTimerRemainingMs),
+                                fontFamily = PlusJakartaSansFontFamily,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -455,5 +522,187 @@ fun NowPlayingScreen(
             }
         }
         Spacer(modifier = Modifier.height(20.dp))
+
+        if (showSleepSheet) {
+            SleepTimerSheet(
+                isActive = sleepActive,
+                remainingMs = sleepTimerRemainingMs,
+                atEndOfSong = sleepAtEndOfSong,
+                onStart = { minutes ->
+                    onStartSleepTimer(minutes)
+                    showSleepSheet = false
+                },
+                onEndOfSong = {
+                    onSleepAtEndOfSong()
+                    showSleepSheet = false
+                },
+                onCancel = {
+                    onCancelSleepTimer()
+                    showSleepSheet = false
+                },
+                onDismiss = { showSleepSheet = false }
+            )
+        }
+    }
+}
+
+/** "14:56" style countdown; shows hours as "1:05:00" when needed. */
+private fun formatCountdown(ms: Long): String {
+    val totalSec = ((ms + 999L) / 1000L).coerceAtLeast(0L)
+    val h = totalSec / 3600L
+    val m = (totalSec % 3600L) / 60L
+    val s = totalSec % 60L
+    return if (h > 0L) {
+        String.format(Locale.US, "%d:%02d:%02d", h, m, s)
+    } else {
+        String.format(Locale.US, "%d:%02d", m, s)
+    }
+}
+
+/** Sleep timer picker: 5 to 120 minutes in 5-minute steps, or stop at the end of the song. */
+@Composable
+private fun SleepTimerSheet(
+    isActive: Boolean,
+    remainingMs: Long,
+    atEndOfSong: Boolean,
+    onStart: (Int) -> Unit,
+    onEndOfSong: () -> Unit,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val palette = LocalM3Palette.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var minutes by remember { mutableFloatStateOf(30f) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = palette.surfaceContainerLow,
+        contentColor = palette.onSurface,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = palette.DragHandleColor) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 28.dp)
+                .testTag("sleep_timer_sheet")
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Bedtime,
+                    contentDescription = null,
+                    tint = palette.primary,
+                    modifier = Modifier.size(26.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Sleep timer",
+                    color = palette.onSurface,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            if (isActive) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = if (atEndOfSong) "Stops at the end of this song" else "Stops in ${formatCountdown(remainingMs)}",
+                    color = palette.primary,
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "${minutes.toInt()} min",
+                color = palette.onSurface,
+                fontFamily = PlusJakartaSansFontFamily,
+                fontSize = 40.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            // Official Material 3 slider, snapping in 5-minute steps (5..120 = 23 stops).
+            Slider(
+                value = minutes,
+                onValueChange = { minutes = (it / 5f).let { v -> Math.round(v) * 5f }.coerceIn(5f, 120f) },
+                valueRange = 5f..120f,
+                steps = 22,
+                colors = SliderDefaults.colors(
+                    thumbColor = palette.primary,
+                    activeTrackColor = palette.primary,
+                    inactiveTrackColor = palette.surfaceContainerHighest,
+                    activeTickColor = palette.onPrimary.copy(alpha = 0.5f),
+                    inactiveTickColor = palette.onSurfaceVariant.copy(alpha = 0.5f)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("sleep_timer_slider")
+            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text("5 min", color = palette.onSurfaceVariant, fontFamily = PlusJakartaSansFontFamily, fontSize = 12.sp)
+                Spacer(modifier = Modifier.weight(1f))
+                Text("120 min", color = palette.onSurfaceVariant, fontFamily = PlusJakartaSansFontFamily, fontSize = 12.sp)
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = { onStart(minutes.toInt()) },
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.primary,
+                    contentColor = palette.onPrimary
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = "Start ${minutes.toInt()} min timer",
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            FilledTonalButton(
+                onClick = onEndOfSong,
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = palette.secondaryContainer,
+                    contentColor = palette.onSecondaryContainer
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = "End of song",
+                    fontFamily = PlusJakartaSansFontFamily,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            if (isActive) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                ) {
+                    Text(
+                        text = "Turn off timer",
+                        color = palette.error,
+                        fontFamily = PlusJakartaSansFontFamily,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
     }
 }
