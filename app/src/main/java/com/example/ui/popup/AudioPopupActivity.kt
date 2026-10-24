@@ -137,6 +137,21 @@ class AudioPopupActivity : ComponentActivity() {
     /** Pressing Home or opening Recents counts as closing the pop-up: stop the music. */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        stopAndCloseBecauseUserLeft()
+    }
+
+    /**
+     * Backup for launchers/gestures where onUserLeaveHint is not delivered: once the pop-up is no longer
+     * visible while the screen is still on, treat it as closed. A screen timeout (screen off) is ignored.
+     */
+    override fun onStop() {
+        super.onStop()
+        val pm = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+        if (pm?.isInteractive == false) return
+        stopAndCloseBecauseUserLeft()
+    }
+
+    private fun stopAndCloseBecauseUserLeft() {
         if (suppressStopOnLeave || isFinishing || isChangingConfigurations) return
         AudioPlaybackManager.getInstance(applicationContext).stopAndClear()
         finish()
