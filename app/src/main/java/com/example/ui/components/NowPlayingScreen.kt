@@ -313,7 +313,7 @@ fun NowPlayingScreen(
             }
         }
 
-        // ---- Seek bar (stock Material 3 Expressive Slider) + times + technical chip ----
+        // ---- Seek bar (official Slider + wavy track) + times + technical chip ----
         Spacer(modifier = Modifier.height(12.dp))
         PlaybackSeekBar(
             progress = fraction,
@@ -322,6 +322,7 @@ fun NowPlayingScreen(
                 dragFraction = null
                 onSeekTo(target)
             },
+            isPlaying = isPlaying,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("audio_seek_slider")

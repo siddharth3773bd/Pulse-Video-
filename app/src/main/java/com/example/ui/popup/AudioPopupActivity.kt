@@ -78,7 +78,7 @@ import com.example.model.formatDurationMs
 import com.example.player.AudioPlaybackManager
 import com.example.player.ExternalAudioInfo
 import com.example.player.ExternalMedia
-import com.example.ui.components.WavySeekBar
+import com.example.ui.components.PlaybackSeekBar
 import com.example.ui.theme.PulseVideoTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -354,7 +354,7 @@ private fun AudioPopupContent(
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            WavySeekBar(
+                            PlaybackSeekBar(
                                 progress = fraction,
                                 onSeekPreview = { dragFraction = it },
                                 onSeekFinished = { target ->

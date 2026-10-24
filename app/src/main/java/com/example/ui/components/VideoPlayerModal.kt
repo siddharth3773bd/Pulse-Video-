@@ -616,7 +616,7 @@ fun VideoPlayerModal(
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Medium
                         )
-                        WavySeekBar(
+                        PlaybackSeekBar(
                             progress = progressFraction,
                             onSeekPreview = { previewFraction ->
                                 seekPreviewFraction = previewFraction
