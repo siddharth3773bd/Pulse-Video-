@@ -112,7 +112,6 @@ enum class SortDir {
 }
 
 enum class BottomTab(val id: String, val label: String) {
-    FOLDERS("folders", "Folders"),
     AUDIO("audio", "Audio"),
     VIDEOS("videos", "Videos"),
     ME("me", "Me")

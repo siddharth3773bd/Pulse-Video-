@@ -1,16 +1,12 @@
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalFoundationApi::class
+)
 
 package com.example.ui.components
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,23 +17,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -46,37 +38,36 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledIconToggleButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,27 +79,26 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.data.AppPreferencesRepository
 import com.example.model.AudioTrackItem
-import com.example.model.LibraryNavMode
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
 import com.example.model.NowPlayingAction
 import com.example.ui.theme.LocalM3Palette
-import com.example.ui.theme.PlusJakartaSansFontFamily
 import kotlinx.coroutines.launch
 
-private enum class LibrarySheetType { SETTINGS, NAV_MODE, MANAGE, JUMP, SORT, TRAY }
+private enum class LibrarySheetType { SETTINGS, MANAGE, SORT, TRAY }
 
 /** Bottom padding of every list so the last rows scroll above the nav pill (and the mini player). */
 private val LocalLibraryBottomPadding = compositionLocalOf { 132.dp }
@@ -123,13 +113,6 @@ private data class AlbumGroup(
 private data class ArtistGroup(
     val key: String,
     val name: String,
-    val tracks: List<AudioTrackItem>
-)
-
-private data class FolderGroup(
-    val key: String,
-    val name: String,
-    val subtitle: String,
     val tracks: List<AudioTrackItem>
 )
 
@@ -176,22 +159,27 @@ private fun buildArtists(tracks: List<AudioTrackItem>, ascending: Boolean): List
     return if (ascending) groups else groups.asReversed()
 }
 
-private fun buildFolders(tracks: List<AudioTrackItem>, ascending: Boolean): List<FolderGroup> {
-    val groups = tracks.groupBy { track ->
-        track.path.substringBeforeLast('/', "").ifBlank { track.folder }
-    }.map { (dir, list) ->
-        val sorted = list.sortedBy { it.title.lowercase() }
-        val name = dir.substringAfterLast('/').ifBlank { sorted.first().folder }
-        FolderGroup(key = dir, name = name, subtitle = dir, tracks = sorted)
-    }.sortedBy { it.name.lowercase() }
-    return if (ascending) groups else groups.asReversed()
+private fun matchesQuery(track: AudioTrackItem, query: String): Boolean {
+    val q = query.trim()
+    if (q.isEmpty()) return false
+    return track.title.contains(q, ignoreCase = true) ||
+        track.artist.contains(q, ignoreCase = true) ||
+        track.album.contains(q, ignoreCase = true)
 }
+
+private fun songCountLabel(count: Int): String = if (count == 1) "1 song" else "$count songs"
+private fun albumCountLabel(count: Int): String = if (count == 1) "1 album" else "$count albums"
+private fun artistCountLabel(count: Int): String = if (count == 1) "1 artist" else "$count artists"
 
 // ---------------------------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------------------------
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Music library, built from official Material 3 components:
+ * TopAppBar (title, search, settings) -> PrimaryScrollableTabRow -> one action row
+ * (count, Shuffle, Sort) -> HorizontalPager of ListItem lists / Card grid on one flat background.
+ */
 @Composable
 fun AudioLibraryScreen(
     tracks: List<AudioTrackItem>,
@@ -208,7 +196,6 @@ fun AudioLibraryScreen(
     modifier: Modifier = Modifier,
     extraBottomPadding: Dp = 0.dp
 ) {
-    val palette = LocalM3Palette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -238,7 +225,8 @@ fun AudioLibraryScreen(
         }
     }
 
-    val currentTab = visibleTabs.getOrNull(pagerState.currentPage) ?: visibleTabs.first()
+    val currentPage = pagerState.currentPage.coerceIn(0, (visibleTabs.size - 1).coerceAtLeast(0))
+    val currentTab = visibleTabs.getOrNull(currentPage) ?: visibleTabs.first()
 
     val selectTab: (LibraryTab) -> Unit = { tab ->
         val idx = visibleTabs.indexOf(tab)
@@ -250,22 +238,25 @@ fun AudioLibraryScreen(
 
     var detailTabId by rememberSaveable { mutableStateOf<String?>(null) }
     var detailKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var searchActive by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
     var sheet by remember { mutableStateOf<LibrarySheetType?>(null) }
     var infoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
 
     val sortedSongs = remember(tracks, prefs.songSort, prefs.songAscending) {
         sortSongs(tracks, prefs.songSort, prefs.songAscending)
     }
+    val likedSongs = remember(sortedSongs, prefs.likedIds) {
+        sortedSongs.filter { it.id in prefs.likedIds }
+    }
     val albums = remember(tracks, prefs.groupAscending) { buildAlbums(tracks, prefs.groupAscending) }
     val artists = remember(tracks, prefs.groupAscending) { buildArtists(tracks, prefs.groupAscending) }
-    val folders = remember(tracks, prefs.groupAscending) { buildFolders(tracks, prefs.groupAscending) }
 
     fun detailTracksFor(tab: LibraryTab): List<AudioTrackItem>? {
         if (detailTabId != tab.id || detailKey == null) return null
         return when (tab) {
             LibraryTab.ALBUMS -> albums.firstOrNull { it.key == detailKey }?.tracks
             LibraryTab.ARTISTS -> artists.firstOrNull { it.key == detailKey }?.tracks
-            LibraryTab.FOLDERS -> folders.firstOrNull { it.key == detailKey }?.tracks
             else -> null
         }
     }
@@ -273,25 +264,24 @@ fun AudioLibraryScreen(
     fun detailTitleFor(tab: LibraryTab): String = when (tab) {
         LibraryTab.ALBUMS -> albums.firstOrNull { it.key == detailKey }?.name.orEmpty()
         LibraryTab.ARTISTS -> artists.firstOrNull { it.key == detailKey }?.name.orEmpty()
-        LibraryTab.FOLDERS -> folders.firstOrNull { it.key == detailKey }?.name.orEmpty()
         else -> ""
     }
 
     val currentDetailTracks = detailTracksFor(currentTab)
-
-    BackHandler(enabled = detailKey != null && currentTab.id == detailTabId) {
+    val inDetail = currentDetailTracks != null
+    val closeDetail = {
         detailTabId = null
         detailKey = null
     }
+    val closeSearch = {
+        searchActive = false
+        query = ""
+    }
 
-    val containerColor = if (amoledBlack) palette.surfaceContainerLowest else palette.surfaceContainerLow
-    val rowColor = if (amoledBlack) palette.surfaceContainer else palette.surfaceContainerHigh
+    BackHandler(enabled = searchActive) { closeSearch() }
+    BackHandler(enabled = !searchActive && inDetail) { closeDetail() }
 
-    val showToolbar = currentTab == LibraryTab.SONGS ||
-        currentTab == LibraryTab.ALBUMS ||
-        currentTab == LibraryTab.ARTISTS ||
-        currentTab == LibraryTab.FOLDERS
-    val showSort = currentDetailTracks == null && showToolbar
+    val background = headerBackground
 
     val playFromList: (List<AudioTrackItem>, Int) -> Unit = { list, index ->
         val target = list.getOrNull(index)
@@ -299,91 +289,165 @@ fun AudioLibraryScreen(
             if (playingAudio?.id == target.id) onTogglePlayPause() else onPlayQueue(list, index, false)
         }
     }
+    val shuffle: (List<AudioTrackItem>) -> Unit = { pool ->
+        if (pool.isNotEmpty()) onPlayQueue(pool, pool.indices.random(), true)
+    }
 
     CompositionLocalProvider(LocalLibraryBottomPadding provides (132.dp + extraBottomPadding)) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(headerBackground)
-            .testTag("audio_library_screen")
-    ) {
-        LibraryHeader(
-            navMode = prefs.navMode,
-            visibleTabs = visibleTabs,
-            currentTab = currentTab,
-            currentPage = pagerState.currentPage,
-            onSelectTab = selectTab,
-            onOpenSettings = { sheet = LibrarySheetType.SETTINGS },
-            onOpenManage = { sheet = LibrarySheetType.MANAGE },
-            onOpenJump = { sheet = LibrarySheetType.JUMP }
-        )
-
-        Surface(
-            color = containerColor,
-            shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(background)
+                .testTag("audio_library_screen")
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                if (showToolbar) {
-                    LibraryToolbar(
-                        showSort = showSort,
-                        onShuffle = {
-                            val pool = currentDetailTracks ?: sortedSongs
-                            if (pool.isNotEmpty()) onPlayQueue(pool, pool.indices.random(), true)
-                        },
+            if (searchActive) {
+                LibrarySearchField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    onClose = closeSearch
+                )
+                val results = remember(sortedSongs, query) {
+                    sortedSongs.filter { matchesQuery(it, query) }
+                }
+                when {
+                    query.isBlank() -> LibraryEmptyState(
+                        icon = Icons.Default.Search,
+                        title = "Search your music",
+                        subtitle = "Find songs by title, artist or album."
+                    )
+                    results.isEmpty() -> LibraryEmptyState(
+                        icon = Icons.Default.Search,
+                        title = "No results",
+                        subtitle = "Nothing matches “${query.trim()}”."
+                    )
+                    else -> SongsList(
+                        songs = results,
+                        playingAudio = playingAudio,
+                        background = background,
+                        onPlay = playFromList,
+                        onMore = { infoTrack = it }
+                    )
+                }
+            } else {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = if (inDetail) detailTitleFor(currentTab) else "Music",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    navigationIcon = {
+                        if (inDetail) {
+                            IconButton(onClick = closeDetail) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = { searchActive = true },
+                            modifier = Modifier.testTag("library_search_button")
+                        ) {
+                            Icon(Icons.Default.Search, contentDescription = "Search")
+                        }
+                        IconButton(
+                            onClick = { sheet = LibrarySheetType.SETTINGS },
+                            modifier = Modifier.testTag("library_settings_button")
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = "Library settings")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = background,
+                        scrolledContainerColor = background
+                    )
+                )
+
+                if (!inDetail && visibleTabs.size > 1) {
+                    PrimaryScrollableTabRow(
+                        selectedTabIndex = currentPage,
+                        containerColor = background,
+                        edgePadding = 16.dp
+                    ) {
+                        visibleTabs.forEachIndexed { index, tab ->
+                            Tab(
+                                selected = index == currentPage,
+                                onClick = { selectTab(tab) },
+                                text = { Text(text = tab.label, maxLines = 1) }
+                            )
+                        }
+                    }
+                }
+
+                // One slim action row: count on the left, Shuffle and Sort on the right.
+                val detail = currentDetailTracks
+                when {
+                    detail != null -> LibraryActionRow(
+                        label = songCountLabel(detail.size),
+                        onShuffle = { shuffle(detail) }.takeIf { detail.isNotEmpty() },
+                        onSort = null
+                    )
+                    currentTab == LibraryTab.SONGS -> LibraryActionRow(
+                        label = songCountLabel(sortedSongs.size),
+                        onShuffle = { shuffle(sortedSongs) }.takeIf { sortedSongs.isNotEmpty() },
                         onSort = { sheet = LibrarySheetType.SORT }
                     )
+                    currentTab == LibraryTab.LIKED -> LibraryActionRow(
+                        label = songCountLabel(likedSongs.size),
+                        onShuffle = { shuffle(likedSongs) }.takeIf { likedSongs.isNotEmpty() },
+                        onSort = null
+                    )
+                    currentTab == LibraryTab.ALBUMS -> LibraryActionRow(
+                        label = albumCountLabel(albums.size),
+                        onShuffle = null,
+                        onSort = { sheet = LibrarySheetType.SORT }
+                    )
+                    currentTab == LibraryTab.ARTISTS -> LibraryActionRow(
+                        label = artistCountLabel(artists.size),
+                        onShuffle = null,
+                        onSort = { sheet = LibrarySheetType.SORT }
+                    )
+                    else -> Unit
                 }
 
                 HorizontalPager(
                     state = pagerState,
                     key = { index -> visibleTabs.getOrNull(index)?.id ?: index.toString() },
+                    userScrollEnabled = !inDetail,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                 ) { page ->
                     val tab = visibleTabs.getOrNull(page)
                     if (tab != null) {
-                        val detail = detailTracksFor(tab)
+                        val pageDetail = detailTracksFor(tab)
                         when {
-                            detail != null -> {
-                                LibraryDetailPage(
-                                    title = detailTitleFor(tab),
-                                    tracks = detail,
-                                    playingAudio = playingAudio,
-                                    isAudioPlaying = isAudioPlaying,
-                                    rowColor = rowColor,
-                                    onBack = {
-                                        detailTabId = null
-                                        detailKey = null
-                                    },
-                                    onPlay = playFromList,
-                                    onMore = { infoTrack = it }
-                                )
-                            }
+                            pageDetail != null -> SongsList(
+                                songs = pageDetail,
+                                playingAudio = playingAudio,
+                                background = background,
+                                onPlay = playFromList,
+                                onMore = { infoTrack = it }
+                            )
                             tab == LibraryTab.SONGS -> {
-                                SongsList(
-                                    songs = sortedSongs,
-                                    playingAudio = playingAudio,
-                                    isAudioPlaying = isAudioPlaying,
-                                    audioProgress = audioProgress,
-                                    showNowPlayingCard = true,
-                                    rowColor = rowColor,
-                                    cardColor = palette.surfaceContainerHigh,
-                                    onPlay = playFromList,
-                                    onMore = { infoTrack = it },
-                                    onTogglePlayPause = onTogglePlayPause,
-                                    onSeekAudio = onSeekAudio,
-                                    onSkipPrevious = onSkipPrevious,
-                                    onSkipNext = onSkipNext
-                                )
+                                if (sortedSongs.isEmpty()) {
+                                    LibraryEmptyState(
+                                        icon = Icons.Default.MusicNote,
+                                        title = "No audio files found",
+                                        subtitle = "Music files stored on your device will appear here."
+                                    )
+                                } else {
+                                    SongsList(
+                                        songs = sortedSongs,
+                                        playingAudio = playingAudio,
+                                        background = background,
+                                        onPlay = playFromList,
+                                        onMore = { infoTrack = it }
+                                    )
+                                }
                             }
                             tab == LibraryTab.LIKED -> {
-                                val likedSongs = remember(sortedSongs, prefs.likedIds) {
-                                    sortedSongs.filter { it.id in prefs.likedIds }
-                                }
                                 if (likedSongs.isEmpty()) {
                                     LibraryEmptyState(
                                         icon = tab.icon,
@@ -394,63 +458,37 @@ fun AudioLibraryScreen(
                                     SongsList(
                                         songs = likedSongs,
                                         playingAudio = playingAudio,
-                                        isAudioPlaying = isAudioPlaying,
-                                        audioProgress = audioProgress,
-                                        showNowPlayingCard = false,
-                                        rowColor = rowColor,
-                                        cardColor = palette.surfaceContainerHigh,
+                                        background = background,
                                         onPlay = playFromList,
-                                        onMore = { infoTrack = it },
-                                        onTogglePlayPause = onTogglePlayPause,
-                                        onSeekAudio = onSeekAudio,
-                                        onSkipPrevious = onSkipPrevious,
-                                        onSkipNext = onSkipNext
+                                        onMore = { infoTrack = it }
                                     )
                                 }
                             }
-                            tab == LibraryTab.ALBUMS -> {
-                                AlbumsGrid(
-                                    albums = albums,
-                                    rowColor = rowColor,
-                                    onOpen = { album ->
-                                        detailTabId = LibraryTab.ALBUMS.id
-                                        detailKey = album.key
-                                    }
-                                )
-                            }
-                            tab == LibraryTab.ARTISTS -> {
-                                ArtistsList(
-                                    artists = artists,
-                                    rowColor = rowColor,
-                                    onOpen = { artist ->
-                                        detailTabId = LibraryTab.ARTISTS.id
-                                        detailKey = artist.key
-                                    }
-                                )
-                            }
-                            tab == LibraryTab.FOLDERS -> {
-                                FoldersList(
-                                    folders = folders,
-                                    rowColor = rowColor,
-                                    onOpen = { folder ->
-                                        detailTabId = LibraryTab.FOLDERS.id
-                                        detailKey = folder.key
-                                    }
-                                )
-                            }
-                            else -> {
-                                LibraryEmptyState(
-                                    icon = tab.icon,
-                                    title = "Coming soon",
-                                    subtitle = "${tab.label} will be available in a future update."
-                                )
-                            }
+                            tab == LibraryTab.ALBUMS -> AlbumsGrid(
+                                albums = albums,
+                                onOpen = { album ->
+                                    detailTabId = LibraryTab.ALBUMS.id
+                                    detailKey = album.key
+                                }
+                            )
+                            tab == LibraryTab.ARTISTS -> ArtistsList(
+                                artists = artists,
+                                background = background,
+                                onOpen = { artist ->
+                                    detailTabId = LibraryTab.ARTISTS.id
+                                    detailKey = artist.key
+                                }
+                            )
+                            else -> LibraryEmptyState(
+                                icon = tab.icon,
+                                title = "Coming soon",
+                                subtitle = "${tab.label} will be available in a future update."
+                            )
                         }
                     }
                 }
             }
         }
-    }
     }
 
     // ---- Sheets -------------------------------------------------------------------------
@@ -460,8 +498,6 @@ fun AudioLibraryScreen(
 
     when (sheet) {
         LibrarySheetType.SETTINGS -> LibrarySettingsSheet(
-            navMode = prefs.navMode,
-            onOpenNavigation = { sheet = LibrarySheetType.NAV_MODE },
             onOpenManageTabs = { sheet = LibrarySheetType.MANAGE },
             onOpenTray = { sheet = LibrarySheetType.TRAY },
             onDismiss = { sheet = null }
@@ -479,28 +515,10 @@ fun AudioLibraryScreen(
             },
             onDismiss = { sheet = null }
         )
-        LibrarySheetType.NAV_MODE -> LibraryNavigationSheet(
-            selected = prefs.navMode,
-            onSelect = { mode ->
-                scope.launch { AppPreferencesRepository.updateLibraryNavMode(context, mode) }
-                sheet = null
-            },
-            onDismiss = { sheet = null }
-        )
         LibrarySheetType.MANAGE -> ManageTabsSheet(
             prefs = prefs,
             onChange = saveTabs,
             onReset = { saveTabs(LibraryTab.entries, emptySet()) },
-            onDismiss = { sheet = null }
-        )
-        LibrarySheetType.JUMP -> LibraryJumpSheet(
-            tabs = visibleTabs,
-            current = currentTab,
-            onSelect = { tab ->
-                selectTab(tab)
-                sheet = null
-            },
-            onReorder = { sheet = LibrarySheetType.MANAGE },
             onDismiss = { sheet = null }
         )
         LibrarySheetType.SORT -> {
@@ -539,283 +557,88 @@ fun AudioLibraryScreen(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Header + navigation
+// Search + action row
 // ---------------------------------------------------------------------------------------------
 
+/** Official Material 3 search input field, shown in place of the top app bar while searching. */
 @Composable
-private fun LibraryHeader(
-    navMode: LibraryNavMode,
-    visibleTabs: List<LibraryTab>,
-    currentTab: LibraryTab,
-    currentPage: Int,
-    onSelectTab: (LibraryTab) -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenManage: () -> Unit,
-    onOpenJump: () -> Unit
+private fun LibrarySearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    Column(
+    SearchBarDefaults.InputField(
+        query = query,
+        onQueryChange = onQueryChange,
+        onSearch = {},
+        expanded = true,
+        onExpandedChange = {},
+        placeholder = { Text("Search songs, artists, albums") },
+        leadingIcon = {
+            IconButton(onClick = onClose) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
+            }
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Default.Close, contentDescription = "Clear search")
+                }
+            }
+        },
         modifier = Modifier
-            .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(top = 8.dp)
-    ) {
-        if (navMode == LibraryNavMode.TAB_ROW) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Library",
-                    color = palette.onSurface,
-                    style = MaterialTheme.typography.headlineLargeEmphasized,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f)
-                )
-                LibraryGearButton(onClick = onOpenSettings)
-            }
-
-            val listState = rememberLazyListState()
-            LaunchedEffect(currentPage) {
-                listState.animateScrollToItem(currentPage.coerceAtLeast(0))
-            }
-            LazyRow(
-                state = listState,
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 12.dp, bottom = 14.dp)
-            ) {
-                items(visibleTabs, key = { it.id }) { tab ->
-                    LibraryTabChip(
-                        label = tab.label,
-                        selected = tab == currentTab,
-                        onClick = { onSelectTab(tab) }
-                    )
-                }
-                item(key = "edit_chip") {
-                    Surface(
-                        onClick = onOpenManage,
-                        shape = RoundedCornerShape(50),
-                        color = palette.surfaceContainerHigh
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .height(48.dp)
-                                .width(64.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Manage tabs",
-                                tint = palette.onSurface,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = palette.primaryContainer
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = currentTab.icon,
-                            contentDescription = null,
-                            tint = palette.onPrimaryContainer,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = currentTab.label,
-                            color = palette.onPrimaryContainer,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                Surface(
-                    onClick = onOpenJump,
-                    shape = RoundedCornerShape(50),
-                    color = palette.primaryContainer
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .height(54.dp)
-                            .width(64.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Jump to tab",
-                            tint = palette.onPrimaryContainer
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                LibraryGearButton(onClick = onOpenSettings)
-            }
-
-            PagerDots(
-                count = visibleTabs.size,
-                current = currentPage,
-                modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 14.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun LibraryGearButton(onClick: () -> Unit) {
-    val palette = LocalM3Palette.current
-    FilledIconButton(
-        onClick = onClick,
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = palette.secondaryContainer,
-            contentColor = palette.onSecondaryContainer
-        ),
-        modifier = Modifier
-            .size(48.dp)
-            .testTag("library_settings_button")
-    ) {
-        Icon(imageVector = Icons.Default.Settings, contentDescription = "Library settings")
-    }
-}
-
-@Composable
-private fun LibraryTabChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val palette = LocalM3Palette.current
-    val bg by animateColorAsState(
-        targetValue = if (selected) palette.primaryContainer else palette.surfaceContainerHigh,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "chipBg"
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .testTag("library_search_field")
     )
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(50),
-        color = bg
-    ) {
-        Box(
-            modifier = Modifier
-                .height(48.dp)
-                .padding(horizontal = 22.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = label.uppercase(),
-                color = if (selected) palette.onPrimaryContainer else palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-        }
-    }
 }
 
 @Composable
-private fun PagerDots(count: Int, current: Int, modifier: Modifier = Modifier) {
-    val palette = LocalM3Palette.current
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        repeat(count) { index ->
-            val isCurrent = index == current
-            val width by animateDpAsState(
-                targetValue = if (isCurrent) 30.dp else 12.dp,
-                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-                label = "dotWidth"
-            )
-            Box(
-                modifier = Modifier
-                    .height(6.dp)
-                    .width(width)
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        if (isCurrent) palette.primary else palette.primary.copy(alpha = 0.35f)
-                    )
-            )
-        }
-    }
-}
-
-@Composable
-private fun LibraryToolbar(
-    showSort: Boolean,
-    onShuffle: () -> Unit,
-    onSort: () -> Unit
+private fun LibraryActionRow(
+    label: String,
+    onShuffle: (() -> Unit)?,
+    onSort: (() -> Unit)?
 ) {
-    val palette = LocalM3Palette.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 10.dp),
+            .height(56.dp)
+            .padding(start = 20.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(
-            onClick = onShuffle,
-            shape = RoundedCornerShape(50),
-            color = palette.secondaryContainer,
-            modifier = Modifier.testTag("library_shuffle_button")
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        if (onShuffle != null) {
+            FilledTonalButton(
+                onClick = onShuffle,
+                shapes = ButtonDefaults.shapes(),
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                modifier = Modifier.testTag("library_shuffle_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.Shuffle,
                     contentDescription = null,
-                    tint = palette.onSecondaryContainer,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(ButtonDefaults.IconSize)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Shuffle",
-                    color = palette.onSecondaryContainer,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Shuffle")
             }
         }
-        Spacer(modifier = Modifier.weight(1f))
-        if (showSort) {
-            Surface(
+        if (onSort != null) {
+            IconButton(
                 onClick = onSort,
-                shape = RoundedCornerShape(18.dp),
-                color = palette.primaryContainer,
                 modifier = Modifier.testTag("library_sort_button")
             ) {
-                Box(
-                    modifier = Modifier
-                        .height(52.dp)
-                        .width(64.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Sort,
-                        contentDescription = "Sort",
-                        tint = palette.onPrimaryContainer
-                    )
-                }
+                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
             }
         }
     }
@@ -829,41 +652,26 @@ private fun LibraryToolbar(
 private fun SongsList(
     songs: List<AudioTrackItem>,
     playingAudio: AudioTrackItem?,
-    isAudioPlaying: Boolean,
-    audioProgress: Float,
-    showNowPlayingCard: Boolean,
-    rowColor: Color,
-    cardColor: Color,
+    background: Color,
     onPlay: (List<AudioTrackItem>, Int) -> Unit,
-    onMore: (AudioTrackItem) -> Unit,
-    onTogglePlayPause: () -> Unit,
-    onSeekAudio: (Float) -> Unit,
-    onSkipPrevious: () -> Unit,
-    onSkipNext: () -> Unit
+    onMore: (AudioTrackItem) -> Unit
 ) {
-    if (songs.isEmpty()) {
-        LibraryEmptyState(
-            icon = Icons.Default.MusicNote,
-            title = "No audio files found",
-            subtitle = "Music files stored on your device will appear here."
-        )
-        return
-    }
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("audio_library_view"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = LocalLibraryBottomPadding.current),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        contentPadding = PaddingValues(
+            start = 8.dp,
+            end = 8.dp,
+            top = 4.dp,
+            bottom = LocalLibraryBottomPadding.current
+        )
     ) {
         itemsIndexed(songs, key = { _, t -> t.id }) { index, track ->
-            val selected = playingAudio?.id == track.id
             SongRow(
                 track = track,
-                selected = selected,
-                playing = selected && isAudioPlaying,
-                rowColor = rowColor,
+                selected = playingAudio?.id == track.id,
+                background = background,
                 onClick = { onPlay(songs, index) },
                 onMore = { onMore(track) }
             )
@@ -871,155 +679,61 @@ private fun SongsList(
     }
 }
 
+/** Official Material 3 Expressive list item; the current song uses the list item's selected state. */
 @Composable
 private fun SongRow(
     track: AudioTrackItem,
     selected: Boolean,
-    playing: Boolean,
-    rowColor: Color,
+    background: Color,
     onClick: () -> Unit,
     onMore: () -> Unit
 ) {
     val palette = LocalM3Palette.current
-    val cardBg by animateColorAsState(
-        targetValue = if (selected) palette.primaryContainer else rowColor,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "songRowBg"
-    )
-    // The selected (current) song turns into a rounder "pill" with a circular cover.
-    val rowCorner by animateDpAsState(
-        targetValue = if (selected) 40.dp else 20.dp,
-        animationSpec = tween(260),
-        label = "songRowCorner"
-    )
-    val artCorner by animateDpAsState(
-        targetValue = if (selected) 25.dp else 12.dp,
-        animationSpec = tween(260),
-        label = "songArtCorner"
-    )
-    Surface(
+    ListItem(
+        selected = selected,
         onClick = onClick,
-        shape = RoundedCornerShape(rowCorner),
-        color = cardBg,
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("audio_track_row_${track.mediaId}")
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        leadingContent = {
             AudioArt(
                 uri = track.contentUri,
                 placeholderBackground = palette.surfaceContainerHighest,
                 placeholderTint = palette.primary,
-                modifier = Modifier.size(50.dp),
-                shape = RoundedCornerShape(artCorner)
+                modifier = Modifier.size(52.dp),
+                shape = RoundedCornerShape(12.dp)
             )
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = track.title,
-                    color = if (selected) palette.primary else palette.onSurface,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = track.artist,
-                    color = if (selected) palette.primary.copy(alpha = 0.8f) else palette.onSurfaceVariant,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+        },
+        supportingContent = {
+            Text(
+                text = track.artist,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        trailingContent = {
+            IconButton(onClick = onMore) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Song info")
             }
-            if (selected) {
-                Spacer(modifier = Modifier.width(8.dp))
-                EqualizerIndicator(isPlaying = playing, color = palette.primary)
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            FilledIconButton(
-                onClick = onMore,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = if (selected) palette.primary else palette.surfaceContainerHighest,
-                    contentColor = if (selected) palette.onPrimary else palette.onSurface
-                ),
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Song info")
-            }
-        }
-    }
-}
-
-@Composable
-private fun EqualizerIndicator(isPlaying: Boolean, color: Color) {
-    if (isPlaying) {
-        val transition = rememberInfiniteTransition(label = "equalizer")
-        val bar1 = transition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(450, easing = LinearEasing), RepeatMode.Reverse),
-            label = "bar1"
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = background,
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
+        modifier = Modifier.testTag("audio_track_row_${track.mediaId}")
+    ) {
+        Text(
+            text = track.title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
-        val bar2 = transition.animateFloat(
-            initialValue = 0.4f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(620, easing = LinearEasing), RepeatMode.Reverse),
-            label = "bar2"
-        )
-        val bar3 = transition.animateFloat(
-            initialValue = 0.25f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(530, easing = LinearEasing), RepeatMode.Reverse),
-            label = "bar3"
-        )
-        Row(
-            modifier = Modifier
-                .height(18.dp)
-                .width(18.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            listOf(bar1, bar2, bar3).forEach { bar ->
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .fillMaxHeight(bar.value)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(color)
-                )
-            }
-        }
-    } else {
-        Row(
-            modifier = Modifier.height(18.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            repeat(3) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                )
-            }
-        }
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Albums / Artists / Folders
+// Albums / Artists
 // ---------------------------------------------------------------------------------------------
 
 @Composable
 private fun AlbumsGrid(
     albums: List<AlbumGroup>,
-    rowColor: Color,
     onOpen: (AlbumGroup) -> Unit
 ) {
     val palette = LocalM3Palette.current
@@ -1036,42 +750,43 @@ private fun AlbumsGrid(
         modifier = Modifier
             .fillMaxSize()
             .testTag("library_albums_grid"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = LocalLibraryBottomPadding.current),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 4.dp,
+            bottom = LocalLibraryBottomPadding.current
+        ),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(albums, key = { it.key }) { album ->
-            Surface(
+            Card(
                 onClick = { onOpen(album) },
-                shape = RoundedCornerShape(24.dp),
-                color = rowColor
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    AudioArt(
-                        uri = album.tracks.first().contentUri,
-                        placeholderBackground = palette.surfaceContainerHighest,
-                        placeholderTint = palette.primary,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        iconSize = 40.dp
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
+                AudioArt(
+                    uri = album.tracks.first().contentUri,
+                    placeholderBackground = palette.surfaceContainerHighest,
+                    placeholderTint = palette.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
+                    shape = RoundedCornerShape(0.dp),
+                    iconSize = 40.dp
+                )
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                     Text(
                         text = album.name,
-                        color = palette.onSurface,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = album.artist,
-                        color = palette.onSurfaceVariant,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 12.5.sp,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1084,7 +799,7 @@ private fun AlbumsGrid(
 @Composable
 private fun ArtistsList(
     artists: List<ArtistGroup>,
-    rowColor: Color,
+    background: Color,
     onOpen: (ArtistGroup) -> Unit
 ) {
     val palette = LocalM3Palette.current
@@ -1100,202 +815,57 @@ private fun ArtistsList(
         modifier = Modifier
             .fillMaxSize()
             .testTag("library_artists_list"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = LocalLibraryBottomPadding.current),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        contentPadding = PaddingValues(
+            start = 8.dp,
+            end = 8.dp,
+            top = 4.dp,
+            bottom = LocalLibraryBottomPadding.current
+        )
     ) {
         items(artists, key = { it.key }) { artist ->
-            Surface(
+            ListItem(
                 onClick = { onOpen(artist) },
-                shape = RoundedCornerShape(20.dp),
-                color = rowColor,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                leadingContent = {
                     AudioArt(
                         uri = artist.tracks.first().contentUri,
                         placeholderBackground = palette.surfaceContainerHighest,
                         placeholderTint = palette.primary,
-                        modifier = Modifier.size(50.dp),
+                        modifier = Modifier.size(52.dp),
                         shape = CircleShape
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = artist.name,
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = songCountLabel(artist.tracks.size),
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.sp
-                        )
-                    }
+                },
+                supportingContent = { Text(songCountLabel(artist.tracks.size)) },
+                trailingContent = {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = palette.onSurfaceVariant
+                        contentDescription = null
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FoldersList(
-    folders: List<FolderGroup>,
-    rowColor: Color,
-    onOpen: (FolderGroup) -> Unit
-) {
-    val palette = LocalM3Palette.current
-    if (folders.isEmpty()) {
-        LibraryEmptyState(
-            icon = LibraryTab.FOLDERS.icon,
-            title = "No folders found",
-            subtitle = "Folders that contain music will appear here."
-        )
-        return
-    }
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag("library_folders_list"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = LocalLibraryBottomPadding.current),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(folders, key = { it.key }) { folder ->
-            Surface(
-                onClick = { onOpen(folder) },
-                shape = RoundedCornerShape(20.dp),
-                color = rowColor,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clip(CircleShape)
-                            .background(palette.secondaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = null,
-                            tint = palette.onSecondaryContainer
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = folder.name,
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = songCountLabel(folder.tracks.size),
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = palette.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryDetailPage(
-    title: String,
-    tracks: List<AudioTrackItem>,
-    playingAudio: AudioTrackItem?,
-    isAudioPlaying: Boolean,
-    rowColor: Color,
-    onBack: () -> Unit,
-    onPlay: (List<AudioTrackItem>, Int) -> Unit,
-    onMore: (AudioTrackItem) -> Unit
-) {
-    val palette = LocalM3Palette.current
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 16.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = palette.onSurface
+                },
+                colors = ListItemDefaults.colors(
+                    containerColor = background,
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
                 )
-            }
-            Column(modifier = Modifier.weight(1f)) {
+            ) {
                 Text(
-                    text = title,
-                    color = palette.onSurface,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = artist.name,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = songCountLabel(tracks.size),
-                    color = palette.onSurfaceVariant,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 13.sp
-                )
             }
         }
-        SongsList(
-            songs = tracks,
-            playingAudio = playingAudio,
-            isAudioPlaying = isAudioPlaying,
-            audioProgress = 0f,
-            showNowPlayingCard = false,
-            rowColor = rowColor,
-            cardColor = rowColor,
-            onPlay = onPlay,
-            onMore = onMore,
-            onTogglePlayPause = {},
-            onSeekAudio = {},
-            onSkipPrevious = {},
-            onSkipNext = {}
-        )
     }
 }
 
-private fun songCountLabel(count: Int): String = if (count == 1) "1 song" else "$count songs"
+// ---------------------------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------------------------
 
 @Composable
 private fun LibraryEmptyState(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String
 ) {
-    val palette = LocalM3Palette.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1308,30 +878,27 @@ private fun LibraryEmptyState(
             modifier = Modifier
                 .size(68.dp)
                 .clip(MaterialShapes.Sunny.toShape())
-                .background(palette.surfaceContainerHigh),
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = palette.primary,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(30.dp)
             )
         }
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = title,
-            color = palette.onSurface,
-            fontFamily = PlusJakartaSansFontFamily,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = subtitle,
-            color = palette.onSurfaceVariant,
-            fontFamily = PlusJakartaSansFontFamily,
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
     }

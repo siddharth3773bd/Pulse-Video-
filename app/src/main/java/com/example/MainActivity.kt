@@ -583,53 +583,6 @@ fun Material3VideoPlayerScreen(
                             }
                         }
 
-                        BottomTab.FOLDERS -> {
-                            if (!uiState.hasVideoPermission) {
-                                val permName = MediaStoreScanner.getVideoPermissionName()
-                                val showSettings = uiState.videoPermissionAsked &&
-                                    (activity == null || !ActivityCompat.shouldShowRequestPermissionRationale(activity, permName))
-                                MediaPermissionPromptCard(
-                                    title = "Video access needed",
-                                    explanation = "Grant video permission so Videos can list your device folders and play local videos.",
-                                    showOpenSettingsButton = uiState.videoPermissionAsked || showSettings,
-                                    onGrantPermission = {
-                                        videoPermissionLauncher.launch(permName)
-                                    },
-                                    onOpenSettings = {
-                                        openAppSystemSettings(context)
-                                    }
-                                )
-                            } else if (uiState.selectedFolderFilter != null || uiState.selectedPlaylistFilter != null) {
-                                VideosContentListOrGrid(
-                                    uiState = uiState,
-                                    effectiveAmoled = effectiveAmoled,
-                                    onVideoClick = { video ->
-                                        if (uiState.isSelectionMode) {
-                                            viewModel.toggleSelectId(video.id)
-                                        } else {
-                                            viewModel.playVideo(video, context)
-                                        }
-                                    },
-                                    onVideoLongClick = { video ->
-                                        viewModel.clearAllOverlays()
-                                        viewModel.toggleSelectId(video.id)
-                                    },
-                                    onVideoMenuClick = { video ->
-                                        viewModel.openVideoMenu(video)
-                                    },
-                                    onRescan = { viewModel.refreshPermissionsAndScan(context, showSpinner = true) }
-                                )
-                            } else {
-                                FoldersLibraryView(
-                                    videos = uiState.videos,
-                                    playlists = uiState.playlists,
-                                    amoledBlack = effectiveAmoled,
-                                    onSelectFolder = { folder -> viewModel.selectFolderFilter(folder) },
-                                    onSelectPlaylist = { plId -> viewModel.selectPlaylistFilter(plId) }
-                                )
-                            }
-                        }
-
                         BottomTab.VIDEOS, BottomTab.ME -> {
                             if (!uiState.hasVideoPermission) {
                                 val permName = MediaStoreScanner.getVideoPermissionName()
@@ -1007,7 +960,6 @@ private fun M3ExpressiveHeader(
 
     val titleText = when {
         activeSubTitle != null -> activeSubTitle
-        uiState.bottomTab == BottomTab.FOLDERS -> "Folders"
         uiState.bottomTab == BottomTab.AUDIO -> "Audio"
         uiState.bottomTab == BottomTab.ME -> "Me"
         else -> "Videos"
@@ -1596,7 +1548,6 @@ private fun MainNavigationPill(
 
     val allFixedTabs = remember {
         listOf(
-            Triple(BottomTab.FOLDERS, "Folders", Icons.Default.Folder),
             Triple(BottomTab.AUDIO, "Audio", Icons.Default.MusicNote),
             Triple(BottomTab.VIDEOS, "Videos", Icons.Default.PlayArrow),
             Triple(BottomTab.ME, "Me", Icons.Default.Person)

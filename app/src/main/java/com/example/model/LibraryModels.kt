@@ -3,7 +3,6 @@ package com.example.model
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlaylistPlay
@@ -15,7 +14,6 @@ enum class LibraryTab(val id: String, val label: String) {
     ALBUMS("albums", "Albums"),
     ARTISTS("artists", "Artists"),
     PLAYLISTS("playlists", "Playlists"),
-    FOLDERS("folders", "Folders"),
     LIKED("liked", "Liked");
 
     val icon: ImageVector
@@ -24,7 +22,6 @@ enum class LibraryTab(val id: String, val label: String) {
             ALBUMS -> Icons.Default.Album
             ARTISTS -> Icons.Default.Person
             PLAYLISTS -> Icons.Default.PlaylistPlay
-            FOLDERS -> Icons.Default.Folder
             LIKED -> Icons.Default.Favorite
         }
 }
@@ -35,11 +32,6 @@ enum class NowPlayingAction(val id: String, val label: String) {
     REPEAT("repeat", "Repeat"),
     LYRICS("lyrics", "Lyrics"),
     SLEEP("sleep", "Sleep timer")
-}
-
-enum class LibraryNavMode(val id: String) {
-    TAB_ROW("tab_row"),
-    COMPACT("compact")
 }
 
 enum class LibrarySongSort(val id: String, val label: String) {
@@ -55,7 +47,6 @@ enum class LibrarySongSort(val id: String, val label: String) {
 data class LibraryPreferences(
     val tabOrder: List<LibraryTab> = LibraryTab.entries,
     val hiddenTabs: Set<LibraryTab> = emptySet(),
-    val navMode: LibraryNavMode = LibraryNavMode.TAB_ROW,
     val songSort: LibrarySongSort = LibrarySongSort.DEFAULT,
     val songAscending: Boolean = true,
     val groupAscending: Boolean = true,

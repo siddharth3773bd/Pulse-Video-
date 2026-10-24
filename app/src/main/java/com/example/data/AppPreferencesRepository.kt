@@ -12,7 +12,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.example.model.BottomTab
 import com.example.model.DecoderMode
 import com.example.model.LayoutMode
-import com.example.model.LibraryNavMode
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
@@ -82,7 +81,6 @@ object AppPreferencesRepository {
     // Audio Library screen
     private val KEY_LIB_TAB_ORDER = stringPreferencesKey("lib_tab_order")
     private val KEY_LIB_HIDDEN_TABS = stringPreferencesKey("lib_hidden_tabs")
-    private val KEY_LIB_NAV_MODE = stringPreferencesKey("lib_nav_mode")
     private val KEY_LIB_SONG_SORT = stringPreferencesKey("lib_song_sort")
     private val KEY_LIB_SONG_ASC = booleanPreferencesKey("lib_song_asc")
     private val KEY_LIB_GROUP_ASC = booleanPreferencesKey("lib_group_asc")
@@ -177,7 +175,6 @@ object AppPreferencesRepository {
             LibraryPreferences(
                 tabOrder = order,
                 hiddenTabs = safeHidden,
-                navMode = LibraryNavMode.entries.find { it.id == prefs[KEY_LIB_NAV_MODE] } ?: LibraryNavMode.TAB_ROW,
                 songSort = LibrarySongSort.entries.find { it.id == prefs[KEY_LIB_SONG_SORT] } ?: LibrarySongSort.DEFAULT,
                 songAscending = prefs[KEY_LIB_SONG_ASC] ?: true,
                 groupAscending = prefs[KEY_LIB_GROUP_ASC] ?: true,
@@ -210,10 +207,6 @@ object AppPreferencesRepository {
         }
     }
 
-    suspend fun updateLibraryNavMode(context: Context, mode: LibraryNavMode) {
-        context.appDataStore.edit { it[KEY_LIB_NAV_MODE] = mode.id }
-    }
-
     suspend fun updateLibrarySongSort(context: Context, sort: LibrarySongSort, ascending: Boolean) {
         context.appDataStore.edit {
             it[KEY_LIB_SONG_SORT] = sort.id
@@ -228,7 +221,7 @@ object AppPreferencesRepository {
     private fun parseActiveTabs(raw: String?): List<BottomTab> {
         if (raw.isNullOrBlank()) return BottomTab.entries
         val ids = raw.split(",").map { it.trim() }.toSet()
-        // Always preserve fixed order: Folders, Audio, Videos, Me
+        // Always preserve fixed order: Audio, Videos, Me
         val ordered = BottomTab.entries.filter { it.id in ids }
         return ordered.ifEmpty { BottomTab.entries }
     }

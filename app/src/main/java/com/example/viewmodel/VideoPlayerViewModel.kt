@@ -430,7 +430,7 @@ class VideoPlayerViewModel : ViewModel() {
     }
 
     /**
-     * Enforces the MINIMUM ONE TAB RULE and fixed tab order (Folders, Audio, Videos, Me).
+     * Enforces the MINIMUM ONE TAB RULE and fixed tab order (Audio, Videos, Me).
      */
     fun setTabActive(tab: BottomTab, active: Boolean, context: Context? = null) {
         var updatedList: List<BottomTab> = emptyList()
@@ -896,7 +896,7 @@ class VideoPlayerViewModel : ViewModel() {
     }
 
     /**
-     * Called when opening ANY video from Videos, Folders, Playlists, or History.
+     * Called when opening ANY video from Videos, Playlists, or History.
      * Shows the resume bottom sheet if the video has a saved position between 5s and 95% of duration;
      * otherwise skips the sheet and starts from 0:00.
      */

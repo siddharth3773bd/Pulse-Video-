@@ -2266,7 +2266,6 @@ private fun NavigationCustomizeSubPage(
 ) {
     val palette = LocalM3Palette.current
     val fixedOrderTabs = listOf(
-        Triple(BottomTab.FOLDERS, "Folders", Icons.Default.Folder to "Browse videos grouped by device folders"),
         Triple(BottomTab.AUDIO, "Audio", Icons.Default.MusicNote to "Play local music and audio tracks"),
         Triple(BottomTab.VIDEOS, "Videos", Icons.Default.PlayArrow to "Main video library with list, grid and tree views"),
         Triple(BottomTab.ME, "Me", Icons.Default.Person to "Playlists, watch history and app preferences")

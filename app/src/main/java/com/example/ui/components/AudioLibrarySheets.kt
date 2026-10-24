@@ -58,7 +58,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AudioTrackItem
-import com.example.model.LibraryNavMode
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
@@ -126,8 +125,6 @@ private fun SheetTitle(title: String, subtitle: String? = null) {
 
 @Composable
 fun LibrarySettingsSheet(
-    navMode: LibraryNavMode,
-    onOpenNavigation: () -> Unit,
     onOpenManageTabs: () -> Unit,
     onOpenTray: () -> Unit,
     onDismiss: () -> Unit
@@ -135,46 +132,6 @@ fun LibrarySettingsSheet(
     val palette = LocalM3Palette.current
     LibrarySheet(onDismiss = onDismiss) {
         SheetTitle(title = "Library settings")
-
-        Surface(
-            onClick = onOpenNavigation,
-            shape = RoundedCornerShape(24.dp),
-            color = palette.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Text(
-                    text = "Library Navigation",
-                    color = palette.onSurface,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Choose how to move between Library tabs.",
-                    color = palette.onSurfaceVariant,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = palette.primaryContainer
-                ) {
-                    Text(
-                        text = if (navMode == LibraryNavMode.TAB_ROW) "Tab row" else "Compact pill & grid",
-                        color = palette.onPrimaryContainer,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         Surface(
             onClick = onOpenManageTabs,
@@ -343,54 +300,6 @@ fun NowPlayingTraySheet(
     }
 }
 
-@Composable
-fun LibraryNavigationSheet(
-    selected: LibraryNavMode,
-    onSelect: (LibraryNavMode) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val palette = LocalM3Palette.current
-    LibrarySheet(onDismiss = onDismiss) {
-        SheetTitle(title = "Library Navigation")
-        val options = listOf(
-            LibraryNavMode.TAB_ROW to "Tab row (default)",
-            LibraryNavMode.COMPACT to "Compact pill & grid"
-        )
-        options.forEach { (mode, label) ->
-            val isSelected = mode == selected
-            Surface(
-                onClick = { onSelect(mode) },
-                shape = RoundedCornerShape(20.dp),
-                color = if (isSelected) palette.primaryContainer else palette.surfaceContainerHigh,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = label,
-                        color = if (isSelected) palette.onPrimaryContainer else palette.onSurface,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = palette.onPrimaryContainer
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------------------------
 // Manage tabs
 // ---------------------------------------------------------------------------------------------
@@ -505,98 +414,6 @@ fun ManageTabsSheet(
                     color = palette.primary,
                     fontFamily = PlusJakartaSansFontFamily,
                     fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Jump sheet (compact navigation mode)
-// ---------------------------------------------------------------------------------------------
-
-@Composable
-fun LibraryJumpSheet(
-    tabs: List<LibraryTab>,
-    current: LibraryTab,
-    onSelect: (LibraryTab) -> Unit,
-    onReorder: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val palette = LocalM3Palette.current
-    LibrarySheet(onDismiss = onDismiss) {
-        SheetTitle(
-            title = "Library tabs",
-            subtitle = "Jump directly to any tab or reorder them."
-        )
-
-        tabs.chunked(2).forEach { rowTabs ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                rowTabs.forEach { tab ->
-                    val isSelected = tab == current
-                    Surface(
-                        onClick = { onSelect(tab) },
-                        shape = RoundedCornerShape(24.dp),
-                        color = if (isSelected) palette.primaryContainer else palette.surfaceContainerHigh,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 18.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) palette.primary else palette.surfaceContainerHighest
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = null,
-                                    tint = if (isSelected) palette.onPrimary else palette.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = tab.label,
-                                color = if (isSelected) palette.onPrimaryContainer else palette.onSurface,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-                if (rowTabs.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-        }
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Surface(
-                onClick = onReorder,
-                shape = RoundedCornerShape(50),
-                color = palette.secondaryContainer
-            ) {
-                Text(
-                    text = "Reorder tabs",
-                    color = palette.onSecondaryContainer,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
                 )
             }
         }
