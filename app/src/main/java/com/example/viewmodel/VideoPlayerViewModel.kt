@@ -1139,7 +1139,11 @@ class VideoPlayerViewModel : ViewModel() {
                     }
                 } else {
                     _uiState.update {
-                        it.copy(isAudioPlaying = false)
+                        it.copy(
+                            playingAudio = null,
+                            isAudioPlaying = false,
+                            audioProgress = 0f
+                        )
                     }
                 }
             }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.os.Bundle
 import android.os.Build
 import android.util.LruCache
 import android.util.Size
@@ -12,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.example.model.AudioTrackItem
 import com.google.common.util.concurrent.ListenableFuture
@@ -52,6 +54,7 @@ class AudioPlaybackManager private constructor(context: Context) {
     private var positionPollJob: Job? = null
     private var queueBuildJob: Job? = null
     private var pendingControllerAction: ((MediaController) -> Unit)? = null
+    private var isLoadingQueue = false
 
     private val tracksById = LinkedHashMap<String, AudioTrackItem>()
 
@@ -136,6 +139,7 @@ class AudioPlaybackManager private constructor(context: Context) {
         tracks.forEach { tracksById[it.id] = it }
 
         val targetTrack = tracks[safeStartIndex]
+        isLoadingQueue = true
         _state.update {
             it.copy(
                 currentTrack = targetTrack,
@@ -163,6 +167,7 @@ class AudioPlaybackManager private constructor(context: Context) {
                 controller.setMediaItems(initialMediaItems, safeStartIndex, 0L)
                 controller.prepare()
                 controller.play()
+                isLoadingQueue = false
                 syncFromController()
             }
 
@@ -282,6 +287,26 @@ class AudioPlaybackManager private constructor(context: Context) {
         }
     }
 
+    /** Stops playback, clears the queue and asks the service to remove its notification and stop. */
+    fun stopAndClear() {
+        queueBuildJob?.cancel()
+        pendingControllerAction = null
+        isLoadingQueue = false
+        mediaController?.let { controller ->
+            try {
+                controller.pause()
+                controller.stop()
+                controller.clearMediaItems()
+                controller.sendCustomCommand(
+                    SessionCommand(AudioPlaybackService.ACTION_STOP_PLAYBACK, Bundle.EMPTY),
+                    Bundle.EMPTY
+                )
+            } catch (_: Throwable) {
+            }
+        }
+        _state.value = AudioPlaybackState()
+    }
+
     fun seekTo(ms: Long) {
         withController { controller ->
             val dur = controller.duration.takeIf { it > 0L }
@@ -335,6 +360,8 @@ class AudioPlaybackManager private constructor(context: Context) {
         val mediaId = currentItem?.mediaId
         val matchedTrack = if (mediaId != null) {
             tracksById[mediaId] ?: reconstructTrackFromMediaItem(currentItem)
+        } else if (!isLoadingQueue && controller.mediaItemCount == 0) {
+            null
         } else {
             _state.value.currentTrack
         }

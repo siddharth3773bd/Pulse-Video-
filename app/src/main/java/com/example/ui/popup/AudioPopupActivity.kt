@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -107,7 +108,12 @@ class AudioPopupActivity : ComponentActivity() {
             ) {
                 AudioPopupContent(
                     uri = currentUri,
-                    onClose = { finish() },
+                    onStopAndClose = {
+                        // Closing the pop-up in any way (X, outside tap, back) stops the music.
+                        AudioPlaybackManager.getInstance(applicationContext).stopAndClear()
+                        finish()
+                    },
+                    onFailed = { finish() },
                     onOpenApp = {
                         try {
                             startActivity(
@@ -139,7 +145,8 @@ class AudioPopupActivity : ComponentActivity() {
 @Composable
 private fun AudioPopupContent(
     uri: Uri?,
-    onClose: () -> Unit,
+    onStopAndClose: () -> Unit,
+    onFailed: () -> Unit,
     onOpenApp: () -> Unit
 ) {
     val context = LocalContext.current
@@ -194,11 +201,13 @@ private fun AudioPopupContent(
     LaunchedEffect(failed) {
         if (failed) {
             Toast.makeText(context, "Can't open this audio file", Toast.LENGTH_SHORT).show()
-            onClose()
+            onFailed()
         }
     }
 
     LaunchedEffect(Unit) { shown = true }
+
+    BackHandler(onBack = onStopAndClose)
 
     val playback by manager.state.collectAsStateWithLifecycle()
     val loadedInfo = info
@@ -210,7 +219,7 @@ private fun AudioPopupContent(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.35f))
-            .clickable(interactionSource = noRipple, indication = null, onClick = onClose),
+            .clickable(interactionSource = noRipple, indication = null, onClick = onStopAndClose),
         contentAlignment = Alignment.BottomCenter
     ) {
         if (loadedInfo != null) {
@@ -302,7 +311,7 @@ private fun AudioPopupContent(
                                 )
                             }
                             Spacer(Modifier.width(8.dp))
-                            FilledTonalIconButton(onClick = onClose) {
+                            FilledTonalIconButton(onClick = onStopAndClose) {
                                 Icon(Icons.Rounded.Close, contentDescription = "Close")
                             }
                         }
