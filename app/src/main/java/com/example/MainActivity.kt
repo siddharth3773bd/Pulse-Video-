@@ -800,10 +800,14 @@ fun Material3VideoPlayerScreen(
                             AppPreferencesRepository.setTrackLiked(context, nowTrack.id, !liked)
                         }
                     },
-                    onOpenInfo = { nowPlayingInfoTrack = nowTrack },
                     onLyrics = {
                         android.widget.Toast.makeText(context, "Lyrics are coming soon", android.widget.Toast.LENGTH_SHORT).show()
-                    }
+                    },
+                    sleepTimerRemainingMs = audioState.sleepTimerRemainingMs,
+                    sleepAtEndOfSong = audioState.sleepAtEndOfSong,
+                    onStartSleepTimer = { minutes -> audioManager.startSleepTimer(minutes) },
+                    onSleepAtEndOfSong = { audioManager.startSleepAtEndOfSong() },
+                    onCancelSleepTimer = { audioManager.cancelSleepTimer() }
                 )
             }
         }
