@@ -72,7 +72,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
-import androidx.compose.material3.TonalToggleButton
+import androidx.compose.material3.FilledTonalToggleButton
+import androidx.compose.material3.FilledTonalToggleButtonDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -244,7 +245,7 @@ fun SortAndViewBottomSheet(
                         checked = active,
                         onCheckedChange = { onSelectViewMode(mode) },
                         shapes = shapes,
-                        colors = ToggleButtonDefaults.toggleButtonColors(
+                        colors = ToggleButtonDefaults.colors(
                             containerColor = palette.surfaceContainerHigh,
                             contentColor = palette.onSurfaceVariant,
                             checkedContainerColor = palette.secondaryContainer,
@@ -291,11 +292,11 @@ fun SortAndViewBottomSheet(
                     fontWeight = FontWeight.Medium
                 )
                 if (!isAudioTab) {
-                    TonalToggleButton(
+                    FilledTonalToggleButton(
                         checked = showResolutionTier,
                         onCheckedChange = { onToggleShowResolutionTier() },
-                        shapes = ToggleButtonDefaults.shapes(),
-                        colors = ToggleButtonDefaults.tonalToggleButtonColors(
+                        shapes = FilledTonalToggleButtonDefaults.shapesFor(buttonHeight = 32.dp),
+                        colors = FilledTonalToggleButtonDefaults.colors(
                             containerColor = palette.surfaceContainerHigh,
                             contentColor = palette.onSurfaceVariant,
                             checkedContainerColor = palette.secondaryContainer,
@@ -342,7 +343,7 @@ fun SortAndViewBottomSheet(
                         checked = active,
                         onCheckedChange = { onSelectLayoutMode(mode) },
                         shapes = shapes,
-                        colors = ToggleButtonDefaults.toggleButtonColors(
+                        colors = ToggleButtonDefaults.colors(
                             containerColor = palette.surfaceContainerHigh,
                             contentColor = palette.onSurfaceVariant,
                             checkedContainerColor = palette.secondaryContainer,
@@ -400,8 +401,8 @@ fun SortAndViewBottomSheet(
                             ToggleButton(
                                 checked = active,
                                 onCheckedChange = { onSelectSort(option) },
-                                shapes = ToggleButtonDefaults.shapes(),
-                                colors = ToggleButtonDefaults.toggleButtonColors(
+                                shapes = ToggleButtonDefaults.shapesFor(buttonHeight = 48.dp),
+                                colors = ToggleButtonDefaults.colors(
                                     containerColor = palette.surfaceContainerHigh,
                                     contentColor = palette.onSurfaceVariant,
                                     checkedContainerColor = palette.secondaryContainer,

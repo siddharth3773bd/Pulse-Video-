@@ -1446,7 +1446,7 @@ private fun AppearanceSubPage(
                                 checked = active,
                                 onCheckedChange = { onSelectThemeMode(mode) },
                                 shapes = shapes,
-                                colors = ToggleButtonDefaults.toggleButtonColors(
+                                colors = ToggleButtonDefaults.colors(
                                     containerColor = palette.surfaceContainerHigh,
                                     contentColor = palette.onSurfaceVariant,
                                     checkedContainerColor = palette.primary,

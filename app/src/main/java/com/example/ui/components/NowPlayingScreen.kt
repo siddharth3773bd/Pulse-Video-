@@ -547,7 +547,7 @@ fun NowPlayingScreen(
                     customItem(
                         buttonGroupContent = {
                             val shapes = when {
-                                trayActions.size == 1 -> ToggleButtonDefaults.shapes()
+                                trayActions.size == 1 -> ToggleButtonDefaults.shapesFor(buttonHeight = 60.dp)
                                 index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                                 index == trayActions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                                 else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
@@ -556,7 +556,7 @@ fun NowPlayingScreen(
                                 checked = active,
                                 onCheckedChange = { onTrayAction() },
                                 shapes = shapes,
-                                colors = ToggleButtonDefaults.toggleButtonColors(
+                                colors = ToggleButtonDefaults.colors(
                                     containerColor = palette.onPrimaryContainer.copy(alpha = 0.10f),
                                     contentColor = palette.onPrimaryContainer,
                                     checkedContainerColor = palette.primary,
