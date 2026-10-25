@@ -6,6 +6,7 @@ import com.example.ui.icons.Symbols
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -17,6 +18,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -60,11 +65,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -73,15 +76,15 @@ import com.example.lyrics.LyricsState
 import com.example.model.AmbientSettings
 import com.example.model.AudioTrackItem
 import com.example.model.NowPlayingBackground
-import com.example.ui.theme.AlbumArtTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Ambient mode: a calm, full-screen, always-on view of the current song.
- * The screen stays on and the system bars hide while it is open. There are no buttons on
- * screen: double-tap the artwork to play/pause and swipe it to change song (anywhere on screen
- * when the artwork is hidden). The ⋮ in the corner opens the options.
+ * Ambient mode: a calm, full-screen, always-on view of the current song, on the same background
+ * as Now Playing. It opens in landscape when started from the button ([forceLandscape]); the
+ * screen stays on and the system bars hide while it is open. There are no buttons on screen:
+ * double-tap the artwork to play/pause and swipe it to change song (anywhere on screen when the
+ * artwork is hidden). The ⋮ in the corner opens the options.
  */
 @Composable
 fun AmbientModeScreen(
@@ -90,6 +93,8 @@ fun AmbientModeScreen(
     queue: List<AudioTrackItem>,
     queueIndex: Int,
     settings: AmbientSettings,
+    background: NowPlayingBackground,
+    forceLandscape: Boolean,
     onSettingsChange: (AmbientSettings) -> Unit,
     onTogglePlayPause: () -> Unit,
     onSkipToQueueItem: (Int) -> Unit,
@@ -103,127 +108,124 @@ fun AmbientModeScreen(
 ) {
     BackHandler(onBack = onClose)
     KeepScreenOnAndHideSystemBars()
+    LockLandscape(enabled = forceLandscape)
 
     var showOptions by remember { mutableStateOf(false) }
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val textColor = Color.White
+    val colors = nowPlayingColors(background)
 
-    AlbumArtTheme(track = track, applyScheme = false, extractColors = !settings.amoled) {
-        Box(modifier = modifier.fillMaxSize().testTag("ambient_mode")) {
-            NowPlayingBackgroundLayer(
-                style = if (settings.amoled) NowPlayingBackground.AMOLED else NowPlayingBackground.GRADIENT,
+    Box(modifier = modifier.fillMaxSize().testTag("ambient_mode")) {
+        NowPlayingBackgroundLayer(style = background, track = track, modifier = Modifier.matchParentSize())
+
+        val showArt = settings.showArtwork
+        val showTitle = showArt && settings.showTitle
+        val showArtist = showArt && settings.showArtist
+        val showLyrics = settings.showLyrics
+
+        val art: @Composable (Modifier) -> Unit = { mod ->
+            ArtworkPager(
                 track = track,
-                followThemeColor = Color.Black,
-                modifier = Modifier.matchParentSize()
+                queue = queue,
+                queueIndex = queueIndex,
+                isPlaying = isPlaying,
+                onTogglePlayPause = onTogglePlayPause,
+                onSkipToQueueItem = onSkipToQueueItem,
+                placeholderBackground = colors.soft,
+                placeholderTint = colors.content,
+                modifier = mod,
+                cornerRadius = 28.dp,
+                testTag = "ambient_artwork"
             )
-
-            val showArt = settings.showArtwork
-            val showTitle = showArt && settings.showTitle
-            val showArtist = showArt && settings.showArtist
-            val showLyrics = settings.showLyrics
-
-            val art: @Composable (Modifier) -> Unit = { mod ->
-                ArtworkPager(
-                    track = track,
-                    queue = queue,
-                    queueIndex = queueIndex,
-                    isPlaying = isPlaying,
-                    onTogglePlayPause = onTogglePlayPause,
-                    onSkipToQueueItem = onSkipToQueueItem,
-                    placeholderBackground = Color.White.copy(alpha = 0.08f),
-                    placeholderTint = Color.White.copy(alpha = 0.7f),
-                    modifier = mod,
-                    cornerRadius = 24.dp,
-                    testTag = "ambient_artwork"
+        }
+        val info: @Composable () -> Unit = {
+            if (showTitle) {
+                Text(
+                    text = track.title,
+                    color = colors.content,
+                    style = MaterialTheme.typography.headlineMediumEmphasized,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            val info: @Composable () -> Unit = {
-                if (showTitle) {
-                    Text(
-                        text = track.title,
-                        color = textColor,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (showArtist) {
-                    Text(
-                        text = track.artist,
-                        color = textColor.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
+            if (showArtist) {
+                Text(
+                    text = track.artist,
+                    color = colors.contentVariant,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
-            // Ambient never asks anything: it follows the saved lyrics choice quietly.
-            val lyricsHandle = if (showLyrics) rememberLyricsState(track, lyricsSettings) else null
-            val lyrics: @Composable (Modifier, TextAlign) -> Unit = { mod, align ->
-                Box(modifier = mod, contentAlignment = Alignment.CenterStart) {
-                    when (val st = lyricsHandle?.state) {
-                        is LyricsState.Loaded -> LyricsView(
-                            lyrics = st.lyrics,
-                            positionMs = positionMs,
-                            isPlaying = isPlaying,
-                            offsetMs = st.offsetMs,
-                            settings = lyricsSettings.copy(alignCenter = align == TextAlign.Center),
-                            onSeekTo = onSeekTo,
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalPadding = 0
-                        )
-                        null, LyricsState.Loading -> Unit
-                        else -> Text(
-                            text = if (st == LyricsState.Instrumental) "Instrumental" else "No lyrics",
-                            color = textColor.copy(alpha = 0.35f),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = align,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-
-            when {
-                // Lyrics only: they fill the screen and the gestures work anywhere.
-                !showArt -> {
-                    LyricsOnlyGestures(
+        }
+        // Ambient never asks anything: it follows the saved lyrics choice quietly.
+        val lyricsHandle = if (showLyrics) rememberLyricsState(track, lyricsSettings) else null
+        val lyrics: @Composable (Modifier, TextAlign) -> Unit = { mod, align ->
+            Box(modifier = mod, contentAlignment = Alignment.CenterStart) {
+                when (val st = lyricsHandle?.state) {
+                    is LyricsState.Loaded -> LyricsView(
+                        lyrics = st.lyrics,
+                        positionMs = positionMs,
                         isPlaying = isPlaying,
-                        onTogglePlayPause = onTogglePlayPause,
-                        onSkipNext = onSkipNext,
-                        onSkipPrevious = onSkipPrevious,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        lyrics(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 64.dp, vertical = 48.dp),
-                            TextAlign.Center
-                        )
-                    }
+                        offsetMs = st.offsetMs,
+                        settings = lyricsSettings.copy(alignCenter = align == TextAlign.Center),
+                        onSeekTo = onSeekTo,
+                        contentColor = colors.content,
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalPadding = 0
+                    )
+                    null, LyricsState.Loading -> Unit
+                    else -> Text(
+                        text = if (st == LyricsState.Instrumental) "Instrumental" else "No lyrics",
+                        color = colors.content.copy(alpha = 0.4f),
+                        style = MaterialTheme.typography.headlineSmall,
+                        textAlign = align,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-                landscape -> Row(
-                    modifier = Modifier
+            }
+        }
+
+        // Room around everything, clear of the camera cut-out.
+        val safe = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.displayCutout)
+        when {
+            // Lyrics only: they fill the screen and the gestures work anywhere.
+            !showArt -> LyricsOnlyGestures(
+                isPlaying = isPlaying,
+                onTogglePlayPause = onTogglePlayPause,
+                onSkipNext = onSkipNext,
+                onSkipPrevious = onSkipPrevious,
+                modifier = safe
+            ) {
+                lyrics(
+                    Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 56.dp, vertical = 40.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 72.dp, vertical = 40.dp),
+                    TextAlign.Center
+                )
+            }
+            landscape -> {
+                val sideContent = showTitle || showArtist || showLyrics
+                Row(
+                    modifier = safe.padding(horizontal = 48.dp, vertical = 32.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = if (sideContent) Arrangement.Start else Arrangement.Center
                 ) {
-                    val sideContent = showTitle || showArtist || showLyrics
+                    // Square artwork as tall as the screen allows.
                     art(
                         Modifier
                             .fillMaxHeight()
-                            .weight(if (sideContent) 1f else 2f)
+                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
                     )
                     if (sideContent) {
-                        Spacer(modifier = Modifier.width(40.dp))
+                        Spacer(modifier = Modifier.width(48.dp))
                         Column(
                             modifier = Modifier
-                                .weight(1.1f)
+                                .weight(1f)
                                 .fillMaxHeight(),
-                            verticalArrangement = Arrangement.Center
+                            verticalArrangement = if (showLyrics) Arrangement.Top else Arrangement.Center
                         ) {
                             info()
                             if (showLyrics) {
@@ -233,53 +235,65 @@ fun AmbientModeScreen(
                         }
                     }
                 }
-                else -> Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 28.dp, vertical = 64.dp),
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    art(
-                        Modifier
-                            .fillMaxWidth()
-                            .weight(if (showLyrics) 1f else 2f)
-                    )
-                    if (showTitle || showArtist) {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        info()
-                    }
-                    if (showLyrics) {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        lyrics(Modifier.weight(0.8f).fillMaxWidth(), TextAlign.Start)
-                    }
+            }
+            else -> Column(
+                modifier = safe.padding(horizontal = 32.dp, vertical = 56.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                art(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                )
+                if (showTitle || showArtist) {
+                    Spacer(modifier = Modifier.height(28.dp))
+                    info()
+                }
+                if (showLyrics) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    lyrics(Modifier.weight(1f).fillMaxWidth(), TextAlign.Start)
                 }
             }
-
-            // The only thing on screen besides the song: ⋮ for the options.
-            IconButton(
-                onClick = { showOptions = true },
-                shapes = IconButtonDefaults.shapes(),
-                colors = IconButtonDefaults.iconButtonColors(contentColor = textColor.copy(alpha = 0.6f)),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-                    .testTag("ambient_options_btn")
-            ) {
-                Icon(Symbols.MoreVert, contentDescription = "Ambient mode options")
-            }
-
-            if (showOptions) {
-                AmbientOptionsSheet(
-                    settings = settings,
-                    onChange = onSettingsChange,
-                    onExit = {
-                        showOptions = false
-                        onClose()
-                    },
-                    onDismiss = { showOptions = false }
-                )
-            }
         }
+
+        // The only thing on screen besides the song: ⋮ for the options.
+        IconButton(
+            onClick = { showOptions = true },
+            shapes = IconButtonDefaults.shapes(),
+            colors = IconButtonDefaults.iconButtonColors(contentColor = colors.content.copy(alpha = 0.6f)),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.displayCutout)
+                .padding(8.dp)
+                .testTag("ambient_options_btn")
+        ) {
+            Icon(Symbols.MoreVert, contentDescription = "Ambient mode options")
+        }
+
+        if (showOptions) {
+            AmbientOptionsSheet(
+                settings = settings,
+                onChange = onSettingsChange,
+                onExit = {
+                    showOptions = false
+                    onClose()
+                },
+                onDismiss = { showOptions = false }
+            )
+        }
+    }
+}
+
+/** Turns the screen sideways while shown (when [enabled]) and gives the old orientation back after. */
+@Composable
+private fun LockLandscape(enabled: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(enabled) {
+        val activity = view.context.findActivity()
+        if (!enabled || activity == null) return@DisposableEffect onDispose { }
+        val previous = activity.requestedOrientation
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose { activity.requestedOrientation = previous }
     }
 }
 
@@ -403,19 +417,16 @@ private fun AmbientOptionsSheet(
                 ) { onChange(settings.copy(showArtist = it)) },
                 AmbientOption(
                     "Show lyrics", "Synced lyrics, when the song has them",
-                    LyricsIcon, settings.showLyrics,
+                    Symbols.Lyrics, settings.showLyrics,
                     enabled = !settings.showLyrics || settings.showArtwork
                 ) { onChange(settings.copy(showLyrics = it)) }
             )
             OptionGroup(rows)
-            Spacer(modifier = Modifier.height(12.dp))
-            OptionGroup(
-                listOf(
-                    AmbientOption(
-                        "AMOLED black", "Black background and white text, no album colours",
-                        Symbols.DarkMode, settings.amoled
-                    ) { onChange(settings.copy(amoled = it)) }
-                )
+            Text(
+                text = "The background follows Now Playing (Me › Music › Background).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp, top = 12.dp)
             )
             Spacer(modifier = Modifier.height(12.dp))
             SegmentedListItem(

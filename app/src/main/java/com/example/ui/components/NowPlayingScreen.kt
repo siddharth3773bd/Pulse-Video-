@@ -2,31 +2,17 @@
 
 package com.example.ui.components
 
-import com.example.ui.icons.Symbols
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import com.example.model.NowPlayingBackground
-import com.example.model.NowPlayingButtonColors
-import com.example.ui.theme.LocalAlbumArtGradient
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -42,35 +28,22 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilledIconToggleButton
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SliderState
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.ToggleButtonDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.mutableFloatStateOf
-import java.util.Locale
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,44 +52,28 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.example.model.AudioTrackItem
 import com.example.model.NowPlayingAction
+import com.example.model.NowPlayingBackground
 import com.example.model.formatDurationMs
-import com.example.ui.theme.LocalM3Palette
-import com.example.ui.theme.PlusJakartaSansFontFamily
-
-/** Simple "lines of text" icon for the Lyrics button (no extra icon dependency needed). */
-val LyricsIcon: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "Lyrics",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f
-    ).apply {
-        path(fill = SolidColor(Color.Black)) {
-            moveTo(4f, 5f); lineTo(20f, 5f); lineTo(20f, 7f); lineTo(4f, 7f); close()
-            moveTo(4f, 9f); lineTo(20f, 9f); lineTo(20f, 11f); lineTo(4f, 11f); close()
-            moveTo(4f, 13f); lineTo(20f, 13f); lineTo(20f, 15f); lineTo(4f, 15f); close()
-            moveTo(4f, 17f); lineTo(14f, 17f); lineTo(14f, 19f); lineTo(4f, 19f); close()
-        }
-    }.build()
-}
+import com.example.ui.icons.Symbols
+import com.example.ui.theme.LocalAlbumArtGradient
+import java.util.Locale
 
 fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) {
     NowPlayingAction.SHUFFLE -> Symbols.Shuffle
@@ -126,9 +83,65 @@ fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) 
     NowPlayingAction.AMBIENT -> Symbols.Landscape
 }
 
+// ---------------------------------------------------------------------------------------------
+// One colour rule for Now Playing, Lyrics and Ambient mode
+// ---------------------------------------------------------------------------------------------
+
 /**
- * Full-screen Now Playing page. Layout is inspired by Echo Music (centered "Now Playing" header,
- * big cover) with Pixel Player style controls and a customizable bottom button tray.
+ * Colours of the Now Playing screens, from one rule so nothing clashes:
+ * - "Colour" background: the main colour of the current colours (album art or app theme) for
+ *   Play, the seek bar and switched-on buttons; a soft tint of the text colour for the others.
+ * - Gradient, Blur and Black backgrounds are dark: everything is white (Play is solid white).
+ */
+@Immutable
+data class NowPlayingColors(
+    val background: NowPlayingBackground,
+    /** Text and plain icons. */
+    val content: Color,
+    /** Secondary text (artist, times). */
+    val contentVariant: Color,
+    /** Play button, seek bar, switched-on toggles. */
+    val main: Color,
+    val onMain: Color,
+    /** Previous / Next and switched-off toggles. */
+    val soft: Color,
+    val onSoft: Color
+)
+
+@Composable
+fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
+    val scheme = MaterialTheme.colorScheme
+    return if (background == NowPlayingBackground.FOLLOW_THEME) {
+        NowPlayingColors(
+            background = background,
+            content = scheme.onPrimaryContainer,
+            contentVariant = scheme.onPrimaryContainer.copy(alpha = 0.72f),
+            main = scheme.primary,
+            onMain = scheme.onPrimary,
+            soft = scheme.onPrimaryContainer.copy(alpha = 0.12f),
+            onSoft = scheme.onPrimaryContainer
+        )
+    } else {
+        NowPlayingColors(
+            background = background,
+            content = Color.White,
+            contentVariant = Color.White.copy(alpha = 0.72f),
+            main = Color.White,
+            onMain = Color.Black,
+            soft = Color.White.copy(alpha = 0.16f),
+            onSoft = Color.White
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Now Playing
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Full-screen Now Playing. Top: close and ⋮ (song actions). Then the cover (swipe to change song,
+ * double-tap to play/pause), title and artist with Lyrics, the wavy seek bar, the official
+ * Expressive button group for the main controls, and the customisable tray of toggles.
  */
 @Composable
 fun NowPlayingScreen(
@@ -158,38 +171,15 @@ fun NowPlayingScreen(
     onSkipToQueueItem: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onShare: () -> Unit,
+    onSongInfo: () -> Unit,
+    onGoToAlbum: (() -> Unit)?,
+    onGoToArtist: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    background: NowPlayingBackground = NowPlayingBackground.FOLLOW_THEME,
-    buttonColors: NowPlayingButtonColors = NowPlayingButtonColors.DEFAULT
+    background: NowPlayingBackground = NowPlayingBackground.FOLLOW_THEME
 ) {
-    // On image / black backgrounds all text and outline icons switch to white.
-    val onImage = background != NowPlayingBackground.FOLLOW_THEME
-    val themePalette = LocalM3Palette.current
-    val palette = if (onImage) themePalette.copy(onPrimaryContainer = Color.White) else themePalette
-    val scheme = MaterialTheme.colorScheme
-
-    // Button colours. Primary / Tertiary come from the current scheme, which is the album-art
-    // scheme when "Colours from: Album art" is on.
-    // On image / black backgrounds (Gradient, Blur, AMOLED) Echo's rules apply. On "Follow theme"
-    // the background is the primary-container colour, so container colours would vanish into it;
-    // there only the strong accent colours are used (Pixel Player style).
-    val (mainContainer, mainContent) = when (buttonColors) {
-        NowPlayingButtonColors.DEFAULT ->
-            if (onImage) Color.White to Color.Black else scheme.tertiary to scheme.onTertiary
-        NowPlayingButtonColors.PRIMARY -> scheme.primary to scheme.onPrimary
-        NowPlayingButtonColors.TERTIARY -> scheme.tertiary to scheme.onTertiary
-    }
-    val (sideContainer, sideContent) = when (buttonColors) {
-        NowPlayingButtonColors.DEFAULT ->
-            if (onImage) Color.White.copy(alpha = 0.2f) to Color.White
-            else scheme.primary to scheme.onPrimary
-        NowPlayingButtonColors.PRIMARY ->
-            if (onImage) scheme.primaryContainer to scheme.onPrimaryContainer
-            else scheme.secondary to scheme.onSecondary
-        NowPlayingButtonColors.TERTIARY ->
-            if (onImage) scheme.tertiaryContainer to scheme.onTertiaryContainer
-            else scheme.secondary to scheme.onSecondary
-    }
+    val colors = nowPlayingColors(background)
     val context = LocalContext.current
     val closeLatest by rememberUpdatedState(onClose)
     val closeThresholdPx = with(LocalDensity.current) { 90.dp.toPx() }
@@ -205,6 +195,9 @@ fun NowPlayingScreen(
             null
         }
     }
+    var showMenu by remember { mutableStateOf(false) }
+    var showSleepSheet by remember { mutableStateOf(false) }
+    var showQueueSheet by remember { mutableStateOf(false) }
 
     val safeDuration = if (durationMs > 0L) durationMs else track.durationMs
     val liveFraction = if (safeDuration > 0L) {
@@ -214,475 +207,238 @@ fun NowPlayingScreen(
     }
     val fraction = dragFraction ?: liveFraction
     val shownPositionMs = (fraction * safeDuration).toLong()
+    val sleepActive = sleepTimerRemainingMs > 0L || sleepAtEndOfSong
 
     Box(modifier = modifier.fillMaxSize()) {
-    NowPlayingBackgroundLayer(
-        style = background,
-        track = track,
-        followThemeColor = palette.primaryContainer,
-        modifier = Modifier.matchParentSize()
-    )
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {}
-            )
-            .pointerInput(closeThresholdPx) {
-                var total = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { total = 0f },
-                    onDragEnd = {
-                        if (total > closeThresholdPx) closeLatest()
-                        total = 0f
-                    },
-                    onDragCancel = { total = 0f }
-                ) { _, dragAmount ->
-                    total += dragAmount
-                }
-            }
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 24.dp)
-            .testTag("audio_now_playing")
-    ) {
-        // ---- Header: collapse button, centered "Now Playing" + album, empty right side ----
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onClose,
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
-                    contentColor = palette.onPrimaryContainer
-                ),
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(Symbols.KeyboardArrowDown, contentDescription = "Close Now Playing")
-            }
+        NowPlayingBackgroundLayer(
+            style = background,
+            track = track,
+            modifier = Modifier.matchParentSize()
+        )
+        CompositionLocalProvider(LocalContentColor provides colors.content) {
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
+                    .pointerInput(closeThresholdPx) {
+                        // Swipe down to close.
+                        var total = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = {
+                                if (total > closeThresholdPx) closeLatest()
+                                total = 0f
+                            },
+                            onDragCancel = { total = 0f }
+                        ) { _, dragAmount -> total += dragAmount }
+                    }
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 24.dp)
+                    .testTag("audio_now_playing")
             ) {
-                Text(
-                    text = "Now Playing",
-                    color = palette.onPrimaryContainer,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center
+                NowPlayingTopBar(
+                    colors = colors,
+                    title = track.album.takeIf { it.isNotBlank() && !it.equals("Unknown album", ignoreCase = true) },
+                    subtitle = null,
+                    onClose = onClose,
+                    closeLabel = "Close Now Playing",
+                    action = {
+                        Box {
+                            TooltipIconButton(
+                                label = "More options",
+                                icon = Symbols.MoreVert,
+                                onClick = { showMenu = true },
+                                modifier = Modifier.testTag("now_playing_more")
+                            )
+                            ExpressiveMenu(
+                                expanded = showMenu,
+                                onDismiss = { showMenu = false },
+                                groups = listOf(
+                                    listOf(
+                                        MenuEntry("Add to playlist", Symbols.PlaylistAdd, "np_menu_add_playlist", onClick = onAddToPlaylist),
+                                        MenuEntry("Share", Symbols.Share, "np_menu_share", onClick = onShare)
+                                    ),
+                                    listOfNotNull(
+                                        onGoToAlbum?.let { MenuEntry("Go to album", Symbols.Album, "np_menu_album", onClick = it) },
+                                        onGoToArtist?.let { MenuEntry("Go to artist", Symbols.Person, "np_menu_artist", onClick = it) },
+                                        MenuEntry("Song info", Symbols.Info, "np_menu_info", onClick = onSongInfo)
+                                    )
+                                )
+                            )
+                        }
+                    }
                 )
-                Text(
-                    text = track.album.uppercase(),
-                    color = palette.onPrimaryContainer.copy(alpha = 0.7f),
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-            }
-            Spacer(modifier = Modifier.size(48.dp))
-        }
 
-        // ---- Cover (takes whatever vertical room is left, always square) ----
-        // Swipe left/right for the next/previous song, double-tap to play or pause.
-        ArtworkPager(
-            track = track,
-            queue = queue,
-            queueIndex = queueIndex,
-            isPlaying = isPlaying,
-            onTogglePlayPause = onTogglePlayPause,
-            onSkipToQueueItem = onSkipToQueueItem,
-            placeholderBackground = palette.surfaceContainerHighest,
-            placeholderTint = palette.primary,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-        )
-
-        // ---- Title / artist + Lyrics button ----
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = track.title,
-                    color = palette.onPrimaryContainer,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                // Cover: takes the room that's left, always square.
+                ArtworkPager(
+                    track = track,
+                    queue = queue,
+                    queueIndex = queueIndex,
+                    isPlaying = isPlaying,
+                    onTogglePlayPause = onTogglePlayPause,
+                    onSkipToQueueItem = onSkipToQueueItem,
+                    placeholderBackground = colors.soft,
+                    placeholderTint = colors.content,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
                 )
-                Text(
-                    text = track.artist,
-                    color = palette.onPrimaryContainer.copy(alpha = 0.75f),
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            FilledTonalIconButton(
-                onClick = onLyrics,
-                shapes = IconButtonDefaults.shapes(),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
-                    contentColor = palette.onPrimaryContainer
-                ),
-                modifier = Modifier
-                    .size(52.dp)
-                    .testTag("now_playing_lyrics")
-            ) {
-                Icon(imageVector = LyricsIcon, contentDescription = "Lyrics")
-            }
-        }
 
-        // ---- Seek bar (official Slider + wavy track) + times + technical chip ----
-        Spacer(modifier = Modifier.height(12.dp))
-        PlaybackSeekBar(
-            progress = fraction,
-            onSeekPreview = { dragFraction = it },
-            onSeekFinished = { target ->
-                dragFraction = null
-                onSeekTo(target)
-            },
-            isPlaying = isPlaying,
-            activeColor = mainContainer,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("audio_seek_slider")
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = formatDurationMs(shownPositionMs),
-                color = palette.onPrimaryContainer.copy(alpha = 0.85f),
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                val chip = techLabel
-                if (!chip.isNullOrBlank()) {
-                    // Slim, low-contrast pill so it reads as metadata, not a button.
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(palette.onPrimaryContainer.copy(alpha = 0.08f))
-                            .padding(horizontal = 10.dp, vertical = 3.dp)
-                    ) {
+                // Title and artist, with Lyrics on the right.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = chip,
-                            color = palette.onPrimaryContainer.copy(alpha = 0.8f),
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = 0.2.sp,
+                            text = track.title,
+                            style = MaterialTheme.typography.headlineSmallEmphasized,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("now_playing_title")
+                        )
+                        Text(
+                            text = track.artist,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colors.contentVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                }
-            }
-            Text(
-                text = formatDurationMs(safeDuration),
-                color = palette.onPrimaryContainer.copy(alpha = 0.85f),
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        // ---- Main controls: official Expressive ButtonGroup ----
-        // ButtonGroup + animateWidth springs the pressed button wider and squeezes its
-        // neighbours; IconButtonDefaults shapes morph the corners on press.
-        Spacer(modifier = Modifier.height(16.dp))
-        val previousInteraction = remember { MutableInteractionSource() }
-        val playPauseInteraction = remember { MutableInteractionSource() }
-        val nextInteraction = remember { MutableInteractionSource() }
-        ButtonGroup(
-            overflowIndicator = { menuState ->
-                ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
-            },
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            customItem(
-                buttonGroupContent = {
+                    Spacer(modifier = Modifier.width(16.dp))
                     FilledTonalIconButton(
-                        onClick = onSkipPrevious,
+                        onClick = onLyrics,
                         shapes = IconButtonDefaults.shapes(),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = sideContainer,
-                            contentColor = sideContent
+                            containerColor = colors.soft,
+                            contentColor = colors.onSoft
                         ),
-                        interactionSource = previousInteraction,
                         modifier = Modifier
-                            .weight(1f)
-                            .animateWidth(previousInteraction)
-                            .height(72.dp)
-                            .testTag("now_playing_previous")
+                            .size(IconButtonDefaults.mediumContainerSize())
+                            .testTag("now_playing_lyrics")
                     ) {
-                        Icon(
-                            imageVector = Symbols.SkipPrevious,
-                            contentDescription = "Previous",
-                            modifier = Modifier.size(30.dp)
-                        )
+                        Icon(Symbols.Lyrics, contentDescription = "Lyrics")
                     }
-                },
-                menuContent = { menuState ->
-                    DropdownMenuItem(
-                        text = { Text("Previous") },
-                        leadingIcon = { Icon(Symbols.SkipPrevious, contentDescription = null) },
-                        onClick = {
-                            onSkipPrevious()
-                            menuState.dismiss()
-                        }
-                    )
                 }
-            )
-            // Official icon button shapes: stays a round pill, squishes on press.
-            customItem(
-                buttonGroupContent = {
-                    FilledIconButton(
-                        onClick = onTogglePlayPause,
-                        shapes = IconButtonDefaults.shapes(),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = mainContainer,
-                            contentColor = mainContent
-                        ),
-                        interactionSource = playPauseInteraction,
-                        modifier = Modifier
-                            .weight(1.25f)
-                            .animateWidth(playPauseInteraction)
-                            .height(80.dp)
-                            .testTag("now_playing_play_pause")
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                },
-                menuContent = { menuState ->
-                    DropdownMenuItem(
-                        text = { Text(if (isPlaying) "Pause" else "Play") },
-                        leadingIcon = {
-                            Icon(
-                                if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            onTogglePlayPause()
-                            menuState.dismiss()
-                        }
-                    )
-                }
-            )
-            customItem(
-                buttonGroupContent = {
-                    FilledTonalIconButton(
-                        onClick = onSkipNext,
-                        shapes = IconButtonDefaults.shapes(),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = sideContainer,
-                            contentColor = sideContent
-                        ),
-                        interactionSource = nextInteraction,
-                        modifier = Modifier
-                            .weight(1f)
-                            .animateWidth(nextInteraction)
-                            .height(72.dp)
-                            .testTag("now_playing_next")
-                    ) {
-                        Icon(
-                            imageVector = Symbols.SkipNext,
-                            contentDescription = "Next",
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
-                },
-                menuContent = { menuState ->
-                    DropdownMenuItem(
-                        text = { Text("Next") },
-                        leadingIcon = { Icon(Symbols.SkipNext, contentDescription = null) },
-                        onClick = {
-                            onSkipNext()
-                            menuState.dismiss()
-                        }
-                    )
-                }
-            )
-        }
 
-        // ---- Bottom tray: official connected ButtonGroup ----
-        // Same official container as the main controls: pressing a toggle springs it wider
-        // and squeezes its neighbours (ButtonGroup + animateWidth).
-        var showSleepSheet by remember { mutableStateOf(false) }
-        var showQueueSheet by remember { mutableStateOf(false) }
-        val sleepActive = sleepTimerRemainingMs > 0L || sleepAtEndOfSong
-        // The running sleep timer morphs into a wider pill that shows the countdown.
-        val sleepWeight by animateFloatAsState(
-            targetValue = if (sleepActive) 2f else 1f,
-            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-            label = "trayWeight_sleep"
-        )
-        val trayInteractions = remember { mutableMapOf<NowPlayingAction, MutableInteractionSource>() }
-        if (trayActions.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            ButtonGroup(
-                overflowIndicator = { menuState ->
-                    ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                trayActions.forEachIndexed { index, action ->
-                    val interaction = trayInteractions.getOrPut(action) { MutableInteractionSource() }
-                    val active = when (action) {
-                        NowPlayingAction.SHUFFLE -> shuffleEnabled
-                        NowPlayingAction.REPEAT -> repeatMode != Player.REPEAT_MODE_OFF
-                        NowPlayingAction.SLEEP -> sleepActive
-                        NowPlayingAction.QUEUE -> false
-                        NowPlayingAction.AMBIENT -> false
-                    }
-                    val icon = when {
-                        action == NowPlayingAction.REPEAT && repeatMode == Player.REPEAT_MODE_ONE ->
-                            Symbols.RepeatOne
-                        else -> nowPlayingActionIcon(action)
-                    }
-                    val onTrayAction: () -> Unit = {
-                        when (action) {
-                            NowPlayingAction.SHUFFLE -> onToggleShuffle()
-                            NowPlayingAction.REPEAT -> onCycleRepeat()
-                            NowPlayingAction.QUEUE -> showQueueSheet = true
-                            NowPlayingAction.AMBIENT -> onOpenAmbient()
-                            // Tap a running timer to turn it off; tap again to set a new one.
-                            NowPlayingAction.SLEEP -> if (sleepActive) {
-                                onCancelSleepTimer()
-                                Toast.makeText(context, "Sleep timer off", Toast.LENGTH_SHORT).show()
-                            } else {
-                                showSleepSheet = true
-                            }
-                        }
-                    }
-                    customItem(
-                        buttonGroupContent = {
-                            val shapes = when {
-                                trayActions.size == 1 -> ToggleButtonDefaults.shapesFor(buttonHeight = 60.dp)
-                                index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                index == trayActions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                            }
-                            ToggleButton(
-                                checked = active,
-                                onCheckedChange = { onTrayAction() },
-                                shapes = shapes,
-                                colors = ToggleButtonDefaults.colors(
-                                    containerColor = palette.onPrimaryContainer.copy(alpha = 0.10f),
-                                    contentColor = palette.onPrimaryContainer,
-                                    checkedContainerColor = mainContainer,
-                                    checkedContentColor = mainContent
-                                ),
-                                contentPadding = PaddingValues(horizontal = 8.dp),
-                                interactionSource = interaction,
-                                modifier = Modifier
-                                    .weight(if (action == NowPlayingAction.SLEEP) sleepWeight else 1f)
-                                    .animateWidth(interaction)
-                                    .height(60.dp)
-                                    .testTag("now_playing_tray_${action.id}")
-                            ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = action.label,
-                                    modifier = Modifier.size(24.dp)
+                // Wavy seek bar, times and the sound details in between.
+                Spacer(modifier = Modifier.height(16.dp))
+                PlaybackSeekBar(
+                    progress = fraction,
+                    onSeekPreview = { dragFraction = it },
+                    onSeekFinished = { target ->
+                        dragFraction = null
+                        onSeekTo(target)
+                    },
+                    isPlaying = isPlaying,
+                    activeColor = colors.main,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("audio_seek_slider")
+                )
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = formatDurationMs(shownPositionMs),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.contentVariant
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val chip = techLabel
+                        if (!chip.isNullOrBlank()) {
+                            // A quiet pill so it reads as information, not a button.
+                            Surface(shape = CircleShape, color = colors.soft, contentColor = colors.contentVariant) {
+                                Text(
+                                    text = chip,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
-                                if (action == NowPlayingAction.SLEEP && sleepActive) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = if (sleepAtEndOfSong) {
-                                            // Time left in the current song.
-                                            formatCountdown((safeDuration - positionMs).coerceAtLeast(0L))
-                                        } else {
-                                            formatCountdown(sleepTimerRemainingMs)
-                                        },
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1
-                                    )
-                                }
                             }
+                        }
+                    }
+                    Text(
+                        text = formatDurationMs(safeDuration),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.contentVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                NowPlayingControls(
+                    isPlaying = isPlaying,
+                    colors = colors,
+                    onPrevious = onSkipPrevious,
+                    onPlayPause = onTogglePlayPause,
+                    onNext = onSkipNext
+                )
+
+                if (trayActions.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    NowPlayingTray(
+                        actions = trayActions,
+                        colors = colors,
+                        shuffleEnabled = shuffleEnabled,
+                        repeatMode = repeatMode,
+                        sleepActive = sleepActive,
+                        sleepLabel = if (sleepAtEndOfSong) {
+                            formatCountdown((safeDuration - positionMs).coerceAtLeast(0L))
+                        } else {
+                            formatCountdown(sleepTimerRemainingMs)
                         },
-                        menuContent = { menuState ->
-                            DropdownMenuItem(
-                                text = { Text(action.label) },
-                                leadingIcon = { Icon(icon, contentDescription = null) },
-                                onClick = {
-                                    onTrayAction()
-                                    menuState.dismiss()
-                                }
-                            )
+                        onAction = { action ->
+                            when (action) {
+                                NowPlayingAction.SHUFFLE -> onToggleShuffle()
+                                NowPlayingAction.REPEAT -> onCycleRepeat()
+                                NowPlayingAction.QUEUE -> showQueueSheet = true
+                                NowPlayingAction.AMBIENT -> onOpenAmbient()
+                                NowPlayingAction.SLEEP -> showSleepSheet = true
+                            }
                         }
                     )
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
-        Spacer(modifier = Modifier.height(20.dp))
 
         if (showQueueSheet) {
             QueueSheet(
                 queue = queue.ifEmpty { listOf(track) },
                 currentIndex = if (queue.isEmpty()) 0 else queueIndex,
                 shuffleEnabled = shuffleEnabled,
-                onPlayItem = { index ->
-                    onSkipToQueueItem(index)
-                },
+                isPlaying = isPlaying,
+                onPlayItem = onSkipToQueueItem,
                 onMove = onMoveQueueItem,
                 onRemove = onRemoveQueueItem,
                 onDismiss = { showQueueSheet = false }
             )
         }
-
         if (showSleepSheet) {
             SleepTimerSheet(
-                isActive = sleepActive,
+                active = sleepActive,
+                atEndActive = sleepAtEndOfSong,
                 remainingMs = sleepTimerRemainingMs,
-                atEndOfSong = sleepAtEndOfSong,
+                endLabel = "At the end of this song",
+                endShortLabel = "End of song",
+                endIcon = Symbols.MusicNote,
                 onStart = { minutes ->
                     onStartSleepTimer(minutes)
                     showSleepSheet = false
                 },
-                onEndOfSong = {
+                onAtEnd = {
                     onSleepAtEndOfSong()
                     showSleepSheet = false
                 },
-                onCancel = {
+                onTurnOff = {
                     onCancelSleepTimer()
                     showSleepSheet = false
                 },
@@ -690,6 +446,239 @@ fun NowPlayingScreen(
             )
         }
     }
+}
+
+/**
+ * Top bar of the Now Playing screens: close on the left, an optional [title] / [subtitle] in the
+ * middle and one [action] on the right. Same height and buttons everywhere.
+ */
+@Composable
+internal fun NowPlayingTopBar(
+    colors: NowPlayingColors,
+    title: String?,
+    subtitle: String?,
+    onClose: () -> Unit,
+    closeLabel: String,
+    action: @Composable () -> Unit
+) {
+    CompositionLocalProvider(LocalContentColor provides colors.content) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TooltipIconButton(
+                label = closeLabel,
+                icon = Symbols.KeyboardArrowDown,
+                onClick = onClose,
+                modifier = Modifier.testTag("now_playing_close")
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (title != null) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.contentVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) { action() }
+        }
+    }
+}
+
+/**
+ * Previous / Play-Pause / Next: the official Expressive button group. The pressed button springs
+ * wider and squeezes its neighbours; corners morph on press. [compact] is for Lyrics.
+ */
+@Composable
+internal fun NowPlayingControls(
+    isPlaying: Boolean,
+    colors: NowPlayingColors,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
+    val sideHeight: Dp = if (compact) 56.dp else 72.dp
+    val mainHeight: Dp = if (compact) 64.dp else 80.dp
+    val sideIcon: Dp = if (compact) 26.dp else 30.dp
+    val mainIcon: Dp = if (compact) 30.dp else 36.dp
+    val previousInteraction = remember { MutableInteractionSource() }
+    val playInteraction = remember { MutableInteractionSource() }
+    val nextInteraction = remember { MutableInteractionSource() }
+    val sideColors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = colors.soft, contentColor = colors.onSoft)
+    ButtonGroup(
+        overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        customItem(
+            buttonGroupContent = {
+                FilledTonalIconButton(
+                    onClick = onPrevious,
+                    shapes = IconButtonDefaults.shapes(),
+                    colors = sideColors,
+                    interactionSource = previousInteraction,
+                    modifier = Modifier
+                        .weight(1f)
+                        .animateWidth(previousInteraction)
+                        .height(sideHeight)
+                        .testTag("now_playing_previous")
+                ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(sideIcon)) }
+            },
+            menuContent = { menuState ->
+                DropdownMenuItem(text = { Text("Previous") }, onClick = { onPrevious(); menuState.dismiss() })
+            }
+        )
+        customItem(
+            buttonGroupContent = {
+                FilledIconButton(
+                    onClick = onPlayPause,
+                    shapes = IconButtonDefaults.shapes(),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.main, contentColor = colors.onMain),
+                    interactionSource = playInteraction,
+                    modifier = Modifier
+                        .weight(1.3f)
+                        .animateWidth(playInteraction)
+                        .height(mainHeight)
+                        .testTag("now_playing_play_pause")
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        modifier = Modifier.size(mainIcon)
+                    )
+                }
+            },
+            menuContent = { menuState ->
+                DropdownMenuItem(text = { Text(if (isPlaying) "Pause" else "Play") }, onClick = { onPlayPause(); menuState.dismiss() })
+            }
+        )
+        customItem(
+            buttonGroupContent = {
+                FilledTonalIconButton(
+                    onClick = onNext,
+                    shapes = IconButtonDefaults.shapes(),
+                    colors = sideColors,
+                    interactionSource = nextInteraction,
+                    modifier = Modifier
+                        .weight(1f)
+                        .animateWidth(nextInteraction)
+                        .height(sideHeight)
+                        .testTag("now_playing_next")
+                ) { Icon(Symbols.SkipNext, contentDescription = "Next", modifier = Modifier.size(sideIcon)) }
+            },
+            menuContent = { menuState ->
+                DropdownMenuItem(text = { Text("Next") }, onClick = { onNext(); menuState.dismiss() })
+            }
+        )
+    }
+}
+
+/**
+ * The customisable tray: official connected button group of toggles. A running sleep timer turns
+ * into a wider pill with the countdown.
+ */
+@Composable
+private fun NowPlayingTray(
+    actions: List<NowPlayingAction>,
+    colors: NowPlayingColors,
+    shuffleEnabled: Boolean,
+    repeatMode: Int,
+    sleepActive: Boolean,
+    sleepLabel: String,
+    onAction: (NowPlayingAction) -> Unit
+) {
+    val sleepWeight by animateFloatAsState(
+        targetValue = if (sleepActive) 2f else 1f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "traySleepWeight"
+    )
+    val interactions = remember { mutableMapOf<NowPlayingAction, MutableInteractionSource>() }
+    ButtonGroup(
+        overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        actions.forEachIndexed { index, action ->
+            val interaction = interactions.getOrPut(action) { MutableInteractionSource() }
+            val checked = when (action) {
+                NowPlayingAction.SHUFFLE -> shuffleEnabled
+                NowPlayingAction.REPEAT -> repeatMode != Player.REPEAT_MODE_OFF
+                NowPlayingAction.SLEEP -> sleepActive
+                NowPlayingAction.QUEUE, NowPlayingAction.AMBIENT -> false
+            }
+            val icon = if (action == NowPlayingAction.REPEAT && repeatMode == Player.REPEAT_MODE_ONE) {
+                Symbols.RepeatOne
+            } else {
+                nowPlayingActionIcon(action)
+            }
+            customItem(
+                buttonGroupContent = {
+                    ToggleButton(
+                        checked = checked,
+                        onCheckedChange = { onAction(action) },
+                        shapes = when {
+                            actions.size == 1 -> ToggleButtonDefaults.shapesFor(buttonHeight = 56.dp)
+                            index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            index == actions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        },
+                        colors = ToggleButtonDefaults.colors(
+                            containerColor = colors.soft,
+                            contentColor = colors.onSoft,
+                            checkedContainerColor = colors.main,
+                            checkedContentColor = colors.onMain
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        interactionSource = interaction,
+                        modifier = Modifier
+                            .weight(if (action == NowPlayingAction.SLEEP) sleepWeight else 1f)
+                            .animateWidth(interaction)
+                            .height(56.dp)
+                            .testTag("now_playing_tray_${action.id}")
+                    ) {
+                        Icon(icon, contentDescription = action.label, modifier = Modifier.size(24.dp))
+                        if (action == NowPlayingAction.SLEEP && sleepActive) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(sleepLabel, style = MaterialTheme.typography.labelLargeEmphasized, maxLines = 1)
+                        }
+                    }
+                },
+                menuContent = { menuState ->
+                    DropdownMenuItem(
+                        text = { Text(action.label) },
+                        leadingIcon = { Icon(icon, contentDescription = null) },
+                        onClick = {
+                            onAction(action)
+                            menuState.dismiss()
+                        }
+                    )
+                }
+            )
+        }
     }
 }
 
@@ -699,217 +688,23 @@ private fun formatCountdown(ms: Long): String {
     val h = totalSec / 3600L
     val m = (totalSec % 3600L) / 60L
     val s = totalSec % 60L
-    return if (h > 0L) {
-        String.format(Locale.US, "%d:%02d:%02d", h, m, s)
-    } else {
-        String.format(Locale.US, "%d:%02d", m, s)
-    }
-}
-
-/** Sleep timer picker: 5 to 120 minutes in 5-minute steps, or stop at the end of the song. */
-@Composable
-private fun SleepTimerSheet(
-    isActive: Boolean,
-    remainingMs: Long,
-    atEndOfSong: Boolean,
-    onStart: (Int) -> Unit,
-    onEndOfSong: () -> Unit,
-    onCancel: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val palette = LocalM3Palette.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var minutes by remember { mutableFloatStateOf(30f) }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = palette.surfaceContainerLow,
-        contentColor = palette.onSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = palette.DragHandleColor) }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 28.dp)
-                .testTag("sleep_timer_sheet")
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Symbols.Bedtime,
-                    contentDescription = null,
-                    tint = palette.primary,
-                    modifier = Modifier.size(26.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Sleep timer",
-                    color = palette.onSurface,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            if (isActive) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = if (atEndOfSong) "Stops at the end of this song" else "Stops in ${formatCountdown(remainingMs)}",
-                    color = palette.primary,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = "${minutes.toInt()} min",
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 40.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            // Official Material 3 slider, snapping in 5-minute steps (5..120 = 23 stops).
-            val sleepSliderState = remember(22) { SliderState(value = minutes, steps = 22, trackRange = 5f..120f) }
-            sleepSliderState.value = minutes
-            Slider(
-                state = sleepSliderState,
-                onValueChange = { minutes = (it / 5f).let { v -> Math.round(v) * 5f }.coerceIn(5f, 120f) },
-                colors = SliderDefaults.colors(
-                    thumbColor = palette.primary,
-                    activeTrackColor = palette.primary,
-                    inactiveTrackColor = palette.surfaceContainerHighest,
-                    activeTickColor = palette.onPrimary.copy(alpha = 0.5f),
-                    inactiveTickColor = palette.onSurfaceVariant.copy(alpha = 0.5f)
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("sleep_timer_slider")
-            )
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text("5 min", color = palette.onSurfaceVariant, fontFamily = PlusJakartaSansFontFamily, fontSize = 12.sp)
-                Spacer(modifier = Modifier.weight(1f))
-                Text("120 min", color = palette.onSurfaceVariant, fontFamily = PlusJakartaSansFontFamily, fontSize = 12.sp)
-            }
-
-            // Quick picks (official connected button group): tap to set the slider.
-            Spacer(modifier = Modifier.height(12.dp))
-            val presets = listOf(5, 15, 30, 45, 60)
-            ButtonGroup(
-                overflowIndicator = { menuState ->
-                    ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("sleep_timer_presets"),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
-            ) {
-                presets.forEachIndexed { index, preset ->
-                    customItem(
-                        buttonGroupContent = {
-                            ToggleButton(
-                                checked = minutes.toInt() == preset,
-                                onCheckedChange = { minutes = preset.toFloat() },
-                                shapes = when (index) {
-                                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                    presets.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(text = "$preset", maxLines = 1)
-                            }
-                        },
-                        menuContent = { menuState ->
-                            DropdownMenuItem(
-                                text = { Text("$preset min") },
-                                onClick = {
-                                    minutes = preset.toFloat()
-                                    menuState.dismiss()
-                                }
-                            )
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = { onStart(minutes.toInt()) },
-                shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = palette.primary,
-                    contentColor = palette.onPrimary
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-            ) {
-                Text(
-                    text = "Start ${minutes.toInt()} min timer",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            FilledTonalButton(
-                onClick = onEndOfSong,
-                shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = palette.secondaryContainer,
-                    contentColor = palette.onSecondaryContainer
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-            ) {
-                Text(
-                    text = "End of song",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            if (isActive) {
-                Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = onCancel,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                ) {
-                    Text(
-                        text = "Turn off timer",
-                        color = palette.error,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
-    }
+    return if (h > 0L) String.format(Locale.US, "%d:%02d:%02d", h, m, s) else String.format(Locale.US, "%d:%02d", m, s)
 }
 
 /**
- * Background behind the Now Playing screen:
- * Follow theme (solid), Gradient (album-art colours), Blur (album art, blurred) or AMOLED black.
- * Image backgrounds get a dark scrim so white text stays readable; changes crossfade.
+ * Background behind the Now Playing screens: Colour (solid primary container), Gradient
+ * (album-art colours), Blur (album art, blurred) or Black. Image backgrounds get a dark scrim so
+ * white text stays readable; changes crossfade.
  */
 @Composable
 internal fun NowPlayingBackgroundLayer(
     style: NowPlayingBackground,
     track: AudioTrackItem,
-    followThemeColor: Color,
     modifier: Modifier = Modifier
 ) {
     val gradient = LocalAlbumArtGradient.current
     when (style) {
-        NowPlayingBackground.FOLLOW_THEME -> Box(modifier.background(followThemeColor))
+        NowPlayingBackground.FOLLOW_THEME -> Box(modifier.background(MaterialTheme.colorScheme.primaryContainer))
         NowPlayingBackground.AMOLED -> Box(modifier.background(Color.Black))
         NowPlayingBackground.GRADIENT -> {
             Crossfade(
@@ -917,9 +712,9 @@ internal fun NowPlayingBackgroundLayer(
                 animationSpec = tween(800),
                 label = "nowPlayingGradient",
                 modifier = modifier
-            ) { colors ->
-                val brush = if (colors.size >= 3) {
-                    Brush.verticalGradient(0f to colors[0], 0.5f to colors[1], 1f to colors[2])
+            ) { stops ->
+                val brush = if (stops.size >= 3) {
+                    Brush.verticalGradient(0f to stops[0], 0.5f to stops[1], 1f to stops[2])
                 } else {
                     Brush.verticalGradient(listOf(Color(0xFF1C1C1C), Color.Black))
                 }

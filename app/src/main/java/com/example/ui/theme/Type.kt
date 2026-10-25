@@ -144,5 +144,90 @@ val Typography = Typography(
         fontSize = 14.sp,
         lineHeight = 18.sp,
         letterSpacing = 0.sp
+    ),
+    // Defined here so every style uses the app font (unset ones fall back to the default font).
+    displayMedium = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 45.sp,
+        lineHeight = 52.sp,
+        letterSpacing = (-0.25).sp
+    ),
+    displaySmall = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 36.sp,
+        lineHeight = 44.sp,
+        letterSpacing = (-0.2).sp
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.4).sp
+    ),
+    displayLargeEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 57.sp,
+        lineHeight = 64.sp,
+        letterSpacing = (-0.25).sp
+    ),
+    displayMediumEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 45.sp,
+        lineHeight = 52.sp,
+        letterSpacing = (-0.25).sp
+    ),
+    displaySmallEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 36.sp,
+        lineHeight = 44.sp,
+        letterSpacing = (-0.2).sp
+    ),
+    headlineSmallEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 24.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.4).sp
+    ),
+    titleSmallEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = (0).sp
+    ),
+    bodyMediumEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.5.sp,
+        lineHeight = 19.sp,
+        letterSpacing = (0).sp
+    ),
+    bodySmallEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 12.5.sp,
+        lineHeight = 17.sp,
+        letterSpacing = (0).sp
+    ),
+    labelMediumEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = (0.1).sp
+    ),
+    labelSmallEmphasized = TextStyle(
+        fontFamily = PlusJakartaSansFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 10.sp,
+        lineHeight = 13.sp,
+        letterSpacing = (0.4).sp
     )
 )

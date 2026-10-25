@@ -8,8 +8,6 @@ import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.BroadcastReceiver
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -20,7 +18,6 @@ import android.media.AudioManager
 import android.provider.OpenableColumns
 import android.util.Rational
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -37,7 +34,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -59,7 +55,6 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -70,8 +65,6 @@ import android.content.res.Configuration
 import android.os.SystemClock
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import kotlin.math.roundToInt
-import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.CheckableDropdownMenuItem
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.DropdownMenuGroup
@@ -83,12 +76,9 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -101,8 +91,6 @@ import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -828,8 +816,11 @@ fun VideoPlayerModal(
     if (showSleepSheet) {
         SleepTimerSheet(
             active = sleepDeadline != null || sleepEndOfVideo,
-            endOfVideo = sleepEndOfVideo,
+            atEndActive = sleepEndOfVideo,
             remainingMs = sleepRemainingMs,
+            endLabel = "At the end of this video",
+            endShortLabel = "End of video",
+            endIcon = Symbols.Movie,
             onStart = { minutes ->
                 sleepEndOfVideo = false
                 sleepRemainingMs = minutes * 60_000L
@@ -837,7 +828,7 @@ fun VideoPlayerModal(
                 gestureHud = Symbols.Bedtime to "Sleep in $minutes min"
                 showSleepSheet = false
             },
-            onEndOfVideo = {
+            onAtEnd = {
                 sleepDeadline = null
                 sleepEndOfVideo = true
                 gestureHud = Symbols.Bedtime to "Sleep at the end of this video"
@@ -1510,82 +1501,6 @@ private fun PlayerMoreMenu(
                 shape = MenuDefaults.itemShape(index = 0, count = 1).shape,
                 leadingIcon = { Icon(Symbols.Info, contentDescription = null) }
             )
-        }
-    }
-}
-
-private fun minutesLabel(m: Int): String =
-    if (m < 60) "$m min" else if (m % 60 == 0) "${m / 60} h" else "${m / 60} h ${m % 60} min"
-
-/** Sleep timer: pick a time (official Expressive button group) or "at the end of this video", then Start. */
-@Composable
-private fun SleepTimerSheet(
-    active: Boolean,
-    endOfVideo: Boolean,
-    remainingMs: Long,
-    onStart: (minutes: Int) -> Unit,
-    onEndOfVideo: () -> Unit,
-    onTurnOff: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    var minutes by remember { mutableIntStateOf(30) }
-    var atEnd by remember { mutableStateOf(endOfVideo) }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.testTag("player_sleep_sheet")
-    ) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Sleep timer", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                if (active) {
-                    Text(
-                        if (endOfVideo) "End of video" else "${formatDurationMs(remainingMs + 999L)} left",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = scheme.primary
-                    )
-                }
-            }
-            CompactRow("Stop after") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(listOf(15, 30, 45), listOf(60, 90, 120)).forEach { row ->
-                        ChoiceButtonGroup(
-                            options = row.map { it to (if (it == 90) "1.5 h" else minutesLabel(it)) },
-                            selected = if (atEnd) null else minutes.takeIf { it in row },
-                            onSelect = { v -> if (v != null) { minutes = v; atEnd = false } },
-                            tag = { "sleep_preset_$it" }
-                        )
-                    }
-                }
-            }
-            FilledTonalToggleButton(
-                checked = atEnd,
-                onCheckedChange = { atEnd = it },
-                modifier = Modifier.fillMaxWidth().testTag("sleep_end_of_video")
-            ) {
-                Icon(Symbols.Movie, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("At the end of this video")
-            }
-            Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (active) {
-                    OutlinedButton(
-                        onClick = onTurnOff,
-                        shapes = ButtonDefaults.shapes(),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Turn off") }
-                }
-                Button(
-                    onClick = { if (atEnd) onEndOfVideo() else onStart(minutes) },
-                    shapes = ButtonDefaults.shapes(),
-                    modifier = Modifier.weight(1f).testTag("sleep_start")
-                ) { Text(if (atEnd) "Start" else "Start · ${minutesLabel(minutes)}") }
-            }
         }
     }
 }

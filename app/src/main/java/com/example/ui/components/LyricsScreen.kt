@@ -31,22 +31,20 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -54,10 +52,9 @@ import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,7 +62,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -89,9 +85,10 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 
 /**
- * Full-screen lyrics. One tap on Lyrics shows lyrics: the song's own, saved ones, or (with
- * "Always search online") LRCLIB automatically. When there's nothing yet it asks once
- * (Search online / Load lyrics file). Every fix (search again, own file, sync) is in ⚙ here.
+ * Full-screen lyrics, with the same background, top bar and controls as Now Playing.
+ * Lyrics come from the song itself, a saved choice, your own file, or LRCLIB online (searched
+ * automatically unless "Always search online" is off). Every fix (search again, own file, sync)
+ * is in the settings button at the top.
  */
 @Composable
 fun LyricsScreen(
@@ -99,7 +96,7 @@ fun LyricsScreen(
     isPlaying: Boolean,
     positionMs: Long,
     settings: LyricsSettings,
-    amoled: Boolean,
+    background: NowPlayingBackground,
     onSettingsChange: (LyricsSettings) -> Unit,
     onSeekTo: (Long) -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -129,13 +126,9 @@ fun LyricsScreen(
     }
     val loadFile: () -> Unit = { filePicker.launch(arrayOf("*/*")) }
 
+    val colors = nowPlayingColors(background)
     Box(modifier = Modifier.fillMaxSize().testTag("lyrics_screen")) {
-        NowPlayingBackgroundLayer(
-            style = if (amoled) NowPlayingBackground.AMOLED else NowPlayingBackground.GRADIENT,
-            track = track,
-            followThemeColor = Color.Black,
-            modifier = Modifier.matchParentSize()
-        )
+        NowPlayingBackgroundLayer(style = background, track = track, modifier = Modifier.matchParentSize())
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -143,62 +136,39 @@ fun LyricsScreen(
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
-            // ---- Top bar: close, song, settings ----
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onClose,
-                    shapes = IconButtonDefaults.shapes(),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
-                    modifier = Modifier.testTag("lyrics_close")
-                ) {
-                    Icon(Symbols.KeyboardArrowDown, contentDescription = "Close lyrics")
-                }
-                Column(
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = track.title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = track.artist,
-                        color = Color.White.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                IconButton(
-                    onClick = { showSettings = true },
-                    shapes = IconButtonDefaults.shapes(),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
-                    modifier = Modifier.testTag("lyrics_settings_btn")
-                ) {
-                    Icon(Symbols.Tune, contentDescription = "Lyrics settings")
-                }
+            Box(Modifier.padding(horizontal = 24.dp)) {
+                NowPlayingTopBar(
+                    colors = colors,
+                    title = track.title,
+                    subtitle = track.artist,
+                    onClose = onClose,
+                    closeLabel = "Close lyrics",
+                    action = {
+                        CompositionLocalProvider(LocalContentColor provides colors.content) {
+                            TooltipIconButton(
+                                label = "Lyrics settings",
+                                icon = Symbols.Tune,
+                                onClick = { showSettings = true },
+                                modifier = Modifier.testTag("lyrics_settings_btn")
+                            )
+                        }
+                    }
+                )
             }
 
-            // ---- Lyrics or a message ----
+            // Lyrics, or a short message with what to do next.
             AnimatedContent(
                 targetState = handle.state,
                 contentKey = { it::class },
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
                 label = "lyricsState",
-                modifier = Modifier.weight(1f).fillMaxWidth()
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
             ) { state ->
                 when (state) {
                     LyricsState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        LoadingIndicator(color = Color.White, modifier = Modifier.testTag("lyrics_loading"))
+                        LoadingIndicator(color = colors.content, modifier = Modifier.testTag("lyrics_loading"))
                     }
                     is LyricsState.Loaded -> LyricsView(
                         lyrics = state.lyrics,
@@ -207,22 +177,28 @@ fun LyricsScreen(
                         offsetMs = state.offsetMs,
                         settings = settings,
                         onSeekTo = onSeekTo,
+                        contentColor = colors.content,
                         modifier = Modifier.fillMaxSize()
                     )
-                    LyricsState.NeedsChoice -> ChoicePanel(
-                        alwaysSearch = settings.autoSearch,
-                        onAlwaysSearchChange = { onSettingsChange(settings.copy(autoSearch = it)) },
-                        onSearchOnline = { handle.reload(true) },
-                        onLoadFile = loadFile
+                    // "Always search online" is off and the song has none: offer both ways.
+                    LyricsState.NeedsChoice -> MessagePanel(
+                        colors = colors,
+                        icon = Symbols.Lyrics,
+                        title = "No lyrics yet",
+                        body = "Search LRCLIB, a free online lyrics library, or load your own .lrc or .txt file.",
+                        primary = "Search online" to { handle.reload(true) },
+                        secondary = "Load file" to loadFile
                     )
                     LyricsState.NotFound -> MessagePanel(
+                        colors = colors,
                         icon = Symbols.Search,
                         title = "No lyrics found",
-                        body = "LRCLIB doesn't have this song under its current name. Try Search again to fix the title or artist, or load your own file.",
+                        body = "LRCLIB doesn't have this song under this name. Fix the title or artist with Search again, or load your own file.",
                         primary = "Search again" to { showSearch = true },
                         secondary = "Load file" to loadFile
                     )
                     LyricsState.NoInternet -> MessagePanel(
+                        colors = colors,
                         icon = Symbols.WifiOff,
                         title = "No internet connection",
                         body = "Connect and try again, or load your own lyrics file.",
@@ -230,7 +206,8 @@ fun LyricsScreen(
                         secondary = "Load file" to loadFile
                     )
                     LyricsState.Instrumental -> MessagePanel(
-                        icon = LyricsIcon,
+                        colors = colors,
+                        icon = Symbols.MusicNote,
                         title = "Instrumental",
                         body = "This song has no lyrics.",
                         primary = "Search again" to { showSearch = true },
@@ -239,44 +216,15 @@ fun LyricsScreen(
                 }
             }
 
-            // ---- Small controls ----
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onSkipPrevious,
-                    shapes = IconButtonDefaults.shapes(),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
-                    modifier = Modifier.size(56.dp)
-                ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(30.dp)) }
-                Spacer(Modifier.width(20.dp))
-                FilledIconButton(
-                    onClick = onTogglePlayPause,
-                    shapes = IconButtonDefaults.shapes(),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
-                    ),
-                    modifier = Modifier.size(64.dp).testTag("lyrics_play_pause")
-                ) {
-                    Icon(
-                        if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-                Spacer(Modifier.width(20.dp))
-                IconButton(
-                    onClick = onSkipNext,
-                    shapes = IconButtonDefaults.shapes(),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
-                    modifier = Modifier.size(56.dp)
-                ) { Icon(Symbols.SkipNext, contentDescription = "Next", modifier = Modifier.size(30.dp)) }
-            }
+            NowPlayingControls(
+                isPlaying = isPlaying,
+                colors = colors,
+                onPrevious = onSkipPrevious,
+                onPlayPause = onTogglePlayPause,
+                onNext = onSkipNext,
+                compact = true,
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 16.dp)
+            )
         }
     }
 
@@ -334,85 +282,10 @@ fun LyricsScreen(
 // Messages
 // ---------------------------------------------------------------------------------------------
 
-/** First time a song has no lyrics (and auto-search is off): pick once. */
-@Composable
-private fun ChoicePanel(
-    alwaysSearch: Boolean,
-    onAlwaysSearchChange: (Boolean) -> Unit,
-    onSearchOnline: () -> Unit,
-    onLoadFile: () -> Unit
-) {
-    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = Color.White.copy(alpha = 0.12f),
-            contentColor = Color.White,
-            modifier = Modifier.widthIn(max = 440.dp).testTag("lyrics_choice")
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(LyricsIcon, contentDescription = null, modifier = Modifier.size(36.dp))
-                Spacer(Modifier.height(12.dp))
-                Text("Find lyrics for this song", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Search LRCLIB, a free online lyrics library, or load your own .lrc or .txt file.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.75f),
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(20.dp))
-                Button(
-                    onClick = onSearchOnline,
-                    shapes = ButtonDefaults.shapes(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                    modifier = Modifier.fillMaxWidth().testTag("lyrics_search_online")
-                ) {
-                    Icon(Symbols.Cloud, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                    Text("Search online")
-                }
-                Spacer(Modifier.height(8.dp))
-                FilledTonalButton(
-                    onClick = onLoadFile,
-                    shapes = ButtonDefaults.shapes(),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = Color.White.copy(alpha = 0.16f),
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("lyrics_load_file")
-                ) {
-                    Icon(Symbols.FileOpen, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                    Text("Load lyrics file")
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onAlwaysSearchChange(!alwaysSearch) }
-                        .padding(vertical = 4.dp)
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Always search online", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Don't ask again; find lyrics automatically",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-                    Switch(checked = alwaysSearch, onCheckedChange = onAlwaysSearchChange)
-                }
-            }
-        }
-    }
-}
-
+/** A short message in the middle of the lyrics screen with one or two buttons. */
 @Composable
 private fun MessagePanel(
+    colors: NowPlayingColors,
     icon: ImageVector,
     title: String,
     body: String,
@@ -420,36 +293,38 @@ private fun MessagePanel(
     secondary: Pair<String, () -> Unit>?
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp)
+            .testTag("lyrics_message"),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(40.dp))
-        Spacer(Modifier.height(12.dp))
-        Text(title, style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(6.dp))
+        Icon(icon, contentDescription = null, tint = colors.content, modifier = Modifier.size(40.dp))
+        Spacer(Modifier.height(16.dp))
+        Text(title, style = MaterialTheme.typography.headlineSmall, color = colors.content, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
         Text(
             body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.75f),
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.contentVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 380.dp)
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = primary.second,
                 shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+                colors = ButtonDefaults.buttonColors(containerColor = colors.main, contentColor = colors.onMain),
+                modifier = Modifier.testTag("lyrics_primary_action")
             ) { Text(primary.first) }
             if (secondary != null) {
                 FilledTonalButton(
                     onClick = secondary.second,
                     shapes = ButtonDefaults.shapes(),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = Color.White.copy(alpha = 0.16f),
-                        contentColor = Color.White
-                    )
+                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = colors.soft, contentColor = colors.onSoft),
+                    modifier = Modifier.testTag("lyrics_secondary_action")
                 ) { Text(secondary.first) }
             }
         }
@@ -623,7 +498,7 @@ private fun SyncRow(index: Int, count: Int, offsetMs: Long, onOffset: (Long) -> 
     ) { Text("Sync") }
 }
 
-/** A row with an Expressive connected button group for picking one option. */
+/** A grouped row with the Expressive standard button group for picking one option. */
 @Composable
 private fun ChoiceRow(
     index: Int,
@@ -645,21 +520,13 @@ private fun ChoiceRow(
                 Spacer(Modifier.width(16.dp))
                 Text(title, style = MaterialTheme.typography.bodyLarge)
             }
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                options.forEachIndexed { i, option ->
-                    ToggleButton(
-                        checked = i == selected,
-                        onCheckedChange = { if (i != selected) onSelect(i) },
-                        shapes = when (i) {
-                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) { Text(option, maxLines = 1) }
-                }
-            }
+            Spacer(Modifier.height(12.dp))
+            ChoiceButtonGroup(
+                options = options.indices.map { it to options[it] },
+                selected = selected,
+                onSelect = { if (it != selected) onSelect(it) },
+                tag = { "lyrics_choice_${title.lowercase().replace(' ', '_')}_$it" }
+            )
         }
     }
 }

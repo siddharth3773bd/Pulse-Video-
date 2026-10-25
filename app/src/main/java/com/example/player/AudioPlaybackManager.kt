@@ -52,6 +52,15 @@ data class AudioPlaybackState(
     val queueIndex: Int = 0
 )
 
+/** A song that couldn't play: shown in a dialog with the full reason, which can be copied. */
+data class PlaybackErrorReport(
+    val title: String,
+    /** True when playback moved on to the next song in the queue. */
+    val skipped: Boolean,
+    /** Error code plus every underlying reason, one per line. */
+    val details: String
+)
+
 class AudioPlaybackManager private constructor(context: Context) {
 
     private val appContext = context.applicationContext
@@ -59,6 +68,13 @@ class AudioPlaybackManager private constructor(context: Context) {
 
     private val _state = MutableStateFlow(AudioPlaybackState())
     val state: StateFlow<AudioPlaybackState> = _state.asStateFlow()
+
+    private val _lastError = MutableStateFlow<PlaybackErrorReport?>(null)
+    /** The last song that couldn't play, until the UI has shown it ([clearError]). */
+    val lastError: StateFlow<PlaybackErrorReport?> = _lastError.asStateFlow()
+
+    /** Songs that failed in a row; stops the skipping when every song in the queue fails. */
+    private var failuresInARow = 0
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
@@ -101,21 +117,29 @@ class AudioPlaybackManager private constructor(context: Context) {
             syncFromController()
         }
 
-        // Say why a song couldn't play instead of failing silently (e.g. an unsupported file).
+        // Say exactly why a song couldn't play, then move on to the next one like other music apps.
         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-            val title = _state.value.currentTrack?.title ?: "this song"
-            val cause = generateSequence(error.cause) { it.cause }.lastOrNull()?.message
-                ?.take(120)
+            val title = _state.value.currentTrack?.title ?: "This song"
             android.util.Log.e("Doppler", "Playback error for $title: ${error.errorCodeName}", error)
-            android.widget.Toast.makeText(
-                appContext,
-                "Couldn't play “$title” (${error.errorCodeName})" + (cause?.let { ": $it" } ?: ""),
-                android.widget.Toast.LENGTH_LONG
-            ).show()
+            val controller = mediaController
+            failuresInARow++
+            val canSkip = controller != null && controller.hasNextMediaItem() &&
+                failuresInARow < controller.mediaItemCount
+            _lastError.value = PlaybackErrorReport(
+                title = title,
+                skipped = canSkip,
+                details = describeError(error)
+            )
+            if (canSkip && controller != null) {
+                controller.seekToNextMediaItem()
+                controller.prepare()
+                controller.play()
+            }
             syncFromController()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_READY) failuresInARow = 0
             syncFromController()
         }
 
@@ -185,6 +209,7 @@ class AudioPlaybackManager private constructor(context: Context) {
 
         val targetTrack = tracks[safeStartIndex]
         isLoadingQueue = true
+        failuresInARow = 0
         _state.update {
             it.copy(
                 currentTrack = targetTrack,
@@ -360,6 +385,7 @@ class AudioPlaybackManager private constructor(context: Context) {
         withController { controller ->
             if (index in 0 until controller.mediaItemCount) {
                 controller.seekTo(index, 0L)
+                controller.prepareIfIdle()
                 controller.play()
             }
             syncFromController()
@@ -393,6 +419,7 @@ class AudioPlaybackManager private constructor(context: Context) {
                 if (controller.playbackState == Player.STATE_ENDED) {
                     controller.seekTo(0L)
                 }
+                controller.prepareIfIdle()
                 controller.play()
             }
             syncFromController()
@@ -465,9 +492,11 @@ class AudioPlaybackManager private constructor(context: Context) {
         withController { controller ->
             if (controller.hasNextMediaItem()) {
                 controller.seekToNextMediaItem()
+                controller.prepareIfIdle()
                 controller.play()
             } else if (controller.mediaItemCount > 0) {
                 controller.seekTo(0, 0L)
+                controller.prepareIfIdle()
                 controller.play()
             }
             syncFromController()
@@ -481,8 +510,29 @@ class AudioPlaybackManager private constructor(context: Context) {
             } else {
                 controller.seekToPreviousMediaItem()
             }
+            controller.prepareIfIdle()
             controller.play()
             syncFromController()
+        }
+    }
+
+    /** Hides the error dialog. */
+    fun clearError() {
+        _lastError.value = null
+    }
+
+    /** After an error the player is idle; it has to be prepared again before it can play. */
+    private fun MediaController.prepareIfIdle() {
+        if (playbackState == Player.STATE_IDLE && mediaItemCount > 0) prepare()
+    }
+
+    /** "ERROR_CODE_… (3001)" followed by every underlying reason, so nothing is cut off. */
+    private fun describeError(error: androidx.media3.common.PlaybackException): String = buildString {
+        append(error.errorCodeName).append(" (").append(error.errorCode).append(')')
+        error.message?.takeIf { it.isNotBlank() }?.let { append('\n').append(it) }
+        generateSequence(error.cause) { it.cause }.take(6).forEach { cause ->
+            append('\n').append(cause.javaClass.simpleName.ifBlank { "Cause" })
+            cause.message?.takeIf { it.isNotBlank() }?.let { append(": ").append(it) }
         }
     }
 

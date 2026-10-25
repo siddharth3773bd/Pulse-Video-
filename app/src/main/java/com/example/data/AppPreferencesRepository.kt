@@ -20,7 +20,6 @@ import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
 import com.example.model.NowPlayingBackground
-import com.example.model.NowPlayingButtonColors
 import com.example.model.NowPlayingColorSource
 import com.example.model.NowPlayingAction
 import com.example.model.MAX_HISTORY_ITEMS
@@ -104,8 +103,8 @@ object AppPreferencesRepository {
     private val KEY_LIB_HIDE_RECORDINGS = booleanPreferencesKey("lib_hide_recordings")
     private val KEY_NP_COLOR_SOURCE = stringPreferencesKey("np_color_source")
     private val KEY_NP_BACKGROUND = stringPreferencesKey("np_background")
-    private val KEY_NP_BUTTON_COLORS = stringPreferencesKey("np_button_colors")
-    private val KEY_LYR_AUTO = booleanPreferencesKey("lyrics_auto_search")
+    // New key: online search is on for everyone by default now (it can still be turned off).
+    private val KEY_LYR_AUTO = booleanPreferencesKey("lyrics_auto_search_v2")
     private val KEY_LYR_SIZE = stringPreferencesKey("lyrics_text_size")
     private val KEY_LYR_CENTER = booleanPreferencesKey("lyrics_align_center")
     private val KEY_LYR_BLUR = booleanPreferencesKey("lyrics_blur")
@@ -113,7 +112,6 @@ object AppPreferencesRepository {
     private val KEY_AMB_TITLE = booleanPreferencesKey("ambient_show_title")
     private val KEY_AMB_ARTIST = booleanPreferencesKey("ambient_show_artist")
     private val KEY_AMB_LYRICS = booleanPreferencesKey("ambient_show_lyrics")
-    private val KEY_AMB_AMOLED = booleanPreferencesKey("ambient_amoled")
     private val KEY_AMB_ROTATE = booleanPreferencesKey("ambient_open_on_rotate")
     private val KEY_LIB_BLACKLIST_SONGS = stringPreferencesKey("lib_blacklist_songs_json")
     private val KEY_LIB_BLACKLIST_FOLDERS = stringSetPreferencesKey("lib_blacklist_folders")
@@ -230,8 +228,6 @@ object AppPreferencesRepository {
                     ?: NowPlayingColorSource.ALBUM_ART,
                 nowPlayingBackground = NowPlayingBackground.entries.find { it.id == prefs[KEY_NP_BACKGROUND] }
                     ?: NowPlayingBackground.GRADIENT,
-                nowPlayingButtonColors = NowPlayingButtonColors.entries.find { it.id == prefs[KEY_NP_BUTTON_COLORS] }
-                    ?: NowPlayingButtonColors.DEFAULT,
                 blacklistedSongs = parseBlacklistedSongs(prefs[KEY_LIB_BLACKLIST_SONGS]),
                 blacklistedFolders = prefs[KEY_LIB_BLACKLIST_FOLDERS] ?: emptySet(),
                 playlists = parseAudioPlaylists(prefs[KEY_LIB_PLAYLISTS]),
@@ -240,11 +236,10 @@ object AppPreferencesRepository {
                     showTitle = prefs[KEY_AMB_TITLE] ?: true,
                     showArtist = prefs[KEY_AMB_ARTIST] ?: true,
                     showLyrics = prefs[KEY_AMB_LYRICS] ?: true,
-                    amoled = prefs[KEY_AMB_AMOLED] ?: false,
                     openOnRotate = prefs[KEY_AMB_ROTATE] ?: true
                 ),
                 lyrics = com.example.lyrics.LyricsSettings(
-                    autoSearch = prefs[KEY_LYR_AUTO] ?: false,
+                    autoSearch = prefs[KEY_LYR_AUTO] ?: true,
                     textSize = com.example.lyrics.LyricsTextSize.entries.find { it.id == prefs[KEY_LYR_SIZE] }
                         ?: com.example.lyrics.LyricsTextSize.MEDIUM,
                     alignCenter = prefs[KEY_LYR_CENTER] ?: false,
@@ -408,10 +403,6 @@ object AppPreferencesRepository {
         context.appDataStore.edit { it[KEY_NP_BACKGROUND] = value.id }
     }
 
-    suspend fun setNowPlayingButtonColors(context: Context, value: NowPlayingButtonColors) {
-        context.appDataStore.edit { it[KEY_NP_BUTTON_COLORS] = value.id }
-    }
-
     suspend fun setLibraryHideShortAudio(context: Context, hide: Boolean) {
         context.appDataStore.edit { it[KEY_LIB_HIDE_SHORT] = hide }
     }
@@ -442,7 +433,6 @@ object AppPreferencesRepository {
             it[KEY_AMB_TITLE] = value.showTitle
             it[KEY_AMB_ARTIST] = value.showArtist
             it[KEY_AMB_LYRICS] = value.showLyrics
-            it[KEY_AMB_AMOLED] = value.amoled
             it[KEY_AMB_ROTATE] = value.openOnRotate
         }
     }

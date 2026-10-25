@@ -3,7 +3,6 @@ package com.example.ui.components
 import com.example.ui.icons.Symbols
 import com.example.model.AudioTrackItem
 import com.example.model.NowPlayingBackground
-import com.example.model.NowPlayingButtonColors
 import com.example.model.NowPlayingColorSource
 import com.example.data.AppPreferencesRepository
 import com.example.model.LibraryPreferences
@@ -121,8 +120,6 @@ import com.example.model.ThemeMode
 import com.example.model.VideoHistoryEntry
 import com.example.model.VideoItem
 import com.example.model.formatLastWatchedDate
-import com.example.ui.theme.LocalM3Palette
-import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.PresetAppearanceSwatches
 import com.example.ui.theme.colorToHex
 import com.example.ui.theme.parseHexColorOrNull
@@ -257,7 +254,7 @@ private fun MeHomeMenuScreen(
     effectiveAmoled: Boolean,
     onOpenSubPage: (MeSubPage) -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
 
     Column(
         modifier = Modifier
@@ -298,9 +295,8 @@ private fun MeHomeMenuScreen(
         // "Preferences" heading
         Text(
             text = "Preferences",
-            color = palette.primary,
-            fontFamily = PlusJakartaSansFontFamily,
-            fontSize = 14.sp,
+            color = scheme.primary,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.2.sp,
             modifier = Modifier.padding(horizontal = 6.dp)
@@ -365,7 +361,7 @@ private fun ExpressiveTopWideCard(
     testTag: String,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     val motionScheme = MaterialTheme.motionScheme
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -380,7 +376,7 @@ private fun ExpressiveTopWideCard(
         animationSpec = motionScheme.fastSpatialSpec(),
         label = "cardCorner"
     )
-    val cardBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+    val cardBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
     Card(
         onClick = onClick,
@@ -394,7 +390,7 @@ private fun ExpressiveTopWideCard(
             }
             .border(
                 width = 1.dp,
-                color = palette.outlineVariant.copy(alpha = 0.35f),
+                color = scheme.outlineVariant.copy(alpha = 0.35f),
                 shape = RoundedCornerShape(cornerRadius)
             )
             .testTag(testTag)
@@ -406,13 +402,13 @@ private fun ExpressiveTopWideCard(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(MaterialShapes.Cookie9Sided.toShape())
-                    .background(palette.secondaryContainer),
+                    .background(scheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = palette.onSecondaryContainer,
+                    tint = scheme.onSecondaryContainer,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -421,9 +417,8 @@ private fun ExpressiveTopWideCard(
 
             Text(
                 text = title,
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 16.5.sp,
+                color = scheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -433,9 +428,8 @@ private fun ExpressiveTopWideCard(
 
             Text(
                 text = subtitle,
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.sp,
+                color = scheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -456,8 +450,8 @@ private fun ExpressivePreferenceMenuRow(
     onClick: () -> Unit,
     testTag: String
 ) {
-    val palette = LocalM3Palette.current
-    val rowBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+    val scheme = MaterialTheme.colorScheme
+    val rowBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
     SegmentedListItem(
         onClick = onClick,
@@ -467,21 +461,21 @@ private fun ExpressivePreferenceMenuRow(
         ),
         colors = ListItemDefaults.segmentedColors(
             containerColor = rowBg,
-            contentColor = palette.onSurface,
-            supportingContentColor = palette.onSurfaceVariant
+            contentColor = scheme.onSurface,
+            supportingContentColor = scheme.onSurfaceVariant
         ),
         leadingContent = {
             Box(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(MaterialShapes.SoftBurst.toShape())
-                    .background(palette.secondaryContainer),
+                    .background(scheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = palette.onSecondaryContainer,
+                    tint = scheme.onSecondaryContainer,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -489,9 +483,8 @@ private fun ExpressivePreferenceMenuRow(
         supportingContent = {
             Text(
                 text = subtitle,
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.sp,
+                color = scheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -501,16 +494,15 @@ private fun ExpressivePreferenceMenuRow(
             Icon(
                 imageVector = Symbols.KeyboardArrowRight,
                 contentDescription = null,
-                tint = palette.onSurfaceVariant,
+                tint = scheme.onSurfaceVariant,
                 modifier = Modifier.size(22.dp)
             )
         },
         content = {
             Text(
                 text = title,
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 16.sp,
+                color = scheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -530,7 +522,7 @@ private fun ExpressiveSubPageHeader(
     onBack: () -> Unit,
     trailingAction: (@Composable () -> Unit)? = null
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
 
     MediumFlexibleTopAppBar(
         title = {
@@ -542,19 +534,19 @@ private fun ExpressiveSubPageHeader(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(MaterialShapes.Sunny.toShape())
-                        .background(palette.secondaryContainer),
+                        .background(scheme.secondaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = palette.onSecondaryContainer,
+                        tint = scheme.onSecondaryContainer,
                         modifier = Modifier.size(22.dp)
                     )
                 }
                 Text(
                     text = title,
-                    color = palette.onSurface,
+                    color = scheme.onSurface,
                     style = MaterialTheme.typography.headlineMediumEmphasized,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -566,8 +558,8 @@ private fun ExpressiveSubPageHeader(
                 onClick = onBack,
                 shapes = IconButtonDefaults.shapes(),
                 colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = palette.surfaceContainerHigh,
-                    contentColor = palette.onSurface
+                    containerColor = scheme.surfaceContainerHigh,
+                    contentColor = scheme.onSurface
                 ),
                 modifier = Modifier
                     .padding(start = 8.dp)
@@ -607,7 +599,7 @@ private fun VideoHistorySubPage(
     onPlayVideo: (VideoItem) -> Unit,
     onClearHistory: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
 
     Column(
         modifier = Modifier
@@ -624,8 +616,8 @@ private fun VideoHistorySubPage(
                         onClick = onClearHistory,
                         shapes = ButtonDefaults.shapes(),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = palette.surfaceContainerHigh,
-                            contentColor = palette.error
+                            containerColor = scheme.surfaceContainerHigh,
+                            contentColor = scheme.error
                         ),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                         modifier = Modifier.testTag("clear_history_btn")
@@ -633,15 +625,14 @@ private fun VideoHistorySubPage(
                         Icon(
                             imageVector = Symbols.DeleteOutline,
                             contentDescription = "Clear history",
-                            tint = palette.error,
+                            tint = scheme.error,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Clear history",
-                            color = palette.error,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.sp,
+                            color = scheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -662,30 +653,28 @@ private fun VideoHistorySubPage(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(MaterialShapes.Cookie9Sided.toShape())
-                            .background(palette.surfaceContainerHigh),
+                            .background(scheme.surfaceContainerHigh),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Symbols.History,
                             contentDescription = null,
-                            tint = palette.onSurfaceVariant,
+                            tint = scheme.onSurfaceVariant,
                             modifier = Modifier.size(30.dp)
                         )
                     }
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         text = "No watch history yet",
-                        color = palette.onSurface,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 17.sp,
+                        color = scheme.onSurface,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Videos you play will appear here (up to 25 recent videos).",
-                        color = palette.onSurfaceVariant,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 13.5.sp,
+                        color = scheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Normal,
                         textAlign = TextAlign.Center
                     )
@@ -708,7 +697,7 @@ private fun VideoHistorySubPage(
                 ) { idx, (entry, video) ->
                     val badge: String? = null
                     val watchedDate = formatLastWatchedDate(entry.lastPlayedTimestamp)
-                    val rowBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+                    val rowBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
                     SegmentedListItem(
                         onClick = { onPlayVideo(video) },
@@ -718,8 +707,8 @@ private fun VideoHistorySubPage(
                         ),
                         colors = ListItemDefaults.segmentedColors(
                             containerColor = rowBg,
-                            contentColor = palette.onSurface,
-                            supportingContentColor = palette.onSurfaceVariant
+                            contentColor = scheme.onSurface,
+                            supportingContentColor = scheme.onSurfaceVariant
                         ),
                         leadingContent = {
                             VideoThumbnailBox(
@@ -739,17 +728,15 @@ private fun VideoHistorySubPage(
                                 if (badge != null) {
                                     Text(
                                         text = badge,
-                                        color = palette.onSurfaceVariant,
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = 12.5.sp,
+                                        color = scheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                                 Text(
                                     text = watchedDate,
-                                    color = palette.onSurfaceVariant,
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontSize = 12.5.sp,
+                                    color = scheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Normal,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -759,9 +746,8 @@ private fun VideoHistorySubPage(
                         content = {
                             Text(
                                 text = video.title,
-                                color = palette.onSurface,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 15.sp,
+                                color = scheme.onSurface,
+                                style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
@@ -796,7 +782,7 @@ private fun VideoPlaylistSubPage(
     onAddVideosToPlaylist: (playlistId: String, videoIds: List<String>) -> Unit,
     onRemoveVideoFromPlaylist: (playlistId: String, videoId: String) -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     val motionScheme = MaterialTheme.motionScheme
     var expandedPlaylistId by remember { mutableStateOf<String?>(null) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
@@ -834,8 +820,7 @@ private fun VideoPlaylistSubPage(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Create",
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontSize = 13.5.sp,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -869,30 +854,28 @@ private fun VideoPlaylistSubPage(
                             modifier = Modifier
                                 .size(64.dp)
                                 .clip(MaterialShapes.SoftBurst.toShape())
-                                .background(palette.surfaceContainerHigh),
+                                .background(scheme.surfaceContainerHigh),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Symbols.PlaylistPlay,
                                 contentDescription = null,
-                                tint = palette.onSurfaceVariant,
+                                tint = scheme.onSurfaceVariant,
                                 modifier = Modifier.size(30.dp)
                             )
                         }
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
                             text = "No playlists yet",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 17.sp,
+                            color = scheme.onSurface,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Tap Create to build a custom video playlist.",
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.5.sp,
+                            color = scheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Normal,
                             textAlign = TextAlign.Center
                         )
@@ -916,7 +899,7 @@ private fun VideoPlaylistSubPage(
                         val resolvedVideos = pl.mediaUris.mapNotNull { videoById[it] }
                         val firstVideo = resolvedVideos.firstOrNull()
                         val isExpanded = expandedPlaylistId == pl.id
-                        val cardBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+                        val cardBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
                         Card(
                             shape = MaterialTheme.shapes.extraLarge,
@@ -954,13 +937,13 @@ private fun VideoPlaylistSubPage(
                                                     .width(96.dp)
                                                     .height(56.dp)
                                                     .clip(MaterialTheme.shapes.medium)
-                                                    .background(palette.surfaceContainerHigh),
+                                                    .background(scheme.surfaceContainerHigh),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
                                                     imageVector = Symbols.PlaylistPlay,
                                                     contentDescription = null,
-                                                    tint = palette.primary,
+                                                    tint = scheme.primary,
                                                     modifier = Modifier.size(26.dp)
                                                 )
                                             }
@@ -969,9 +952,8 @@ private fun VideoPlaylistSubPage(
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = pl.name,
-                                                color = palette.onSurface,
-                                                fontFamily = PlusJakartaSansFontFamily,
-                                                fontSize = 16.sp,
+                                                color = scheme.onSurface,
+                                                style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.SemiBold,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
@@ -979,9 +961,8 @@ private fun VideoPlaylistSubPage(
                                             Spacer(modifier = Modifier.height(3.dp))
                                             Text(
                                                 text = if (resolvedVideos.size == 1) "1 video" else "${resolvedVideos.size} videos",
-                                                color = palette.onSurfaceVariant,
-                                                fontFamily = PlusJakartaSansFontFamily,
-                                                fontSize = 13.sp,
+                                                color = scheme.onSurfaceVariant,
+                                                style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.Normal
                                             )
                                         }
@@ -996,7 +977,7 @@ private fun VideoPlaylistSubPage(
                                             Icon(
                                                 imageVector = Symbols.Add,
                                                 contentDescription = "Add videos to ${pl.name}",
-                                                tint = palette.primary,
+                                                tint = scheme.primary,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }
@@ -1011,7 +992,7 @@ private fun VideoPlaylistSubPage(
                                             Icon(
                                                 imageVector = Symbols.Edit,
                                                 contentDescription = "Rename ${pl.name}",
-                                                tint = palette.onSurfaceVariant,
+                                                tint = scheme.onSurfaceVariant,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -1023,14 +1004,14 @@ private fun VideoPlaylistSubPage(
                                             Icon(
                                                 imageVector = Symbols.DeleteOutline,
                                                 contentDescription = "Delete ${pl.name}",
-                                                tint = palette.error,
+                                                tint = scheme.error,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
                                         Icon(
                                             imageVector = if (isExpanded) Symbols.ExpandLess else Symbols.ExpandMore,
                                             contentDescription = null,
-                                            tint = palette.onSurfaceVariant,
+                                            tint = scheme.onSurfaceVariant,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -1049,13 +1030,12 @@ private fun VideoPlaylistSubPage(
                                             .padding(top = 12.dp),
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        HorizontalDivider(color = palette.surfaceContainerHighest)
+                                        HorizontalDivider(color = scheme.surfaceContainerHighest)
                                         if (resolvedVideos.isEmpty()) {
                                             Text(
                                                 text = "No videos in this playlist yet. Tap + to add videos.",
-                                                color = palette.onSurfaceVariant,
-                                                fontFamily = PlusJakartaSansFontFamily,
-                                                fontSize = 13.sp,
+                                                color = scheme.onSurfaceVariant,
+                                                style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.Normal,
                                                 modifier = Modifier.padding(vertical = 6.dp)
                                             )
@@ -1069,9 +1049,9 @@ private fun VideoPlaylistSubPage(
                                                         count = resolvedVideos.size.coerceAtLeast(1)
                                                     ),
                                                     colors = ListItemDefaults.segmentedColors(
-                                                        containerColor = palette.surfaceContainerHigh,
-                                                        contentColor = palette.onSurface,
-                                                        supportingContentColor = palette.onSurfaceVariant
+                                                        containerColor = scheme.surfaceContainerHigh,
+                                                        contentColor = scheme.onSurface,
+                                                        supportingContentColor = scheme.onSurfaceVariant
                                                     ),
                                                     leadingContent = {
                                                         VideoThumbnailBox(
@@ -1091,9 +1071,8 @@ private fun VideoPlaylistSubPage(
                                                                 }
                                                                 append(video.durationLabel)
                                                             },
-                                                            color = palette.onSurfaceVariant,
-                                                            fontFamily = PlusJakartaSansFontFamily,
-                                                            fontSize = 12.sp,
+                                                            color = scheme.onSurfaceVariant,
+                                                            style = MaterialTheme.typography.labelMedium,
                                                             fontWeight = FontWeight.Normal
                                                         )
                                                     },
@@ -1106,7 +1085,7 @@ private fun VideoPlaylistSubPage(
                                                             Icon(
                                                                 imageVector = Symbols.RemoveCircleOutline,
                                                                 contentDescription = "Remove from playlist",
-                                                                tint = palette.error,
+                                                                tint = scheme.error,
                                                                 modifier = Modifier.size(18.dp)
                                                             )
                                                         }
@@ -1114,9 +1093,8 @@ private fun VideoPlaylistSubPage(
                                                     content = {
                                                         Text(
                                                             text = video.title,
-                                                            color = palette.onSurface,
-                                                            fontFamily = PlusJakartaSansFontFamily,
-                                                            fontSize = 14.sp,
+                                                            color = scheme.onSurface,
+                                                            style = MaterialTheme.typography.titleSmall,
                                                             fontWeight = FontWeight.SemiBold,
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis
@@ -1168,7 +1146,6 @@ private fun VideoPlaylistSubPage(
                 text = {
                     Text(
                         text = "New playlist",
-                        fontFamily = PlusJakartaSansFontFamily,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -1183,7 +1160,6 @@ private fun VideoPlaylistSubPage(
             title = {
                 Text(
                     text = "Create playlist",
-                    fontFamily = PlusJakartaSansFontFamily,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -1195,7 +1171,6 @@ private fun VideoPlaylistSubPage(
                     placeholder = {
                         Text(
                             text = "Playlist name...",
-                            fontFamily = PlusJakartaSansFontFamily
                         )
                     },
                     shape = MaterialTheme.shapes.medium,
@@ -1235,7 +1210,6 @@ private fun VideoPlaylistSubPage(
             title = {
                 Text(
                     text = "Rename playlist",
-                    fontFamily = PlusJakartaSansFontFamily,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -1282,7 +1256,6 @@ private fun VideoPlaylistSubPage(
             title = {
                 Text(
                     text = "Add videos to ${currentAddTarget.name}",
-                    fontFamily = PlusJakartaSansFontFamily,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -1314,32 +1287,30 @@ private fun VideoPlaylistSubPage(
                                     count = availableVideos.size.coerceAtLeast(1)
                                 ),
                                 colors = ListItemDefaults.segmentedColors(
-                                    containerColor = palette.surfaceContainer,
-                                    contentColor = palette.onSurface,
-                                    supportingContentColor = palette.onSurfaceVariant
+                                    containerColor = scheme.surfaceContainer,
+                                    contentColor = scheme.onSurface,
+                                    supportingContentColor = scheme.onSurfaceVariant
                                 ),
                                 supportingContent = {
                                     Text(
                                         text = video.durationLabel,
-                                        color = palette.onSurfaceVariant,
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = 12.sp
+                                        color = scheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.labelMedium,
                                     )
                                 },
                                 trailingContent = {
                                     Icon(
                                         imageVector = Symbols.Add,
                                         contentDescription = "Add",
-                                        tint = palette.primary,
+                                        tint = scheme.primary,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 },
                                 content = {
                                     Text(
                                         text = video.title,
-                                        color = palette.onSurface,
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = 14.sp,
+                                        color = scheme.onSurface,
+                                        style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -1379,10 +1350,10 @@ private fun AppearanceSubPage(
     onToggleAmoledBlack: () -> Unit,
     onUpdatePlaybackSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     val motionScheme = MaterialTheme.motionScheme
     var showCustomColorPicker by remember { mutableStateOf(false) }
-    val cardBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+    val cardBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
     Column(
         modifier = Modifier
@@ -1412,17 +1383,15 @@ private fun AppearanceSubPage(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
                         text = "Theme mode",
-                        color = palette.onSurface,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 16.sp,
+                        color = scheme.onSurface,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Choose how Videos adapts to system light and dark themes",
-                        color = palette.onSurfaceVariant,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 13.sp,
+                        color = scheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Normal
                     )
                     Spacer(modifier = Modifier.height(14.dp))
@@ -1448,10 +1417,10 @@ private fun AppearanceSubPage(
                                 onCheckedChange = { onSelectThemeMode(mode) },
                                 shapes = shapes,
                                 colors = ToggleButtonDefaults.colors(
-                                    containerColor = palette.surfaceContainerHigh,
-                                    contentColor = palette.onSurfaceVariant,
-                                    checkedContainerColor = palette.primary,
-                                    checkedContentColor = palette.onPrimary
+                                    containerColor = scheme.surfaceContainerHigh,
+                                    contentColor = scheme.onSurfaceVariant,
+                                    checkedContainerColor = scheme.primary,
+                                    checkedContentColor = scheme.onPrimary
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -1460,8 +1429,7 @@ private fun AppearanceSubPage(
                             ) {
                                 Text(
                                     text = label,
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontSize = 14.sp,
+                                    style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1
                                 )
@@ -1497,17 +1465,15 @@ private fun AppearanceSubPage(
                     Column(modifier = Modifier.padding(18.dp)) {
                         Text(
                             text = "Color scheme",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 16.sp,
+                            color = scheme.onSurface,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Pick a preset accent or craft a custom seed color",
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.sp,
+                            color = scheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Normal
                         )
                         Spacer(modifier = Modifier.height(16.dp))
@@ -1543,13 +1509,13 @@ private fun AppearanceSubPage(
                                             },
                                             shape = RoundedCornerShape(corner),
                                             colors = CardDefaults.cardColors(
-                                                containerColor = if (active) palette.secondaryContainer else palette.surfaceContainerHigh
+                                                containerColor = if (active) scheme.secondaryContainer else scheme.surfaceContainerHigh
                                             ),
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .border(
                                                     width = if (active) 2.dp else 1.dp,
-                                                    color = if (active) palette.primary else Color.Transparent,
+                                                    color = if (active) scheme.primary else Color.Transparent,
                                                     shape = RoundedCornerShape(corner)
                                                 )
                                                 .testTag("appearance_swatch_$id")
@@ -1602,9 +1568,8 @@ private fun AppearanceSubPage(
 
                                                 Text(
                                                     text = label,
-                                                    color = if (active) palette.onSecondaryContainer else palette.onSurface,
-                                                    fontFamily = PlusJakartaSansFontFamily,
-                                                    fontSize = 12.5.sp,
+                                                    color = if (active) scheme.onSecondaryContainer else scheme.onSurface,
+                                                    style = MaterialTheme.typography.bodySmall,
                                                     fontWeight = FontWeight.SemiBold,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
@@ -1662,7 +1627,7 @@ private fun CustomSeedColorPickerDialog(
     onConfirmColor: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     val initialHsv = remember(initialColorArgb) {
         val hsv = FloatArray(3)
         AndroidColor.colorToHSV(initialColorArgb, hsv)
@@ -1685,7 +1650,6 @@ private fun CustomSeedColorPickerDialog(
         title = {
             Text(
                 text = "Custom Theme Color",
-                fontFamily = PlusJakartaSansFontFamily,
                 fontWeight = FontWeight.Bold
             )
         },
@@ -1707,7 +1671,7 @@ private fun CustomSeedColorPickerDialog(
                             .size(56.dp)
                             .clip(MaterialShapes.Sunny.toShape())
                             .background(currentColor)
-                            .border(2.dp, palette.outlineVariant, MaterialShapes.Sunny.toShape())
+                            .border(2.dp, scheme.outlineVariant, MaterialShapes.Sunny.toShape())
                     )
 
                     OutlinedTextField(
@@ -1728,7 +1692,6 @@ private fun CustomSeedColorPickerDialog(
                         label = {
                             Text(
                                 text = "Hex (#RRGGBB)",
-                                fontFamily = PlusJakartaSansFontFamily
                             )
                         },
                         shape = MaterialTheme.shapes.medium,
@@ -1746,16 +1709,14 @@ private fun CustomSeedColorPickerDialog(
                     ) {
                         Text(
                             text = "Hue",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.5.sp,
+                            color = scheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "${hue.roundToInt()}°",
-                            color = palette.primary,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.5.sp,
+                            color = scheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -1780,16 +1741,14 @@ private fun CustomSeedColorPickerDialog(
                     ) {
                         Text(
                             text = "Saturation",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.5.sp,
+                            color = scheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "${(saturation * 100).roundToInt()}%",
-                            color = palette.primary,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.5.sp,
+                            color = scheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -1814,16 +1773,14 @@ private fun CustomSeedColorPickerDialog(
                     ) {
                         Text(
                             text = "Brightness",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.5.sp,
+                            color = scheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "${(brightness * 100).roundToInt()}%",
-                            color = palette.primary,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.5.sp,
+                            color = scheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -1871,8 +1828,8 @@ private fun VideoPlaybackSettingsSubPage(
     onBack: () -> Unit,
     onUpdateSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit
 ) {
-    val palette = LocalM3Palette.current
-    val cardBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+    val scheme = MaterialTheme.colorScheme
+    val cardBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
     var showOrientationSheet by remember { mutableStateOf(false) }
     var showDecoderSheet by remember { mutableStateOf(false) }
@@ -1900,9 +1857,8 @@ private fun VideoPlaybackSettingsSubPage(
         ) {
             Text(
                 text = "Gestures",
-                color = palette.primary,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 14.sp,
+                color = scheme.primary,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             )
@@ -1933,29 +1889,26 @@ private fun VideoPlaybackSettingsSubPage(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Skip duration",
-                                color = palette.onSurface,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 15.5.sp,
+                                color = scheme.onSurface,
+                                style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Seconds jumped when seeking via double tap or buttons",
-                                color = palette.onSurfaceVariant,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 12.5.sp,
+                                color = scheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Normal
                             )
                         }
                         Surface(
                             shape = CircleShape,
-                            color = palette.secondaryContainer
+                            color = scheme.secondaryContainer
                         ) {
                             Text(
                                 text = "${settings.skipDurationSec}s",
-                                color = palette.onSecondaryContainer,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 14.sp,
+                                color = scheme.onSecondaryContainer,
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                             )
@@ -1975,11 +1928,11 @@ private fun VideoPlaybackSettingsSubPage(
                             }
                         },
                         colors = SliderDefaults.colors(
-                            thumbColor = palette.primary,
-                            activeTrackColor = palette.primary,
-                            inactiveTrackColor = palette.surfaceContainerHighest,
-                            activeTickColor = palette.onPrimary,
-                            inactiveTickColor = palette.onSurfaceVariant
+                            thumbColor = scheme.primary,
+                            activeTrackColor = scheme.primary,
+                            inactiveTrackColor = scheme.surfaceContainerHighest,
+                            activeTickColor = scheme.onPrimary,
+                            inactiveTickColor = scheme.onSurfaceVariant
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1995,9 +1948,8 @@ private fun VideoPlaybackSettingsSubPage(
                         listOf(5, 10, 15, 20, 25, 30).forEach { sec ->
                             Text(
                                 text = "${sec}s",
-                                color = if (settings.skipDurationSec == sec) palette.primary else palette.onSurfaceVariant,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 11.5.sp,
+                                color = if (settings.skipDurationSec == sec) scheme.primary else scheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (settings.skipDurationSec == sec) FontWeight.Bold else FontWeight.Normal
                             )
                         }
@@ -2054,9 +2006,8 @@ private fun VideoPlaybackSettingsSubPage(
 
             Text(
                 text = "Playback & Display",
-                color = palette.primary,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 14.sp,
+                color = scheme.primary,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             )
@@ -2195,23 +2146,22 @@ private fun ExpressiveDropdownSettingRow(
     onClick: () -> Unit,
     testTag: String
 ) {
-    val palette = LocalM3Palette.current
-    val cardBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+    val scheme = MaterialTheme.colorScheme
+    val cardBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
     SegmentedListItem(
         onClick = onClick,
         shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
         colors = ListItemDefaults.segmentedColors(
             containerColor = cardBg,
-            contentColor = palette.onSurface,
-            supportingContentColor = palette.primary
+            contentColor = scheme.onSurface,
+            supportingContentColor = scheme.primary
         ),
         supportingContent = {
             Text(
                 text = currentValueLabel,
-                color = palette.primary,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.5.sp,
+                color = scheme.primary,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -2222,13 +2172,13 @@ private fun ExpressiveDropdownSettingRow(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(MaterialShapes.Cookie9Sided.toShape())
-                    .background(palette.surfaceContainerHigh),
+                    .background(scheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Symbols.KeyboardArrowDown,
                     contentDescription = null,
-                    tint = palette.primary,
+                    tint = scheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -2236,9 +2186,8 @@ private fun ExpressiveDropdownSettingRow(
         content = {
             Text(
                 text = title,
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 15.5.sp,
+                color = scheme.onSurface,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -2259,15 +2208,15 @@ private fun <T> ExpressiveRadioBottomSheet(
     onSelectOption: (T) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = palette.surfaceContainerLow,
-        contentColor = palette.onSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = palette.DragHandleColor) },
+        containerColor = scheme.surfaceContainerLow,
+        contentColor = scheme.onSurface,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
         modifier = Modifier.testTag("expressive_radio_bottom_sheet")
     ) {
         Column(
@@ -2279,9 +2228,8 @@ private fun <T> ExpressiveRadioBottomSheet(
         ) {
             Text(
                 text = title,
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 19.sp,
+                color = scheme.onSurface,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
 
@@ -2298,27 +2246,26 @@ private fun <T> ExpressiveRadioBottomSheet(
                             count = options.size.coerceAtLeast(1)
                         ),
                         colors = ListItemDefaults.segmentedColors(
-                            containerColor = palette.surfaceContainer,
-                            contentColor = palette.onSurface,
-                            selectedContainerColor = palette.secondaryContainer,
-                            selectedContentColor = palette.onSecondaryContainer
+                            containerColor = scheme.surfaceContainer,
+                            contentColor = scheme.onSurface,
+                            selectedContainerColor = scheme.secondaryContainer,
+                            selectedContentColor = scheme.onSecondaryContainer
                         ),
                         leadingContent = {
                             RadioButton(
                                 selected = isSelected,
                                 onClick = null,
                                 colors = RadioButtonDefaults.colors(
-                                    selectedColor = palette.primary,
-                                    unselectedColor = palette.onSurfaceVariant
+                                    selectedColor = scheme.primary,
+                                    unselectedColor = scheme.onSurfaceVariant
                                 )
                             )
                         },
                         content = {
                             Text(
                                 text = label,
-                                color = if (isSelected) palette.onSecondaryContainer else palette.onSurface,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 15.5.sp,
+                                color = if (isSelected) scheme.onSecondaryContainer else scheme.onSurface,
+                                style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1
                             )
@@ -2342,7 +2289,7 @@ private fun NavigationCustomizeSubPage(
     onBack: () -> Unit,
     onSetTabActive: (BottomTab, Boolean) -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     val fixedOrderTabs = listOf(
         Triple(BottomTab.AUDIO, "Music", Symbols.MusicNote to "Play local music and audio tracks"),
         Triple(BottomTab.VIDEOS, "Videos", Symbols.PlayArrow to "Main video library with list, grid and tree views"),
@@ -2370,9 +2317,8 @@ private fun NavigationCustomizeSubPage(
         ) {
             Text(
                 text = "Choose which items appear in the bottom navigation pill. You can also long-press any icon on the bottom pill to edit directly.",
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.5.sp,
+                color = scheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Normal,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
             )
@@ -2385,7 +2331,7 @@ private fun NavigationCustomizeSubPage(
                 // Minimum One Tab Rule: when only 1 tab is active, that last active tab cannot be turned off
                 val isLastRemainingActive = isChecked && activeTabs.size <= 1
                 val canToggle = !isLastRemainingActive
-                val rowBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+                val rowBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
                 SegmentedListItem(
                     checked = isChecked,
@@ -2401,11 +2347,11 @@ private fun NavigationCustomizeSubPage(
                     ),
                     colors = ListItemDefaults.segmentedColors(
                         containerColor = rowBg,
-                        contentColor = palette.onSurface,
-                        supportingContentColor = palette.onSurfaceVariant,
+                        contentColor = scheme.onSurface,
+                        supportingContentColor = scheme.onSurfaceVariant,
                         selectedContainerColor = rowBg,
-                        selectedContentColor = palette.onSurface,
-                        selectedSupportingContentColor = palette.onSurfaceVariant
+                        selectedContentColor = scheme.onSurface,
+                        selectedSupportingContentColor = scheme.onSurfaceVariant
                     ),
                     leadingContent = {
                         Box(
@@ -2413,14 +2359,14 @@ private fun NavigationCustomizeSubPage(
                                 .size(42.dp)
                                 .clip(MaterialShapes.Cookie9Sided.toShape())
                                 .background(
-                                    if (isChecked) palette.secondaryContainer else palette.surfaceContainerHigh
+                                    if (isChecked) scheme.secondaryContainer else scheme.surfaceContainerHigh
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = icon,
                                 contentDescription = null,
-                                tint = if (isChecked) palette.onSecondaryContainer else palette.onSurfaceVariant,
+                                tint = if (isChecked) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -2432,9 +2378,8 @@ private fun NavigationCustomizeSubPage(
                             } else {
                                 subtitle
                             },
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 12.5.sp,
+                            color = scheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Normal
                         )
                     },
@@ -2457,9 +2402,8 @@ private fun NavigationCustomizeSubPage(
                     content = {
                         Text(
                             text = title,
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 15.5.sp,
+                            color = scheme.onSurface,
+                            style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1
                         )
@@ -2484,8 +2428,8 @@ private fun ExpressiveSettingToggleCard(
     onToggle: () -> Unit,
     testTag: String
 ) {
-    val palette = LocalM3Palette.current
-    val cardBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
+    val scheme = MaterialTheme.colorScheme
+    val cardBg = if (effectiveAmoled) scheme.surfaceContainerLow else scheme.surfaceContainer
 
     SegmentedListItem(
         checked = checked,
@@ -2493,18 +2437,17 @@ private fun ExpressiveSettingToggleCard(
         shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
         colors = ListItemDefaults.segmentedColors(
             containerColor = cardBg,
-            contentColor = palette.onSurface,
-            supportingContentColor = palette.onSurfaceVariant,
+            contentColor = scheme.onSurface,
+            supportingContentColor = scheme.onSurfaceVariant,
             selectedContainerColor = cardBg,
-            selectedContentColor = palette.onSurface,
-            selectedSupportingContentColor = palette.onSurfaceVariant
+            selectedContentColor = scheme.onSurface,
+            selectedSupportingContentColor = scheme.onSurfaceVariant
         ),
         supportingContent = {
             Text(
                 text = subtitle,
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 12.5.sp,
+                color = scheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Normal
             )
         },
@@ -2526,9 +2469,8 @@ private fun ExpressiveSettingToggleCard(
         content = {
             Text(
                 text = title,
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 15.5.sp,
+                color = scheme.onSurface,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold
             )
         },
@@ -2547,7 +2489,7 @@ private fun MusicSettingsSubPage(
     effectiveAmoled: Boolean,
     onBack: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs by remember(context) {
@@ -2569,9 +2511,8 @@ private fun MusicSettingsSubPage(
     fun SectionTitle(text: String) {
         Text(
             text = text,
-            color = palette.primary,
-            fontFamily = PlusJakartaSansFontFamily,
-            fontSize = 14.sp,
+            color = scheme.primary,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
@@ -2628,7 +2569,7 @@ private fun MusicSettingsSubPage(
                     title = "Colours from",
                     subtitle = prefs.nowPlayingColorSource.label,
                     index = 0,
-                    totalCount = 3,
+                    totalCount = 2,
                     effectiveAmoled = effectiveAmoled,
                     onClick = { lookChoice = "colors" },
                     testTag = "music_np_color_source"
@@ -2638,20 +2579,10 @@ private fun MusicSettingsSubPage(
                     title = "Background",
                     subtitle = prefs.nowPlayingBackground.label,
                     index = 1,
-                    totalCount = 3,
+                    totalCount = 2,
                     effectiveAmoled = effectiveAmoled,
                     onClick = { lookChoice = "background" },
                     testTag = "music_np_background"
-                )
-                ExpressivePreferenceMenuRow(
-                    icon = Symbols.RadioButtonChecked,
-                    title = "Button colours",
-                    subtitle = prefs.nowPlayingButtonColors.label,
-                    index = 2,
-                    totalCount = 3,
-                    effectiveAmoled = effectiveAmoled,
-                    onClick = { lookChoice = "buttons" },
-                    testTag = "music_np_button_colors"
                 )
             }
 
@@ -2763,16 +2694,6 @@ private fun MusicSettingsSubPage(
             selected = prefs.nowPlayingBackground,
             onSelect = { value ->
                 scope.launch { AppPreferencesRepository.setNowPlayingBackground(context, value) }
-                lookChoice = null
-            },
-            onDismiss = { lookChoice = null }
-        )
-        "buttons" -> NowPlayingChoiceSheet(
-            title = "Button colours",
-            options = NowPlayingButtonColors.entries.map { Triple(it, it.label, it.description) },
-            selected = prefs.nowPlayingButtonColors,
-            onSelect = { value ->
-                scope.launch { AppPreferencesRepository.setNowPlayingButtonColors(context, value) }
                 lookChoice = null
             },
             onDismiss = { lookChoice = null }

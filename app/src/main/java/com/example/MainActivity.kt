@@ -162,13 +162,32 @@ import com.example.ui.components.VideoPlayerModal
 import com.example.ui.theme.AlbumArtTheme
 import com.example.model.NowPlayingBackground
 import com.example.model.NowPlayingColorSource
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.ui.graphics.graphicsLayer
+import android.widget.Toast
+import com.example.model.LibraryTab
+import com.example.ui.components.LibraryOpenRequest
 import com.example.ui.theme.DopplerTheme
 import com.example.viewmodel.VideoPlayerViewModel
 import com.example.viewmodel.VideoUiState
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        /** Set by the pop-up player's "Open in Doppler": show the Now Playing screen. */
+        const val EXTRA_OPEN_NOW_PLAYING = "com.example.extra.OPEN_NOW_PLAYING"
+    }
+
     private lateinit var externalViewModel: VideoPlayerViewModel
+
+    /** Goes up by one each time something asks for Now Playing to open. */
+    private val openNowPlayingSignal = androidx.compose.runtime.mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -178,6 +197,7 @@ class MainActivity : ComponentActivity() {
         externalViewModel.initializeAndScan(this)
         if (savedInstanceState == null) {
             handleExternalVideoIntent(intent)
+            handleOpenNowPlaying(intent)
         }
         holdSplashUntilReady()
         setContent {
@@ -199,7 +219,8 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Material3VideoPlayerScreen(
                         uiState = uiState,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        openNowPlayingSignal = openNowPlayingSignal.intValue
                     )
                     // If the app closed because of an error last time, show that error once.
                     var crashReport by remember { mutableStateOf(com.example.crash.CrashReporter.takeLastReport(context)) }
@@ -235,6 +256,14 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleExternalVideoIntent(intent)
+        handleOpenNowPlaying(intent)
+    }
+
+    private fun handleOpenNowPlaying(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_NOW_PLAYING, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_NOW_PLAYING)
+            openNowPlayingSignal.intValue++
+        }
     }
 
     /**
@@ -281,7 +310,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun Material3VideoPlayerScreen(
     uiState: VideoUiState,
-    viewModel: VideoPlayerViewModel
+    viewModel: VideoPlayerViewModel,
+    openNowPlayingSignal: Int = 0
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -482,6 +512,7 @@ fun Material3VideoPlayerScreen(
     // ---- Audio: mini player pill + Now Playing screen ----
     val audioManager = remember(context) { AudioPlaybackManager.getInstance(context) }
     val audioState by audioManager.state.collectAsStateWithLifecycle()
+    val playbackError by audioManager.lastError.collectAsStateWithLifecycle()
     val libraryPrefs by remember(context) {
         AppPreferencesRepository.observeLibraryPreferences(context)
     }.collectAsStateWithLifecycle(initialValue = LibraryPreferences())
@@ -505,12 +536,29 @@ fun Material3VideoPlayerScreen(
     // Long-press selection in the Music tab: its own toolbar replaces the nav pill and mini player.
     var audioSelectionActive by remember { mutableStateOf(false) }
     var nowPlayingInfoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
+    // Now Playing ⋮: add the song to a playlist (pick one, or name a new one).
+    var nowPlayingAddToPlaylist by remember { mutableStateOf<AudioTrackItem?>(null) }
+    var nowPlayingNewPlaylistFor by remember { mutableStateOf<AudioTrackItem?>(null) }
+    // Now Playing ⋮ › Go to album / artist: the Music tab opens that page.
+    var libraryOpenRequest by remember { mutableStateOf<LibraryOpenRequest?>(null) }
     var lastNowPlayingTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
     LaunchedEffect(miniTrack) {
         if (miniTrack != null) {
             lastNowPlayingTrack = miniTrack
         } else {
             showNowPlaying = false
+        }
+    }
+    // "Open in Doppler" from the pop-up player: Music tab with Now Playing open, once the song is here.
+    val miniTrackLatest by rememberUpdatedState(miniTrack)
+    LaunchedEffect(openNowPlayingSignal) {
+        if (openNowPlayingSignal == 0) return@LaunchedEffect
+        val ready = kotlinx.coroutines.withTimeoutOrNull(3_000L) {
+            androidx.compose.runtime.snapshotFlow { miniTrackLatest }.first { it != null }
+        }
+        if (ready != null) {
+            viewModel.setBottomTab(BottomTab.AUDIO, context)
+            showNowPlaying = true
         }
     }
 
@@ -661,7 +709,9 @@ fun Material3VideoPlayerScreen(
                                     onPlayNext = { list -> audioManager.playNext(list) },
                                     onAddToQueue = { list -> audioManager.addToQueue(list) },
                                     onLibraryChanged = { viewModel.refreshPermissionsAndScan(context) },
-                                    onSelectionModeChange = { audioSelectionActive = it }
+                                    onSelectionModeChange = { audioSelectionActive = it },
+                                    openRequest = libraryOpenRequest,
+                                    onOpenRequestHandled = { libraryOpenRequest = null }
                                 )
                             }
                         }
@@ -741,23 +791,18 @@ fun Material3VideoPlayerScreen(
                     !showNowPlaying &&
                     !audioSelectionActive
                 ) {
-                    AlbumArtTheme(
+                    // App theme colours (not the album's), so it sits calmly next to the bar.
+                    AudioMiniPlayer(
                         track = miniTrack,
-                        applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
-                        extractColors = false
-                    ) {
-                        AudioMiniPlayer(
-                            track = miniTrack,
-                            isPlaying = uiState.isAudioPlaying,
-                            onOpen = { showNowPlaying = true },
-                            onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
-                            onSkipPrevious = { viewModel.skipAudioPrevious() },
-                            onSkipNext = { viewModel.skipAudioNext() },
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                        )
-                    }
+                        isPlaying = uiState.isAudioPlaying,
+                        onOpen = { showNowPlaying = true },
+                        onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
+                        onSkipPrevious = { viewModel.skipAudioPrevious() },
+                        onSkipNext = { viewModel.skipAudioNext() },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                    )
                 }
 
                 // Selected videos: official floating toolbar (replaces the navigation bar)
@@ -820,7 +865,9 @@ fun Material3VideoPlayerScreen(
                     bottomTab = uiState.bottomTab,
                     activeTabs = uiState.activeTabs,
                     onSelectTab = { viewModel.setBottomTab(it, context) },
-                    onLongPress = { showTabsSheet = true }
+                    onLongPress = { showTabsSheet = true },
+                    musicLoaded = uiState.playingAudio != null,
+                    musicPlaying = uiState.isAudioPlaying
                 )
             }
         }
@@ -877,8 +924,24 @@ fun Material3VideoPlayerScreen(
                     onSkipToQueueItem = { audioManager.skipToQueueItem(it) },
                     onMoveQueueItem = { from, to -> audioManager.moveQueueItem(from, to) },
                     onRemoveQueueItem = { audioManager.removeQueueItem(it) },
-                    background = libraryPrefs.nowPlayingBackground,
-                    buttonColors = libraryPrefs.nowPlayingButtonColors
+                    onAddToPlaylist = { nowPlayingAddToPlaylist = nowTrack },
+                    onShare = { com.example.ui.components.shareTrack(context, nowTrack) },
+                    onSongInfo = { nowPlayingInfoTrack = nowTrack },
+                    onGoToAlbum = if (LibraryTab.ALBUMS in libraryPrefs.visibleTabs) {
+                        {
+                            libraryOpenRequest = LibraryOpenRequest(LibraryTab.ALBUMS, com.example.ui.components.albumKeyOf(nowTrack))
+                            showNowPlaying = false
+                            viewModel.setBottomTab(BottomTab.AUDIO, context)
+                        }
+                    } else null,
+                    onGoToArtist = if (LibraryTab.ARTISTS in libraryPrefs.visibleTabs && nowTrack.artist.isNotBlank()) {
+                        {
+                            libraryOpenRequest = LibraryOpenRequest(LibraryTab.ARTISTS, nowTrack.artist.lowercase())
+                            showNowPlaying = false
+                            viewModel.setBottomTab(BottomTab.AUDIO, context)
+                        }
+                    } else null,
+                    background = libraryPrefs.nowPlayingBackground
                 )
                 }
             }
@@ -893,13 +956,18 @@ fun Material3VideoPlayerScreen(
         ) {
             val lyricsTrack = miniTrack ?: lastNowPlayingTrack
             if (lyricsTrack != null) {
-                AlbumArtTheme(track = lyricsTrack, applyScheme = false, extractColors = true) {
+                // Same colours and background as Now Playing.
+                AlbumArtTheme(
+                    track = lyricsTrack,
+                    applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
+                    extractColors = libraryPrefs.nowPlayingBackground == NowPlayingBackground.GRADIENT
+                ) {
                     LyricsScreen(
                         track = lyricsTrack,
                         isPlaying = uiState.isAudioPlaying,
                         positionMs = audioState.positionMs,
                         settings = libraryPrefs.lyrics,
-                        amoled = libraryPrefs.nowPlayingBackground == NowPlayingBackground.AMOLED,
+                        background = libraryPrefs.nowPlayingBackground,
                         onSettingsChange = { value ->
                             audioUiScope.launch { AppPreferencesRepository.updateLyricsSettings(context, value) }
                         },
@@ -922,12 +990,20 @@ fun Material3VideoPlayerScreen(
         ) {
             val ambientTrack = miniTrack ?: lastNowPlayingTrack
             if (ambientTrack != null) {
+                AlbumArtTheme(
+                    track = ambientTrack,
+                    applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
+                    extractColors = libraryPrefs.nowPlayingBackground == NowPlayingBackground.GRADIENT
+                ) {
                 AmbientModeScreen(
                     track = ambientTrack,
                     isPlaying = uiState.isAudioPlaying,
                     queue = audioState.queue,
                     queueIndex = audioState.queueIndex,
                     settings = libraryPrefs.ambient,
+                    background = libraryPrefs.nowPlayingBackground,
+                    // From the button it turns sideways; turned by hand it just follows the phone.
+                    forceLandscape = ambientRequested,
                     onSettingsChange = { value ->
                         audioUiScope.launch { AppPreferencesRepository.updateAmbientSettings(context, value) }
                     },
@@ -943,11 +1019,46 @@ fun Material3VideoPlayerScreen(
                     lyricsSettings = libraryPrefs.lyrics,
                     onSeekTo = { audioManager.seekTo(it) }
                 )
+                }
             }
+        }
+
+        // A song that couldn't play: the full reason, with Copy.
+        playbackError?.let { error ->
+            com.example.ui.components.PlaybackErrorDialog(error = error, onDismiss = { audioManager.clearError() })
         }
 
         nowPlayingInfoTrack?.let { infoTrack ->
             SongInfoSheet(track = infoTrack, onDismiss = { nowPlayingInfoTrack = null })
+        }
+        nowPlayingAddToPlaylist?.let { song ->
+            com.example.ui.components.AddToPlaylistSheet(
+                playlists = libraryPrefs.playlists,
+                songCount = 1,
+                onCreateNew = {
+                    nowPlayingAddToPlaylist = null
+                    nowPlayingNewPlaylistFor = song
+                },
+                onPick = { playlist ->
+                    nowPlayingAddToPlaylist = null
+                    audioUiScope.launch { AppPreferencesRepository.addToAudioPlaylist(context, playlist.id, listOf(song.id)) }
+                    Toast.makeText(context, "Added to “${playlist.name}”", Toast.LENGTH_SHORT).show()
+                },
+                onDismiss = { nowPlayingAddToPlaylist = null }
+            )
+        }
+        nowPlayingNewPlaylistFor?.let { song ->
+            com.example.ui.components.PlaylistNameDialog(
+                title = "New playlist",
+                initialName = "",
+                confirmLabel = "Create",
+                onConfirm = { name ->
+                    nowPlayingNewPlaylistFor = null
+                    audioUiScope.launch { AppPreferencesRepository.createAudioPlaylist(context, name, listOf(song.id)) }
+                    Toast.makeText(context, "Added to “$name”", Toast.LENGTH_SHORT).show()
+                },
+                onDismiss = { nowPlayingNewPlaylistFor = null }
+            )
         }
 
         // 4. Overlays, Menus, Bottom Sheets & Dialogs
@@ -1380,7 +1491,9 @@ private fun MainNavigationBar(
     bottomTab: BottomTab,
     activeTabs: List<BottomTab>,
     onSelectTab: (BottomTab) -> Unit,
-    onLongPress: () -> Unit
+    onLongPress: () -> Unit,
+    musicLoaded: Boolean = false,
+    musicPlaying: Boolean = false
 ) {
     val tabs = NavTabs.filter { it.first in activeTabs }.ifEmpty { NavTabs.filter { it.first == BottomTab.VIDEOS } }
     val haptics = LocalHapticFeedback.current
@@ -1418,12 +1531,43 @@ private fun MainNavigationBar(
             ShortNavigationBarItem(
                 selected = bottomTab == tab,
                 onClick = { onSelectTab(tab) },
-                icon = { Icon(icon, contentDescription = null) },
+                icon = {
+                    // Music tab: moving sound bars while a song plays, a small dot when it's paused.
+                    if (tab == BottomTab.AUDIO && musicLoaded) {
+                        BadgedBox(badge = { if (!musicPlaying) Badge(modifier = Modifier.testTag("music_paused_badge")) }) {
+                            if (musicPlaying) {
+                                PlayingBarsIcon(contentDescription = "Music is playing")
+                            } else {
+                                Icon(icon, contentDescription = "Music is paused")
+                            }
+                        }
+                    } else {
+                        Icon(icon, contentDescription = null)
+                    }
+                },
                 label = { Text(label) },
                 modifier = Modifier.testTag("nav_tab_${tab.id}")
             )
         }
     }
+}
+
+/** The equaliser icon, its bars gently rising and falling (official Material Symbol, animated). */
+@Composable
+private fun PlayingBarsIcon(contentDescription: String) {
+    val pulse = rememberInfiniteTransition(label = "navMusicBars").animateFloat(
+        initialValue = 1f,
+        targetValue = 0.55f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 550), RepeatMode.Reverse),
+        label = "navMusicBarsScale"
+    )
+    Icon(
+        Symbols.GraphicEq,
+        contentDescription = contentDescription,
+        modifier = Modifier
+            .testTag("music_playing_icon")
+            .graphicsLayer { scaleY = pulse.value }
+    )
 }
 
 /** Long-press on the navigation bar opens this: a switch per tab (at least one stays on). */

@@ -7,7 +7,9 @@ import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -19,6 +21,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class AudioPlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
@@ -59,7 +62,12 @@ class AudioPlaybackService : MediaSessionService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .build()
 
+        // WAV files with a slightly wrong header still play (see WavHeaderFixingDataSource).
+        val mediaSourceFactory = DefaultMediaSourceFactory(
+            WavHeaderFixingDataSource.Factory(DefaultDataSource.Factory(this))
+        )
         val exoPlayer = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)

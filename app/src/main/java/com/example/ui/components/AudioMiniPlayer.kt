@@ -2,7 +2,6 @@
 
 package com.example.ui.components
 
-import com.example.ui.icons.Symbols
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -38,10 +36,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.AudioTrackItem
+import com.example.ui.icons.Symbols
 
 /**
- * Pill-shaped mini player shown above the bottom navigation while a song is loaded.
- * Tap it, or drag it upwards, to open the Now Playing screen.
+ * Mini player: a floating pill above the navigation bar while a song is loaded, styled like the
+ * official Expressive floating toolbar (pill shape, calm container, soft shadow) in the app's own
+ * colours. Play/Pause is the one filled button; Previous and Next are plain icons.
+ * Tap it, or drag it up, to open Now Playing.
  */
 @Composable
 fun AudioMiniPlayer(
@@ -53,18 +54,19 @@ fun AudioMiniPlayer(
     onSkipNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Inside AlbumArtTheme, so these are the album-art colours when that option is on.
     val scheme = MaterialTheme.colorScheme
     val openLatest by rememberUpdatedState(onOpen)
     val thresholdPx = with(LocalDensity.current) { 36.dp.toPx() }
 
     Surface(
         onClick = onOpen,
-        shape = RoundedCornerShape(50),
-        color = scheme.primaryContainer,
+        shape = CircleShape,
+        color = scheme.surfaceContainerHighest,
+        contentColor = scheme.onSurface,
+        shadowElevation = 4.dp,
         modifier = modifier
             .fillMaxWidth()
-            .height(72.dp)
+            .height(64.dp)
             .testTag("audio_mini_player")
             .pointerInput(thresholdPx) {
                 var total = 0f
@@ -75,48 +77,43 @@ fun AudioMiniPlayer(
                         total = 0f
                     },
                     onDragCancel = { total = 0f }
-                ) { _, dragAmount ->
-                    total += dragAmount
-                }
+                ) { _, dragAmount -> total += dragAmount }
             }
     ) {
         Row(
-            modifier = Modifier.padding(start = 10.dp, end = 10.dp),
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AudioArt(
                 uri = track.contentUri,
-                placeholderBackground = scheme.surfaceContainerHighest,
-                placeholderTint = scheme.primary,
-                modifier = Modifier.size(52.dp),
+                placeholderBackground = scheme.secondaryContainer,
+                placeholderTint = scheme.onSecondaryContainer,
+                modifier = Modifier.size(48.dp),
                 shape = CircleShape
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = track.title,
-                    color = scheme.onPrimaryContainer,
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = track.artist,
-                    color = scheme.onPrimaryContainer.copy(alpha = 0.75f),
                     style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            // Official Expressive ButtonGroup: shape-morphing icon buttons that spring wider on press.
+            // Official Expressive button group: the pressed button springs wider.
             val previousInteraction = remember { MutableInteractionSource() }
-            val playPauseInteraction = remember { MutableInteractionSource() }
+            val playInteraction = remember { MutableInteractionSource() }
             val nextInteraction = remember { MutableInteractionSource() }
             ButtonGroup(
-                overflowIndicator = { menuState ->
-                    ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
-                },
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 customItem(
@@ -124,27 +121,14 @@ fun AudioMiniPlayer(
                         IconButton(
                             onClick = onSkipPrevious,
                             shapes = IconButtonDefaults.shapes(),
-                            colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = scheme.onPrimaryContainer.copy(alpha = 0.12f),
-                                contentColor = scheme.onPrimaryContainer
-                            ),
                             interactionSource = previousInteraction,
                             modifier = Modifier
                                 .animateWidth(previousInteraction)
-                                .size(42.dp)
-                        ) {
-                            Icon(Symbols.SkipPrevious, contentDescription = "Previous")
-                        }
+                                .testTag("mini_player_previous")
+                        ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous") }
                     },
                     menuContent = { menuState ->
-                        DropdownMenuItem(
-                            text = { Text("Previous") },
-                            leadingIcon = { Icon(Symbols.SkipPrevious, contentDescription = null) },
-                            onClick = {
-                                onSkipPrevious()
-                                menuState.dismiss()
-                            }
-                        )
+                        DropdownMenuItem(text = { Text("Previous") }, onClick = { onSkipPrevious(); menuState.dismiss() })
                     }
                 )
                 customItem(
@@ -156,10 +140,11 @@ fun AudioMiniPlayer(
                                 containerColor = scheme.primary,
                                 contentColor = scheme.onPrimary
                             ),
-                            interactionSource = playPauseInteraction,
+                            interactionSource = playInteraction,
                             modifier = Modifier
-                                .animateWidth(playPauseInteraction)
-                                .size(52.dp)
+                                .animateWidth(playInteraction)
+                                .size(48.dp)
+                                .testTag("mini_player_play_pause")
                         ) {
                             Icon(
                                 imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
@@ -170,16 +155,7 @@ fun AudioMiniPlayer(
                     menuContent = { menuState ->
                         DropdownMenuItem(
                             text = { Text(if (isPlaying) "Pause" else "Play") },
-                            leadingIcon = {
-                                Icon(
-                                    if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                onTogglePlayPause()
-                                menuState.dismiss()
-                            }
+                            onClick = { onTogglePlayPause(); menuState.dismiss() }
                         )
                     }
                 )
@@ -188,27 +164,14 @@ fun AudioMiniPlayer(
                         IconButton(
                             onClick = onSkipNext,
                             shapes = IconButtonDefaults.shapes(),
-                            colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = scheme.onPrimaryContainer.copy(alpha = 0.12f),
-                                contentColor = scheme.onPrimaryContainer
-                            ),
                             interactionSource = nextInteraction,
                             modifier = Modifier
                                 .animateWidth(nextInteraction)
-                                .size(42.dp)
-                        ) {
-                            Icon(Symbols.SkipNext, contentDescription = "Next")
-                        }
+                                .testTag("mini_player_next")
+                        ) { Icon(Symbols.SkipNext, contentDescription = "Next") }
                     },
                     menuContent = { menuState ->
-                        DropdownMenuItem(
-                            text = { Text("Next") },
-                            leadingIcon = { Icon(Symbols.SkipNext, contentDescription = null) },
-                            onClick = {
-                                onSkipNext()
-                                menuState.dismiss()
-                            }
-                        )
+                        DropdownMenuItem(text = { Text("Next") }, onClick = { onSkipNext(); menuState.dismiss() })
                     }
                 )
             }

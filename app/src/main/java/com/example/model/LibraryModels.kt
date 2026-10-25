@@ -29,16 +29,15 @@ enum class NowPlayingAction(val id: String, val label: String) {
 }
 
 /**
- * Ambient mode: a full-screen, always-on view of the song (artwork, name, artist, lyrics).
- * Song name and artist only show with the artwork; artwork and lyrics can't both be off.
+ * Ambient mode: a full-screen, always-on view of the song (artwork, name, artist, lyrics), on the
+ * same background as Now Playing. Song name and artist only show with the artwork; artwork and
+ * lyrics can't both be off.
  */
 data class AmbientSettings(
     val showArtwork: Boolean = true,
     val showTitle: Boolean = true,
     val showArtist: Boolean = true,
     val showLyrics: Boolean = true,
-    /** Pure black background with white text instead of the album-art colours. */
-    val amoled: Boolean = false,
     /** Turning the phone sideways on Now Playing opens ambient mode. */
     val openOnRotate: Boolean = true
 )
@@ -105,17 +104,10 @@ enum class NowPlayingColorSource(val id: String, val label: String, val descript
 
 /** Background of the Now Playing screen. */
 enum class NowPlayingBackground(val id: String, val label: String, val description: String) {
-    FOLLOW_THEME("follow_theme", "Follow theme", "A solid colour from the current colours"),
+    FOLLOW_THEME("follow_theme", "Colour", "One solid colour from the current colours"),
     GRADIENT("gradient", "Gradient", "A gradient made from the album art"),
     BLUR("blur", "Blur", "The album art, softly blurred"),
-    AMOLED("amoled", "AMOLED black", "Pure black, saves battery on OLED screens")
-}
-
-/** Colours of the Now Playing buttons, seek bar and toggles. */
-enum class NowPlayingButtonColors(val id: String, val label: String, val description: String) {
-    DEFAULT("default", "Default", "White on image backgrounds, theme colours otherwise"),
-    PRIMARY("primary", "Primary colour", "The main colour of the current colours"),
-    TERTIARY("tertiary", "Tertiary colour", "The accent colour of the current colours")
+    AMOLED("amoled", "Black", "Pure black, saves battery on OLED screens")
 }
 
 /** Persisted settings of the Library screen. */
@@ -134,7 +126,6 @@ data class LibraryPreferences(
     val hideRecordings: Boolean = true,
     val nowPlayingColorSource: NowPlayingColorSource = NowPlayingColorSource.ALBUM_ART,
     val nowPlayingBackground: NowPlayingBackground = NowPlayingBackground.GRADIENT,
-    val nowPlayingButtonColors: NowPlayingButtonColors = NowPlayingButtonColors.DEFAULT,
     /** Songs the user blacklisted (hidden from the library, still on the device). */
     val blacklistedSongs: List<BlacklistedSong> = emptyList(),
     /** Folders the user blacklisted; everything inside them (and their sub-folders) is hidden. */

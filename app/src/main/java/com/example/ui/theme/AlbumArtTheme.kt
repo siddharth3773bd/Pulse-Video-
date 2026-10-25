@@ -194,29 +194,6 @@ private fun animateColorScheme(target: ColorScheme): ColorScheme {
     )
 }
 
-/** The app's own palette with the roles it uses taken from [scheme]. */
-internal fun ColorScheme.toM3Palette(base: M3Palette): M3Palette = base.copy(
-    primary = primary,
-    onPrimary = onPrimary,
-    primaryContainer = primaryContainer,
-    onPrimaryContainer = onPrimaryContainer,
-    secondaryContainer = secondaryContainer,
-    onSecondaryContainer = onSecondaryContainer,
-    surfaceDim = surfaceDim,
-    surface = surface,
-    surfaceContainerLowest = surfaceContainerLowest,
-    surfaceContainerLow = surfaceContainerLow,
-    surfaceContainer = surfaceContainer,
-    surfaceContainerHigh = surfaceContainerHigh,
-    surfaceContainerHighest = surfaceContainerHighest,
-    onSurface = onSurface,
-    onSurfaceVariant = onSurfaceVariant,
-    outline = outline,
-    outlineVariant = outlineVariant,
-    error = error,
-    errorContainer = errorContainer,
-    onErrorContainer = onErrorContainer
-)
 
 /**
  * Themes its [content] (the Now Playing screen and the mini player) from [track]'s album art.
@@ -246,12 +223,7 @@ fun AlbumArtTheme(
     val albumScheme = colors?.let { if (isDark) it.dark else it.light }
     val useAlbum = applyScheme && albumScheme != null
     val scheme = animateColorScheme(if (useAlbum) albumScheme!! else base)
-    val palette = LocalM3Palette.current
-
-    CompositionLocalProvider(
-        LocalM3Palette provides if (useAlbum) scheme.toM3Palette(palette) else palette,
-        LocalAlbumArtGradient provides colors?.gradient.orEmpty()
-    ) {
+    CompositionLocalProvider(LocalAlbumArtGradient provides colors?.gradient.orEmpty()) {
         MaterialExpressiveTheme(
             colorScheme = scheme,
             motionScheme = MotionScheme.expressive(),

@@ -6,12 +6,9 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.toArgb
@@ -40,7 +37,7 @@ fun DopplerTheme(
     // One colour system: everything comes from a Material 3 ColorScheme. With "Dynamic colour" it
     // is the wallpaper scheme; otherwise the chosen preset (or custom colour) is the seed for
     // Google's own Material You algorithm (SchemeTonalSpot), so every role, tertiary included,
-    // is a real Material colour. LocalM3Palette is just a view of that same scheme.
+    // is a real Material colour.
     val rawScheme: ColorScheme = if (dynamicColor) {
         if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
@@ -55,24 +52,17 @@ fun DopplerTheme(
             background = Color.Black,
             surface = Color.Black,
             surfaceDim = Color.Black,
-            surfaceContainerLowest = Color.Black
+            surfaceContainerLowest = Color.Black,
+            surfaceContainerLow = Color.Black
         )
     } else rawScheme
-    val template = if (dynamicColor) IndigoDarkPalette.copy(id = "dynamic", name = "Dynamic")
-    else (M3PalettesById[paletteId] ?: IndigoDarkPalette)
-    val basePalette = baseScheme.toM3Palette(template).let {
-        if (applyAmoled) it.copy(surfaceContainerLow = Color.Black) else it
-    }
-
-    CompositionLocalProvider(LocalM3Palette provides basePalette) {
-        MaterialExpressiveTheme(
-            colorScheme = baseScheme,
-            motionScheme = MotionScheme.expressive(),
-            shapes = Shapes(),
-            typography = Typography,
-            content = content
-        )
-    }
+    MaterialExpressiveTheme(
+        colorScheme = baseScheme,
+        motionScheme = MotionScheme.expressive(),
+        shapes = Shapes(),
+        typography = Typography,
+        content = content
+    )
 }
 
 @Composable

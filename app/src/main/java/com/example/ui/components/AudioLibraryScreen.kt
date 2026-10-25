@@ -160,6 +160,9 @@ private data class ArtistGroup(
     val tracks: List<AudioTrackItem>
 )
 
+/** A page another screen asks the Music tab to open (Now Playing ⋮ › Go to album / artist). */
+data class LibraryOpenRequest(val tab: LibraryTab, val key: String)
+
 /** What the playlist name dialog is doing. */
 private sealed interface PlaylistDialog {
     data class Create(val trackIds: List<String>) : PlaylistDialog
@@ -261,7 +264,9 @@ fun AudioLibraryScreen(
     onPlayNext: (List<AudioTrackItem>) -> Unit = {},
     onAddToQueue: (List<AudioTrackItem>) -> Unit = {},
     onLibraryChanged: () -> Unit = {},
-    onSelectionModeChange: (Boolean) -> Unit = {}
+    onSelectionModeChange: (Boolean) -> Unit = {},
+    openRequest: LibraryOpenRequest? = null,
+    onOpenRequestHandled: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -394,6 +399,16 @@ fun AudioLibraryScreen(
     fun openDetail(tab: LibraryTab, key: String) {
         detailTabId = tab.id
         detailKey = key
+    }
+
+    // Opened from elsewhere (Now Playing ⋮): show that album or artist.
+    LaunchedEffect(openRequest) {
+        val request = openRequest ?: return@LaunchedEffect
+        if (request.tab in visibleTabs) {
+            openDetail(request.tab, request.key)
+            selectTab(request.tab)
+        }
+        onOpenRequestHandled()
     }
 
     /** The song list on screen right now; long-press selection works inside it. */
@@ -880,11 +895,11 @@ fun AudioLibraryScreen(
 }
 
 /** Same key the Albums tab groups by. */
-private fun albumKeyOf(track: AudioTrackItem): String =
+internal fun albumKeyOf(track: AudioTrackItem): String =
     if (track.albumId != 0L) "id:${track.albumId}" else "name:${track.album.lowercase()}"
 
 /** Android share sheet with the audio file attached. */
-private fun shareTrack(context: Context, track: AudioTrackItem) {
+internal fun shareTrack(context: Context, track: AudioTrackItem) {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "audio/*"
         putExtra(Intent.EXTRA_STREAM, track.contentUri)
@@ -1345,7 +1360,7 @@ private fun SongRow(
  * music plays). While selecting, a check sits on top and a selected art shrinks a little.
  */
 @Composable
-private fun SongArt(
+internal fun SongArt(
     track: AudioTrackItem,
     playing: Boolean,
     animatePlaying: Boolean,
@@ -1398,7 +1413,7 @@ private fun SongArt(
 
 /** Small primary circle with an equaliser icon; it breathes while the song plays. */
 @Composable
-private fun PlayingBadge(animate: Boolean) {
+internal fun PlayingBadge(animate: Boolean) {
     val scheme = MaterialTheme.colorScheme
     // Only runs while playing; paused, the bars stand still.
     val pulse = if (animate) {

@@ -2,7 +2,6 @@ package com.example.ui.theme
 
 import android.graphics.Color as AndroidColor
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import java.util.Locale
@@ -774,5 +773,3 @@ fun parseHexColorOrNull(hexInput: String): Color? {
         null
     }
 }
-
-val LocalM3Palette = staticCompositionLocalOf { IndigoDarkPalette }

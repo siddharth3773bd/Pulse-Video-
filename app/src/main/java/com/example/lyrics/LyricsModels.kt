@@ -69,7 +69,7 @@ enum class LyricsTextSize(val id: String, val label: String, val activeSp: Int, 
 /** Lyrics settings that apply to every song. */
 data class LyricsSettings(
     /** Search LRCLIB automatically when a song has no lyrics of its own. */
-    val autoSearch: Boolean = false,
+    val autoSearch: Boolean = true,
     val textSize: LyricsTextSize = LyricsTextSize.MEDIUM,
     val alignCenter: Boolean = false,
     val blur: Boolean = true

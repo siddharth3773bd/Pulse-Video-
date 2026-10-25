@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+
 package com.example.ui.popup
 
 import com.example.ui.icons.Symbols
@@ -9,42 +11,32 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,11 +46,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -70,14 +61,22 @@ import com.example.model.formatDurationMs
 import com.example.player.AudioPlaybackManager
 import com.example.player.ExternalAudioInfo
 import com.example.player.ExternalMedia
+import com.example.ui.components.ExpressiveMenu
+import com.example.ui.components.MenuEntry
+import com.example.ui.components.PlaybackErrorDialog
 import com.example.ui.components.PlaybackSeekBar
+import com.example.ui.components.SongInfoSheet
+import com.example.ui.components.TooltipIconButton
+import com.example.ui.components.shareTrack
 import com.example.ui.theme.DopplerTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Small bottom pop-up player shown when an audio file is opened from a file manager.
- * Playback goes through the shared AudioPlaybackService, so closing this pop-up never stops the music.
+ * Pop-up player shown when an audio file is opened from a file manager: an official bottom sheet
+ * with the cover, the wavy seek bar and one big Play/Pause. Playback goes through the shared
+ * AudioPlaybackService. Closing the sheet (swipe down, tap outside, Back) stops the song;
+ * "Open in Doppler" hands it over to the app's Now Playing screen instead.
  */
 class AudioPopupActivity : ComponentActivity() {
 
@@ -113,17 +112,24 @@ class AudioPopupActivity : ComponentActivity() {
                         suppressStopOnLeave = true
                         try {
                             startActivity(
-                                Intent(this@AudioPopupActivity, MainActivity::class.java).addFlags(
-                                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                )
+                                Intent(this@AudioPopupActivity, MainActivity::class.java)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                    .putExtra(MainActivity.EXTRA_OPEN_NOW_PLAYING, true)
                             )
                         } catch (_: Throwable) {
                         }
                         finish()
-                    }
+                    },
+                    onLeaveBriefly = { suppressStopOnLeave = true }
                 )
             }
         }
+    }
+
+    /** Back from the share sheet or the permission dialog: leaving counts as closing again. */
+    override fun onResume() {
+        super.onResume()
+        suppressStopOnLeave = false
     }
 
     /** Pressing Home or opening Recents counts as closing the pop-up: stop the music. */
@@ -166,21 +172,19 @@ private fun AudioPopupContent(
     uri: Uri?,
     onStopAndClose: () -> Unit,
     onFailed: () -> Unit,
-    onOpenApp: () -> Unit
+    onOpenApp: () -> Unit,
+    onLeaveBriefly: () -> Unit
 ) {
     val context = LocalContext.current
     val manager = remember { AudioPlaybackManager.getInstance(context) }
     var info by remember { mutableStateOf<ExternalAudioInfo?>(null) }
     var failed by remember { mutableStateOf(false) }
-    var shown by remember { mutableStateOf(false) }
-    var infoExpanded by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableStateOf<Float?>(null) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showInfo by remember { mutableStateOf(false) }
 
     // Ask for notification permission once (playback works even when denied).
-    val popupActivity = context as? AudioPopupActivity
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { popupActivity?.suppressStopOnLeave = false }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -189,11 +193,10 @@ private fun AudioPopupContent(
             val sp = context.getSharedPreferences("popup_prefs", android.content.Context.MODE_PRIVATE)
             if (!sp.getBoolean("asked_notifications", false)) {
                 sp.edit().putBoolean("asked_notifications", true).apply()
-                popupActivity?.suppressStopOnLeave = true
+                onLeaveBriefly()
                 try {
                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } catch (_: Throwable) {
-                    popupActivity?.suppressStopOnLeave = false
                 }
             }
         }
@@ -219,7 +222,6 @@ private fun AudioPopupContent(
             manager.playQueue(listOf(loaded.track), 0)
         }
     }
-
     LaunchedEffect(failed) {
         if (failed) {
             Toast.makeText(context, "Can't open this audio file", Toast.LENGTH_SHORT).show()
@@ -227,225 +229,165 @@ private fun AudioPopupContent(
         }
     }
 
-    LaunchedEffect(Unit) { shown = true }
-
-    BackHandler(onBack = onStopAndClose)
-
     val playback by manager.state.collectAsStateWithLifecycle()
-    val loadedInfo = info
+    val error by manager.lastError.collectAsStateWithLifecycle()
+    val loadedInfo = info ?: return
+    val track = loadedInfo.track
+    val scheme = MaterialTheme.colorScheme
 
-    val noRipple = remember { MutableInteractionSource() }
-    val consumeClicks = remember { MutableInteractionSource() }
+    val isCurrent = playback.currentTrack?.id == track.id
+    val isPlaying = isCurrent && playback.isPlaying && !playback.isEnded
+    val durationMs = if (isCurrent && playback.durationMs > 0L) playback.durationMs else track.durationMs
+    val positionMs = if (isCurrent) playback.positionMs else 0L
+    val liveFraction = if (durationMs > 0L) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+    val fraction = dragFraction ?: liveFraction
+    val shownPositionMs = (fraction * durationMs).toLong()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.35f))
-            .clickable(interactionSource = noRipple, indication = null, onClick = onStopAndClose),
-        contentAlignment = Alignment.BottomCenter
+    ModalBottomSheet(
+        onDismissRequest = onStopAndClose,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        modifier = Modifier.testTag("audio_popup_sheet")
     ) {
-        if (loadedInfo != null) {
-            val track = loadedInfo.track
-            val isCurrent = playback.currentTrack?.id == track.id
-            val isPlaying = isCurrent && playback.isPlaying && !playback.isEnded
-            val durationMs = if (isCurrent && playback.durationMs > 0L) {
-                playback.durationMs
-            } else {
-                track.durationMs
-            }
-            val positionMs = if (isCurrent) playback.positionMs else 0L
-            val liveFraction = if (durationMs > 0L) {
-                (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            val fraction = dragFraction ?: liveFraction
-            val shownPositionMs = (fraction * durationMs).toLong()
-
-            AnimatedVisibility(
-                visible = shown,
-                enter = slideInVertically(animationSpec = tween(260), initialOffsetY = { it }) +
-                    fadeIn(animationSpec = tween(200))
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            // Cover, title and artist, and ⋮ with the rest.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val coverBitmap = remember(loadedInfo) { loadedInfo.cover?.asImageBitmap() }
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(interactionSource = consumeClicks, indication = null) { }
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(scheme.secondaryContainer),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .windowInsetsPadding(WindowInsets.navigationBars)
-                            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .width(36.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    if (coverBitmap != null) {
+                        Image(
+                            bitmap = coverBitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
                         )
-                        Spacer(Modifier.height(16.dp))
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val coverBitmap = remember(loadedInfo) { loadedInfo.cover?.asImageBitmap() }
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (coverBitmap != null) {
-                                    Image(
-                                        bitmap = coverBitmap,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Symbols.MusicNote,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.size(32.dp)
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = track.title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = track.artist,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            FilledTonalIconButton(onClick = onStopAndClose) {
-                                Icon(Symbols.Close, contentDescription = "Close")
-                            }
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = formatDurationMs(shownPositionMs),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            PlaybackSeekBar(
-                                progress = fraction,
-                                onSeekPreview = { dragFraction = it },
-                                onSeekFinished = { target ->
-                                    dragFraction = null
-                                    if (durationMs > 0L) {
-                                        manager.seekTo((target * durationMs).toLong())
-                                    }
-                                },
-                                isPlaying = isPlaying,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 8.dp)
-                            )
-                            Text(
-                                text = formatDurationMs(durationMs),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            FilledTonalButton(onClick = { infoExpanded = !infoExpanded }) {
-                                Icon(Symbols.Info, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Info")
-                                Icon(
-                                    imageVector = if (infoExpanded) Symbols.ExpandLess else Symbols.ExpandMore,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            FilledIconButton(
-                                onClick = {
-                                    if (isCurrent) {
-                                        manager.togglePlayPause()
-                                    } else {
-                                        manager.playQueue(listOf(track), 0)
-                                    }
-                                },
-                                modifier = Modifier.size(60.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
-                                    contentDescription = if (isPlaying) "Pause" else "Play",
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-                            FilledTonalButton(onClick = onOpenApp) {
-                                Icon(
-                                    Symbols.OpenInNew,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text("Open app")
-                            }
-                        }
-
-                        AnimatedVisibility(visible = infoExpanded) {
-                            Column(modifier = Modifier.padding(top = 12.dp)) {
-                                InfoLine("Duration", formatDurationMs(durationMs))
-                                InfoLine("Album", track.album)
-                                InfoLine("Artist", track.artist)
-                                val technical = buildList {
-                                    if (loadedInfo.sampleRateHz > 0) {
-                                        add(String.format(java.util.Locale.US, "%.1f kHz", loadedInfo.sampleRateHz / 1000f))
-                                    }
-                                    if (loadedInfo.bitrateKbps > 0) add("${loadedInfo.bitrateKbps} kbps")
-                                    if (loadedInfo.format.isNotBlank()) add(loadedInfo.format)
-                                }.joinToString(" · ").ifBlank { "-" }
-                                InfoLine("Song info", technical)
-                                InfoLine("Path", loadedInfo.path)
-                            }
-                        }
+                    } else {
+                        Icon(
+                            imageVector = Symbols.MusicNote,
+                            contentDescription = null,
+                            tint = scheme.onSecondaryContainer,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
                 }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = track.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("audio_popup_title")
+                    )
+                    Text(
+                        text = track.artist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Box {
+                    TooltipIconButton(
+                        label = "More options",
+                        icon = Symbols.MoreVert,
+                        onClick = { showMenu = true },
+                        modifier = Modifier.testTag("audio_popup_more")
+                    )
+                    ExpressiveMenu(
+                        expanded = showMenu,
+                        onDismiss = { showMenu = false },
+                        groups = listOf(
+                            listOf(
+                                MenuEntry("Song info", Symbols.Info, "audio_popup_info") { showInfo = true },
+                                MenuEntry("Open in Doppler", Symbols.OpenInNew, "audio_popup_open_app", onClick = onOpenApp),
+                                MenuEntry("Share", Symbols.Share, "audio_popup_share") {
+                                    onLeaveBriefly()
+                                    shareTrack(context, track)
+                                }
+                            )
+                        )
+                    )
+                }
+            }
+
+            // Wavy seek bar with the times under it.
+            Spacer(Modifier.height(20.dp))
+            PlaybackSeekBar(
+                progress = fraction,
+                onSeekPreview = { dragFraction = it },
+                onSeekFinished = { target ->
+                    dragFraction = null
+                    if (durationMs > 0L) manager.seekTo((target * durationMs).toLong())
+                },
+                isPlaying = isPlaying,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("audio_popup_seek")
+            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = formatDurationMs(shownPositionMs),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = scheme.onSurfaceVariant
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = formatDurationMs(durationMs),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = scheme.onSurfaceVariant
+                )
+            }
+
+            // One big Play/Pause; it morphs between round (playing) and square (paused).
+            Spacer(Modifier.height(16.dp))
+            FilledIconToggleButton(
+                checked = !isPlaying,
+                onCheckedChange = {
+                    if (isCurrent) manager.togglePlayPause() else manager.playQueue(listOf(track), 0)
+                },
+                shapes = IconButtonDefaults.toggleableShapes(),
+                colors = IconButtonDefaults.filledIconToggleButtonColors(
+                    containerColor = scheme.primary,
+                    contentColor = scheme.onPrimary,
+                    checkedContainerColor = scheme.primary,
+                    checkedContentColor = scheme.onPrimary
+                ),
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(width = 112.dp, height = 72.dp)
+                    .testTag("audio_popup_play_pause")
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    modifier = Modifier.size(32.dp)
+                )
             }
         }
     }
-}
 
-@Composable
-private fun InfoLine(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
+    if (showInfo) {
+        SongInfoSheet(track = track, onDismiss = { showInfo = false })
+    }
+    // The file couldn't play: show the full reason (with Copy), then close.
+    error?.let { report ->
+        PlaybackErrorDialog(
+            error = report,
+            onDismiss = {
+                manager.clearError()
+                onStopAndClose()
+            }
         )
     }
 }
