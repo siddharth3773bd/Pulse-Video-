@@ -67,6 +67,11 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import android.content.res.Configuration
 import android.os.SystemClock
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.runtime.SideEffect
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SliderState
+import androidx.compose.material3.VerticalSlider
 import kotlin.math.roundToInt
 import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.CheckableDropdownMenuItem
@@ -270,6 +275,7 @@ fun VideoPlayerModal(
             playerController.setBackgroundAudio(false)
             playerController.setVideoEnabled(true)
             playerController.setVolume(1f)
+            playerController.setScrubbing(false)
         }
     }
 
@@ -377,6 +383,17 @@ fun VideoPlayerModal(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // The loading indicator only appears if loading takes a moment, so quick seeks don't flash it.
+    var showBuffering by remember { mutableStateOf(false) }
+    LaunchedEffect(playerState.isBuffering) {
+        if (playerState.isBuffering) {
+            delay(400L)
+            showBuffering = true
+        } else {
+            showBuffering = false
+        }
     }
 
     val effectiveDurationMs = playerState.durationMs.takeIf { it > 0L } ?: video.durationMs.coerceAtLeast(1000L)
@@ -502,8 +519,14 @@ fun VideoPlayerModal(
                         val current = activity?.window?.attributes?.screenBrightness ?: -1f
                         dragStartBrightness = if (current in 0.01f..1.0f) current else 0.5f
                     },
-                    onDragEnd = { dragMode = "NONE" },
-                    onDragCancel = { dragMode = "NONE" },
+                    onDragEnd = {
+                        if (dragMode == "SEEK") playerController.setScrubbing(false)
+                        dragMode = "NONE"
+                    },
+                    onDragCancel = {
+                        if (dragMode == "SEEK") playerController.setScrubbing(false)
+                        dragMode = "NONE"
+                    },
                     onDrag = { change, amount ->
                         if (controlsLocked || dragMode == "IGNORE") return@detectDragGestures
                         change.consume()
@@ -511,7 +534,10 @@ fun VideoPlayerModal(
                         dragAccumulatedY += amount.y
                         if (dragMode == "NONE") {
                             if (abs(dragAccumulatedX) > 24f && abs(dragAccumulatedX) > abs(dragAccumulatedY)) {
-                                if (playbackSettings.horizontalSwipeToSeek) dragMode = "SEEK"
+                                if (playbackSettings.horizontalSwipeToSeek) {
+                                    dragMode = "SEEK"
+                                    playerController.setScrubbing(true)
+                                }
                             } else if (abs(dragAccumulatedY) > 24f && abs(dragAccumulatedY) > abs(dragAccumulatedX)) {
                                 val right = dragStartX >= surfaceWidthPx * 0.5f
                                 if (right && playbackSettings.rightSwipeForVolume) dragMode = "VOLUME"
@@ -569,7 +595,7 @@ fun VideoPlayerModal(
             )
         }
 
-        if (playerState.isBuffering && !audioOnly) {
+        if (showBuffering && !audioOnly) {
             ContainedLoadingIndicator(modifier = Modifier.align(Alignment.Center).size(56.dp))
         }
 
@@ -584,32 +610,39 @@ fun VideoPlayerModal(
             )
         }
 
-        // 3. Gesture feedback
+        // 3. Gesture feedback. Volume and brightness show an upright level bar (the official
+        //    Expressive vertical slider, like Android's own volume panel) on the side being swiped;
+        //    everything else is a small chip in the middle.
         val hud = gestureHud
+        val level = hudLevel
         if (hud != null && !inPip) {
-            Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = Color.Black.copy(alpha = 0.72f),
-                contentColor = Color.White,
-                modifier = Modifier.align(Alignment.Center).testTag("player_gesture_hud")
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+            val isLevel = level != null && (hud.first === Symbols.VolumeUp || hud.first === Symbols.BrightnessMedium)
+            if (isLevel && level != null) {
+                LevelHud(
+                    icon = hud.first,
+                    label = hud.second,
+                    level = level,
+                    modifier = Modifier
+                        .align(if (hud.first === Symbols.VolumeUp) Alignment.CenterEnd else Alignment.CenterStart)
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(horizontal = 28.dp)
+                        .testTag("player_level_hud")
+                )
+            } else {
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = Color.Black.copy(alpha = 0.72f),
+                    contentColor = Color.White,
+                    modifier = Modifier.align(Alignment.Center).testTag("player_gesture_hud")
                 ) {
-                    Icon(hud.first, contentDescription = null, modifier = Modifier.size(22.dp))
-                    val level = hudLevel
-                    if (level != null && (hud.first === Symbols.VolumeUp || hud.first === Symbols.BrightnessMedium)) {
-                        // Official Expressive progress indicator as a level bar.
-                        LinearProgressIndicator(
-                            progress = { level.coerceIn(0f, 1f) },
-                            color = Color.White,
-                            trackColor = Color.White.copy(alpha = 0.25f),
-                            modifier = Modifier.width(140.dp)
-                        )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(hud.first, contentDescription = null, modifier = Modifier.size(22.dp))
+                        Text(hud.second, style = MaterialTheme.typography.titleMedium)
                     }
-                    Text(hud.second, style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
@@ -692,6 +725,45 @@ fun VideoPlayerModal(
                         onSubtitles = { showSubtitleSheet = true; poke() },
                         onSpeed = { showSpeedSheet = true; poke() },
                         onSleep = { showSleepSheet = true; poke() },
+                        onLock = { controlsLocked = true; poke() },
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                    PlayerBottomBar(
+                        isPlaying = playerState.isPlaying,
+                        positionLabel = formatDurationMs(displayedPositionMs),
+                        rightLabel = rightTimeLabel,
+                        progress = progressFraction,
+                        rotationLocked = rotationOverride != null,
+                        showRotate = !audioOnly,
+                        onSeekPreview = { f ->
+                            // Scrubbing mode (Media3): quick, frequent seeks while dragging, so
+                            // the picture follows the finger.
+                            if (seekPreviewFraction == null) playerController.setScrubbing(true)
+                            seekPreviewFraction = f
+                            playerController.seekTo((f.coerceIn(0f, 1f) * effectiveDurationMs).toLong())
+                            poke()
+                        },
+                        onSeekFinished = { f ->
+                            seekPreviewFraction = null
+                            playerController.setScrubbing(false)
+                            playerController.seekTo((f * effectiveDurationMs).toLong())
+                            poke()
+                        },
+                        onPlayPause = { playerController.togglePlayPause(); poke() },
+                        onPrevious = onPreviousVideo,
+                        onNext = onNextVideo,
+                        onRotate = {
+                            val landscapeNow = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                            rotationOverride = if (landscapeNow) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                            else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            gestureHud = Symbols.ScreenRotation to (if (landscapeNow) "Portrait" else "Landscape")
+                            poke()
+                        },
+                        onRotateLongPress = {
+                            rotationOverride = null
+                            gestureHud = Symbols.ScreenRotation to "Auto-rotate"
+                            poke()
+                        },
                         onMore = { showMoreMenu = true; poke() },
                         moreMenu = {
                             PlayerMoreMenu(
@@ -717,37 +789,7 @@ fun VideoPlayerModal(
                                 onDetails = { showInfoSheet = true }
                             )
                         },
-                        modifier = Modifier.align(Alignment.TopCenter)
-                    )
-                    PlayerBottomBar(
-                        isPlaying = playerState.isPlaying,
-                        positionLabel = formatDurationMs(displayedPositionMs),
-                        rightLabel = rightTimeLabel,
-                        progress = progressFraction,
-                        rotationLocked = rotationOverride != null,
-                        showRotate = !audioOnly,
-                        onSeekPreview = { seekPreviewFraction = it; poke() },
-                        onSeekFinished = { f ->
-                            seekPreviewFraction = null
-                            playerController.seekTo((f * effectiveDurationMs).toLong())
-                            poke()
-                        },
-                        onPlayPause = { playerController.togglePlayPause(); poke() },
-                        onPrevious = onPreviousVideo,
-                        onNext = onNextVideo,
-                        onLock = { controlsLocked = true; poke() },
-                        onRotate = {
-                            val landscapeNow = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-                            rotationOverride = if (landscapeNow) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                            else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                            gestureHud = Symbols.ScreenRotation to (if (landscapeNow) "Portrait" else "Landscape")
-                            poke()
-                        },
-                        onRotateLongPress = {
-                            rotationOverride = null
-                            gestureHud = Symbols.ScreenRotation to "Auto-rotate"
-                            poke()
-                        },
+
                         isPlayingForSeekBar = playerState.isPlaying && !playerState.isEnded,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
@@ -817,6 +859,42 @@ fun VideoPlayerModal(
             video = video,
             onDismiss = { showInfoSheet = false }
         )
+    }
+}
+
+/** Upright level bar for volume / brightness: percentage, the slider, then the icon. */
+@Composable
+private fun LevelHud(icon: ImageVector, label: String, level: Float, modifier: Modifier = Modifier) {
+    val state = remember { SliderState(value = level.coerceIn(0f, 1f)) }
+    SideEffect { state.value = level.coerceIn(0f, 1f) }
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = Color.Black.copy(alpha = 0.6f),
+        contentColor = Color.White,
+        modifier = modifier
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 14.dp)
+        ) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(10.dp))
+            VerticalSlider(
+                state = state,
+                onValueChange = {},
+                topToBottom = false,
+                colors = SliderDefaults.colors(
+                    thumbColor = Color.White,
+                    activeTrackColor = Color.White,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                ),
+                modifier = Modifier
+                    .height(170.dp)
+                    .clearAndSetSemantics {}
+            )
+            Spacer(Modifier.height(10.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        }
     }
 }
 
@@ -891,8 +969,7 @@ private fun PlayerTopBar(
     onSubtitles: () -> Unit,
     onSpeed: () -> Unit,
     onSleep: () -> Unit,
-    onMore: () -> Unit,
-    moreMenu: @Composable () -> Unit,
+    onLock: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val white = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
@@ -925,7 +1002,7 @@ private fun PlayerTopBar(
                 )
             }
         }
-        // Order: subtitles, speed, more (rotate sits at the bottom right, aspect in ⋮).
+        // Order: subtitles, speed, lock (lock up here so it's a deliberate tap).
         if (showSubtitles) {
             PlayerIconButton(onClick = onSubtitles, contentDescription = "Subtitles", active = subtitlesOn, modifier = Modifier.testTag("player_subtitles_btn")) {
                 Icon(if (subtitlesOn) Symbols.ClosedCaption else Symbols.ClosedCaptionDisabled, contentDescription = null)
@@ -938,11 +1015,8 @@ private fun PlayerTopBar(
                 Icon(Symbols.Speed, contentDescription = null)
             }
         }
-        Box {
-            PlayerIconButton(onClick = onMore, contentDescription = "More", modifier = Modifier.testTag("player_more_btn")) {
-                Icon(Symbols.MoreVert, contentDescription = null)
-            }
-            moreMenu()
+        PlayerIconButton(onClick = onLock, contentDescription = "Lock controls", modifier = Modifier.testTag("player_lock_btn")) {
+            Icon(Symbols.LockOpen, contentDescription = null)
         }
     }
 }
@@ -960,9 +1034,10 @@ private fun PlayerBottomBar(
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onLock: () -> Unit,
     onRotate: () -> Unit,
     onRotateLongPress: () -> Unit,
+    onMore: () -> Unit,
+    moreMenu: @Composable () -> Unit,
     isPlayingForSeekBar: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -993,8 +1068,20 @@ private fun PlayerBottomBar(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PlayerIconButton(onClick = onLock, contentDescription = "Lock controls") {
-                Icon(Symbols.LockOpen, contentDescription = null)
+            // Rotate: tap flips portrait/landscape, hold goes back to auto-rotate. Same width
+            // kept in audio-only mode, so the play buttons don't move.
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                if (showRotate) {
+                    PlayerIconButton(
+                        onClick = onRotate,
+                        onLongClick = onRotateLongPress,
+                        contentDescription = "Rotate (hold for auto-rotate)",
+                        active = rotationLocked,
+                        modifier = Modifier.testTag("player_rotate_btn")
+                    ) {
+                        Icon(Symbols.ScreenRotation, contentDescription = null)
+                    }
+                }
             }
             // Official Expressive button group: the pressed button springs wider and squeezes
             // its neighbours; the shapes morph on press.
@@ -1066,20 +1153,12 @@ private fun PlayerBottomBar(
                     }
                 )
             }
-            // Rotate: tap flips portrait/landscape, hold goes back to auto-rotate. Same width
-            // kept in audio-only mode, so the play buttons don't move.
-            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                if (showRotate) {
-                    PlayerIconButton(
-                        onClick = onRotate,
-                        onLongClick = onRotateLongPress,
-                        contentDescription = "Rotate (hold for auto-rotate)",
-                        active = rotationLocked,
-                        modifier = Modifier.testTag("player_rotate_btn")
-                    ) {
-                        Icon(Symbols.ScreenRotation, contentDescription = null)
-                    }
+            // ⋮ at the bottom right, under the thumb; its menu opens upwards.
+            Box {
+                PlayerIconButton(onClick = onMore, contentDescription = "More", modifier = Modifier.testTag("player_more_btn")) {
+                    Icon(Symbols.MoreVert, contentDescription = null)
                 }
+                moreMenu()
             }
         }
     }
@@ -1190,7 +1269,7 @@ private fun SubtitleSheet(
             }
             Spacer(Modifier.height(16.dp))
             CompactRow("Text size") {
-                ConnectedChoice(
+                ChoiceButtonGroup(
                     options = SubtitleSize.entries.map { it to it.label },
                     selected = settings.subtitleSize,
                     onSelect = { size -> onUpdateSettings { it.copy(subtitleSize = size) } },
@@ -1240,8 +1319,8 @@ private fun SpeedSheet(speed: Float, onSpeed: (Float) -> Unit, onDismiss: () -> 
                 }
             }
             rows.forEach { row ->
-                ConnectedChoice(
-                    options = row.map { it to (if (it == 1f) "Normal" else speedLabel(it)) },
+                ChoiceButtonGroup(
+                    options = row.map { it to speedLabel(it) },
                     selected = row.firstOrNull { abs(it - speed) < 0.01f },
                     onSelect = { v -> if (v != null) onSpeed(v) },
                     tag = { "speed_${it}" }
@@ -1467,8 +1546,8 @@ private fun SleepTimerSheet(
             CompactRow("Stop after") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(listOf(15, 30, 45), listOf(60, 90, 120)).forEach { row ->
-                        ConnectedChoice(
-                            options = row.map { it to minutesLabel(it) },
+                        ChoiceButtonGroup(
+                            options = row.map { it to (if (it == 90) "1.5 h" else minutesLabel(it)) },
                             selected = if (atEnd) null else minutes.takeIf { it in row },
                             onSelect = { v -> if (v != null) { minutes = v; atEnd = false } },
                             tag = { "sleep_preset_$it" }

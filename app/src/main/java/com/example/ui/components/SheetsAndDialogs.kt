@@ -26,6 +26,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -146,7 +149,7 @@ fun SortAndViewBottomSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CompactRow("Show") {
-                ConnectedChoice(
+                ChoiceButtonGroup(
                     options = listOf(
                         ViewMode.VIDEOS to "Videos",
                         ViewMode.FOLDERS to "Folders",
@@ -158,7 +161,7 @@ fun SortAndViewBottomSheet(
                 )
             }
             CompactRow("Layout") {
-                ConnectedChoice(
+                ChoiceButtonGroup(
                     options = listOf(
                         LayoutMode.LIST to "List",
                         LayoutMode.GRID to "Grid"
@@ -169,7 +172,7 @@ fun SortAndViewBottomSheet(
                 )
             }
             CompactRow("Sort by") {
-                ConnectedChoice(
+                ChoiceButtonGroup(
                     options = SortBy.entries.map { it to it.label },
                     selected = sortBy,
                     onSelect = onSelectSortField,
@@ -179,7 +182,7 @@ fun SortAndViewBottomSheet(
             CompactRow("Order") {
                 val natural = sortBy.naturalDir
                 val dirs = listOf(natural, if (natural == SortDir.ASC) SortDir.DESC else SortDir.ASC)
-                ConnectedChoice(
+                ChoiceButtonGroup(
                     options = dirs.map { it to if (it == SortDir.ASC) sortBy.ascFull else sortBy.descFull },
                     selected = sortDir,
                     onSelect = onSelectSortDir,
@@ -219,34 +222,57 @@ internal fun CompactRow(label: String, content: @Composable () -> Unit) {
 }
 
 /**
- * An Expressive connected button group for picking one of a few options. Every button has the
- * same width and the official tonal colours, so picking one never moves anything.
+ * Pick one of a few options: the official Material 3 Expressive standard button group. Separate
+ * rounded buttons sharing the width equally; the pressed one stretches and squeezes its
+ * neighbours, and the selected one turns into a rounded square.
  */
 @Composable
-internal fun <T> ConnectedChoice(
+internal fun <T> ChoiceButtonGroup(
     options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
     tag: (T) -> String
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-        options.forEachIndexed { i, (value, label) ->
-            FilledTonalToggleButton(
-                checked = value == selected,
-                onCheckedChange = { if (value != selected) onSelect(value) },
-                shapes = when (i) {
-                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                    options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+    val scheme = MaterialTheme.colorScheme
+    val colors = ToggleButtonDefaults.colors(
+        containerColor = scheme.secondaryContainer,
+        contentColor = scheme.onSecondaryContainer,
+        checkedContainerColor = scheme.primary,
+        checkedContentColor = scheme.onPrimary
+    )
+    ButtonGroup(
+        overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        options.forEach { (value, label) ->
+            customItem(
+                buttonGroupContent = {
+                    val interaction = remember { MutableInteractionSource() }
+                    ToggleButton(
+                        checked = value == selected,
+                        onCheckedChange = { if (value != selected) onSelect(value) },
+                        colors = colors,
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        interactionSource = interaction,
+                        modifier = Modifier
+                            .weight(1f)
+                            .animateWidth(interaction)
+                            .semantics { role = Role.RadioButton }
+                            .testTag(tag(value))
+                    ) {
+                        Text(label, maxLines = 1, softWrap = false)
+                    }
                 },
-                contentPadding = PaddingValues(horizontal = 4.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { role = Role.RadioButton }
-                    .testTag(tag(value))
-            ) {
-                Text(label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-            }
+                menuContent = { menuState ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onSelect(value)
+                            menuState.dismiss()
+                        }
+                    )
+                }
+            )
         }
     }
 }

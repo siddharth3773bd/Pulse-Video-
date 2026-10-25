@@ -303,6 +303,11 @@ class ExoPlayerController(
             .build()
     }
 
+    override fun setScrubbing(enabled: Boolean) {
+        val player = exoPlayer ?: return
+        if (player.isScrubbingModeEnabled != enabled) player.setScrubbingModeEnabled(enabled)
+    }
+
     override fun setVolume(volume: Float) {
         exoPlayer?.volume = volume.coerceIn(0f, 1f)
     }

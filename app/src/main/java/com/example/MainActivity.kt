@@ -1,5 +1,16 @@
 package com.example
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.Switch
 import com.example.ui.icons.Symbols
 import androidx.compose.material3.AppBarWithSearch
 import androidx.compose.material3.SearchBarScrollBehavior
@@ -516,6 +527,9 @@ fun Material3VideoPlayerScreen(
     val videoSearchText = rememberTextFieldState()
     val headerScope = rememberCoroutineScope()
 
+    // Long-press the navigation bar: choose which tabs show.
+    var showTabsSheet by remember { mutableStateOf(false) }
+
     // ---- Audio: mini player pill + Now Playing screen ----
     val audioManager = remember(context) { AudioPlaybackManager.getInstance(context) }
     val audioState by audioManager.state.collectAsStateWithLifecycle()
@@ -861,7 +875,8 @@ fun Material3VideoPlayerScreen(
                 MainNavigationBar(
                     bottomTab = uiState.bottomTab,
                     activeTabs = uiState.activeTabs,
-                    onSelectTab = { viewModel.setBottomTab(it, context) }
+                    onSelectTab = { viewModel.setBottomTab(it, context) },
+                    onLongPress = { showTabsSheet = true }
                 )
             }
         }
@@ -992,6 +1007,14 @@ fun Material3VideoPlayerScreen(
         }
 
         // 4. Overlays, Menus, Bottom Sheets & Dialogs
+
+        if (showTabsSheet) {
+            ChooseTabsSheet(
+                activeTabs = uiState.activeTabs,
+                onSetTabActive = { tab, active -> viewModel.setTabActive(tab, active, context) },
+                onDismiss = { showTabsSheet = false }
+            )
+        }
 
         if (uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS) {
             SortAndViewBottomSheet(
@@ -1417,24 +1440,56 @@ private fun SelectionToolbar(
     }
 }
 
+private val NavTabs = listOf(
+    Triple(BottomTab.AUDIO, "Music", Symbols.MusicNote),
+    Triple(BottomTab.VIDEOS, "Videos", Symbols.PlayCircle),
+    Triple(BottomTab.ME, "Me", Symbols.Person)
+)
+
 /**
- * The tabs: official Material 3 Expressive short navigation bar. Which tabs show is chosen in
- * Me › Settings.
+ * The tabs: official Material 3 Expressive short navigation bar. Long-press anywhere on it to
+ * choose which tabs show.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MainNavigationBar(
     bottomTab: BottomTab,
     activeTabs: List<BottomTab>,
-    onSelectTab: (BottomTab) -> Unit
+    onSelectTab: (BottomTab) -> Unit,
+    onLongPress: () -> Unit
 ) {
-    val tabs = listOf(
-        Triple(BottomTab.AUDIO, "Music", Symbols.MusicNote),
-        Triple(BottomTab.VIDEOS, "Videos", Symbols.PlayCircle),
-        Triple(BottomTab.ME, "Me", Symbols.Person)
-    ).filter { it.first in activeTabs }.ifEmpty { listOf(Triple(BottomTab.VIDEOS, "Videos", Symbols.PlayCircle)) }
+    val tabs = NavTabs.filter { it.first in activeTabs }.ifEmpty { NavTabs.filter { it.first == BottomTab.VIDEOS } }
+    val haptics = LocalHapticFeedback.current
+    val longPressLatest by rememberUpdatedState(onLongPress)
 
-    ShortNavigationBar(modifier = Modifier.testTag("main_navigation_bar")) {
+    ShortNavigationBar(
+        modifier = Modifier
+            .testTag("main_navigation_bar")
+            // Watches for a long press before the tab buttons see it; once it fires, the rest of
+            // that touch is used up so the tab under the finger doesn't also get tapped.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val released = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+                        }
+                        true
+                    }
+                    if (released == null) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        longPressLatest()
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.forEach { it.consume() }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
+            }
+    ) {
         tabs.forEach { (tab, label, icon) ->
             ShortNavigationBarItem(
                 selected = bottomTab == tab,
@@ -1443,6 +1498,56 @@ private fun MainNavigationBar(
                 label = { Text(label) },
                 modifier = Modifier.testTag("nav_tab_${tab.id}")
             )
+        }
+    }
+}
+
+/** Long-press on the navigation bar opens this: a switch per tab (at least one stays on). */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun ChooseTabsSheet(
+    activeTabs: List<BottomTab>,
+    onSetTabActive: (BottomTab, Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        modifier = Modifier.testTag("choose_tabs_sheet")
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Text("Tabs", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
+            Text(
+                "Choose what shows in the bar. Long-press the bar again to change it.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 12.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                NavTabs.forEachIndexed { i, (tab, label, icon) ->
+                    val on = tab in activeTabs
+                    val isLast = on && activeTabs.size <= 1
+                    SegmentedListItem(
+                        checked = on,
+                        onCheckedChange = { checked -> onSetTabActive(tab, checked) },
+                        enabled = !isLast,
+                        shapes = ListItemDefaults.segmentedShapes(index = i, count = NavTabs.size),
+                        leadingContent = { Icon(icon, contentDescription = null) },
+                        supportingContent = if (isLast) {
+                            { Text("At least one tab stays on") }
+                        } else null,
+                        trailingContent = { Switch(checked = on, onCheckedChange = null, enabled = !isLast) },
+                        colors = ListItemDefaults.segmentedColors(containerColor = scheme.surfaceContainerHigh),
+                        modifier = Modifier.testTag("tab_switch_${tab.id}")
+                    ) { Text(label) }
+                }
+            }
         }
     }
 }

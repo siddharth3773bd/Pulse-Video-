@@ -88,6 +88,12 @@ interface PlayerController {
      */
     fun setPreferredLanguages(audio: String?, subtitles: String?)
 
+    /**
+     * Scrubbing mode (Media3): while on, seeks are optimised for many quick jumps (dragging the
+     * seek bar or swiping), so the picture follows the finger. Turn off when the finger lifts.
+     */
+    fun setScrubbing(enabled: Boolean)
+
     /** 0..1, used by the sleep timer's fade-out. */
     fun setVolume(volume: Float)
 

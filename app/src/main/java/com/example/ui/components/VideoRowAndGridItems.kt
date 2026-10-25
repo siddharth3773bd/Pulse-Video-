@@ -295,7 +295,9 @@ fun VideoThumbnailBox(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(inset)
+                // The springy animation can overshoot a hair below 0 on the way back; padding must
+                // never be negative (that crashed the app when a selection ended).
+                .padding(inset.coerceAtLeast(0.dp))
                 .clip(RoundedCornerShape(corner))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center
