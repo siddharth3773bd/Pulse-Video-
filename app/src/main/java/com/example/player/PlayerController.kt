@@ -82,6 +82,12 @@ interface PlayerController {
     fun setVideoEnabled(enabled: Boolean)
     /** Keeps the sound playing after leaving the app, with a media notification. */
     fun setBackgroundAudio(enabled: Boolean)
+    /**
+     * Languages to pick automatically when a video has several audio or subtitle tracks
+     * (ISO codes like "hi", "en"; null or blank = the video's own default).
+     */
+    fun setPreferredLanguages(audio: String?, subtitles: String?)
+
     /** 0..1, used by the sleep timer's fade-out. */
     fun setVolume(volume: Float)
 

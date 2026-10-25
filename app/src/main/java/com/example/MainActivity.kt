@@ -241,6 +241,11 @@ class MainActivity : ComponentActivity() {
                         uiState = uiState,
                         viewModel = viewModel
                     )
+                    // If the app closed because of an error last time, show that error once.
+                    var crashReport by remember { mutableStateOf(com.example.crash.CrashReporter.takeLastReport(context)) }
+                    crashReport?.let { report ->
+                        com.example.ui.components.CrashReportDialog(report = report, onDismiss = { crashReport = null })
+                    }
                 }
             }
         }
@@ -1330,7 +1335,9 @@ private fun VideosContentListOrGrid(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("videos_list_container"),
-            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = bottomPad)
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = bottomPad),
+            // The Expressive list gap: selected rows stay separate rounded tiles instead of merging.
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
         ) {
             fun listItems(list: List<VideoItem>, episodes: Boolean) {
                 items(list, key = { it.id }, contentType = { "video" }) { v ->

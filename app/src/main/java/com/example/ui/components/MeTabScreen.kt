@@ -1864,6 +1864,8 @@ private fun VideoPlaybackSettingsSubPage(
 
     var showOrientationSheet by remember { mutableStateOf(false) }
     var showDecoderSheet by remember { mutableStateOf(false) }
+    var showAudioLanguageSheet by remember { mutableStateOf(false) }
+    var showSubtitleLanguageSheet by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -2065,6 +2067,22 @@ private fun VideoPlaybackSettingsSubPage(
                 testTag = "setting_default_decoder_dropdown"
             )
 
+            // Dropdown Rows: preferred languages for videos with several audio / subtitle tracks
+            ExpressiveDropdownSettingRow(
+                title = "Preferred audio language",
+                currentValueLabel = languageLabel(settings.preferredAudioLanguage, "Video's default"),
+                effectiveAmoled = effectiveAmoled,
+                onClick = { showAudioLanguageSheet = true },
+                testTag = "setting_pref_audio_language"
+            )
+            ExpressiveDropdownSettingRow(
+                title = "Preferred subtitle language",
+                currentValueLabel = languageLabel(settings.preferredSubtitleLanguage, "None"),
+                effectiveAmoled = effectiveAmoled,
+                onClick = { showSubtitleLanguageSheet = true },
+                testTag = "setting_pref_subtitle_language"
+            )
+
             ExpressiveSettingToggleCard(
                 title = "Show remaining time instead of total duration",
                 subtitle = "Display time left (-mm:ss) on the right side of the seek bar",
@@ -2113,6 +2131,32 @@ private fun VideoPlaybackSettingsSubPage(
                 showOrientationSheet = false
             },
             onDismiss = { showOrientationSheet = false }
+        )
+    }
+
+    if (showAudioLanguageSheet) {
+        ExpressiveRadioBottomSheet(
+            title = "Preferred audio language",
+            options = listOf("" to "Video's default") + PreferredLanguages,
+            selectedOption = settings.preferredAudioLanguage,
+            onSelectOption = { chosen ->
+                onUpdateSettings { it.copy(preferredAudioLanguage = chosen) }
+                showAudioLanguageSheet = false
+            },
+            onDismiss = { showAudioLanguageSheet = false }
+        )
+    }
+
+    if (showSubtitleLanguageSheet) {
+        ExpressiveRadioBottomSheet(
+            title = "Preferred subtitle language",
+            options = listOf("" to "None") + PreferredLanguages,
+            selectedOption = settings.preferredSubtitleLanguage,
+            onSelectOption = { chosen ->
+                onUpdateSettings { it.copy(preferredSubtitleLanguage = chosen) }
+                showSubtitleLanguageSheet = false
+            },
+            onDismiss = { showSubtitleLanguageSheet = false }
         )
     }
 
@@ -2217,6 +2261,7 @@ private fun <T> ExpressiveRadioBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp)
         ) {
@@ -2797,3 +2842,31 @@ private fun <T> NowPlayingChoiceSheet(
         }
     }
 }
+
+/** Languages offered for "preferred audio / subtitle language" (ISO 639-1 codes). */
+private val PreferredLanguages: List<Pair<String, String>> = listOf(
+    "en" to "English",
+    "hi" to "Hindi",
+    "mr" to "Marathi",
+    "bn" to "Bengali",
+    "ta" to "Tamil",
+    "te" to "Telugu",
+    "kn" to "Kannada",
+    "ml" to "Malayalam",
+    "gu" to "Gujarati",
+    "pa" to "Punjabi",
+    "ur" to "Urdu",
+    "es" to "Spanish",
+    "fr" to "French",
+    "de" to "German",
+    "it" to "Italian",
+    "pt" to "Portuguese",
+    "ru" to "Russian",
+    "ar" to "Arabic",
+    "ja" to "Japanese",
+    "ko" to "Korean",
+    "zh" to "Chinese"
+)
+
+private fun languageLabel(code: String, blankLabel: String): String =
+    if (code.isBlank()) blankLabel else PreferredLanguages.firstOrNull { it.first == code }?.second ?: code

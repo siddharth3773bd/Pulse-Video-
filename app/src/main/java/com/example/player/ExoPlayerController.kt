@@ -169,6 +169,7 @@ class ExoPlayerController(
         exoPlayer = created
         activePlayerInstance = created
         if (videoDisabled) applyVideoDisabled(created)
+        applyLanguagePrefs(created)
         if (backgroundAudio) {
             created.setWakeMode(C.WAKE_MODE_LOCAL)
             VideoAudioService.swapPlayer(created)
@@ -284,6 +285,22 @@ class ExoPlayerController(
             player?.setWakeMode(C.WAKE_MODE_NONE)
             VideoAudioService.stop(appContext)
         }
+    }
+
+    private var preferredAudio: String? = null
+    private var preferredText: String? = null
+
+    override fun setPreferredLanguages(audio: String?, subtitles: String?) {
+        preferredAudio = audio?.takeIf { it.isNotBlank() }
+        preferredText = subtitles?.takeIf { it.isNotBlank() }
+        exoPlayer?.let { applyLanguagePrefs(it) }
+    }
+
+    private fun applyLanguagePrefs(player: ExoPlayer) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setPreferredAudioLanguages(*listOfNotNull(preferredAudio).toTypedArray())
+            .setPreferredTextLanguages(*listOfNotNull(preferredText).toTypedArray())
+            .build()
     }
 
     override fun setVolume(volume: Float) {
@@ -415,11 +432,11 @@ class ExoPlayerController(
                     for (trackIdx in 0 until group.length) {
                         val format = group.getTrackFormat(trackIdx)
                         val langCode = format.language
-                        val langDisplay = langCode?.let {
-                            Locale(it).displayLanguage.takeIf { d -> d.isNotBlank() }
+                        val langDisplay = langCode?.takeIf { it != "und" }?.let {
+                            Locale.forLanguageTag(it).displayLanguage.takeIf { d -> d.isNotBlank() && d != it }
                         }
                         val labelText = buildString {
-                            append(format.label ?: langDisplay ?: "Audio Track ${audioOptions.size + 1}")
+                            append(format.label ?: langDisplay ?: "Track ${audioOptions.size + 1}")
                             if (!langDisplay.isNullOrBlank() && format.label != null && !format.label!!.contains(langDisplay, ignoreCase = true)) {
                                 append(" ($langDisplay)")
                             }
@@ -444,8 +461,8 @@ class ExoPlayerController(
                     for (trackIdx in 0 until group.length) {
                         val format = group.getTrackFormat(trackIdx)
                         val langCode = format.language
-                        val langDisplay = langCode?.let {
-                            Locale(it).displayLanguage.takeIf { d -> d.isNotBlank() && d != "und" }
+                        val langDisplay = langCode?.takeIf { it != "und" }?.let {
+                            Locale.forLanguageTag(it).displayLanguage.takeIf { d -> d.isNotBlank() && d != it }
                         }
                         val labelText = format.label
                             ?: langDisplay

@@ -193,6 +193,10 @@ data class PlaybackSettings(
     val autoplayNext: Boolean = true,
     /** Reopening a video carries on where it was left (with a "Start over" option). */
     val rememberPosition: Boolean = true,
+    /** Audio language to pick when a video has several (ISO code; blank = the video's default). */
+    val preferredAudioLanguage: String = "",
+    /** Subtitle language to turn on when a video has it (ISO code; blank = none chosen). */
+    val preferredSubtitleLanguage: String = "",
     /** Keep playing in a small window when leaving the app during a video. */
     val pictureInPicture: Boolean = true,
     val subtitleSize: SubtitleSize = SubtitleSize.MEDIUM,

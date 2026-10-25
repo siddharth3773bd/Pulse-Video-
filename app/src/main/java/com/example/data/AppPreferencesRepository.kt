@@ -84,6 +84,8 @@ object AppPreferencesRepository {
     private val KEY_SHOW_REMAINING_TIME = booleanPreferencesKey("pb_show_remaining_time")
     private val KEY_AUTOPLAY_NEXT = booleanPreferencesKey("pb_autoplay_next")
     private val KEY_REMEMBER_POSITION = booleanPreferencesKey("pb_remember_position")
+    private val KEY_PREF_AUDIO_LANG = stringPreferencesKey("pb_pref_audio_lang")
+    private val KEY_PREF_SUB_LANG = stringPreferencesKey("pb_pref_sub_lang")
     private val KEY_PIP = booleanPreferencesKey("pb_picture_in_picture")
     private val KEY_SUB_SIZE = stringPreferencesKey("pb_subtitle_size")
     private val KEY_SUB_BG = booleanPreferencesKey("pb_subtitle_background")
@@ -151,6 +153,8 @@ object AppPreferencesRepository {
                 showRemainingTime = prefs[KEY_SHOW_REMAINING_TIME] ?: false,
                 autoplayNext = prefs[KEY_AUTOPLAY_NEXT] ?: true,
                 rememberPosition = prefs[KEY_REMEMBER_POSITION] ?: true,
+                preferredAudioLanguage = prefs[KEY_PREF_AUDIO_LANG] ?: "",
+                preferredSubtitleLanguage = prefs[KEY_PREF_SUB_LANG] ?: "",
                 pictureInPicture = prefs[KEY_PIP] ?: true,
                 subtitleSize = com.example.model.SubtitleSize.entries.find { it.id == prefs[KEY_SUB_SIZE] }
                     ?: com.example.model.SubtitleSize.MEDIUM,
@@ -520,6 +524,8 @@ object AppPreferencesRepository {
             it[KEY_SHOW_REMAINING_TIME] = settings.showRemainingTime
             it[KEY_AUTOPLAY_NEXT] = settings.autoplayNext
             it[KEY_REMEMBER_POSITION] = settings.rememberPosition
+            it[KEY_PREF_AUDIO_LANG] = settings.preferredAudioLanguage
+            it[KEY_PREF_SUB_LANG] = settings.preferredSubtitleLanguage
             it[KEY_PIP] = settings.pictureInPicture
             it[KEY_SUB_SIZE] = settings.subtitleSize.id
             it[KEY_SUB_BG] = settings.subtitleBackground

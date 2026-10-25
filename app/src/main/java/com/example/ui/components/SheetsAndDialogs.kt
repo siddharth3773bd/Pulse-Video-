@@ -72,6 +72,7 @@ import com.example.model.VideoItem
 import com.example.model.ViewMode
 import com.example.model.formatDurationMs
 import com.example.model.formatSizeLabel
+import com.example.model.formatCompactDate
 import com.example.model.naturalDir
 
 // ---------------------------------------------------------------------------------------------
@@ -205,7 +206,7 @@ fun SortAndViewBottomSheet(
 
 /** A small label above one row of choices. */
 @Composable
-private fun CompactRow(label: String, content: @Composable () -> Unit) {
+internal fun CompactRow(label: String, content: @Composable () -> Unit) {
     Column {
         Text(
             label,
@@ -222,7 +223,7 @@ private fun CompactRow(label: String, content: @Composable () -> Unit) {
  * same width and the official tonal colours, so picking one never moves anything.
  */
 @Composable
-private fun <T> ConnectedChoice(
+internal fun <T> ConnectedChoice(
     options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
@@ -254,32 +255,48 @@ private fun <T> ConnectedChoice(
 // Details
 // ---------------------------------------------------------------------------------------------
 
+/** "720p", "1080p", "4K"… from a video's size, for the details screen. */
+private fun qualityName(width: Int, height: Int): String? {
+    val short = minOf(width, height)
+    return when {
+        short <= 0 -> null
+        short >= 2000 -> "4K"
+        short >= 1400 -> "1440p"
+        short >= 1000 -> "1080p"
+        short >= 700 -> "720p"
+        short >= 470 -> "480p"
+        else -> "${short}p"
+    }
+}
+
 /**
- * Video details, kept small: the thumbnail and name with where it lives, then one card with the
- * basics (length, size, format, dimensions).
+ * Video details: the thumbnail, name and date on top, then one grouped Material 3 Expressive list
+ * (the same grouped style as the ⋮ menu) with the basics, each with its icon.
  */
 @Composable
 fun VideoDetailsSheet(
     video: VideoItem,
     onDismiss: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("video_details_sheet")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
                 VideoThumbnailBox(
                     video = video,
                     modifier = Modifier
-                        .width(112.dp)
+                        .width(120.dp)
                         .aspectRatio(16f / 9f)
-                        .clip(MaterialTheme.shapes.medium)
                 )
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
@@ -290,45 +307,42 @@ fun VideoDetailsSheet(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        "${friendlyFolderPath(video.folderPath)} · ${video.dateStr}",
+                        formatCompactDate(video.dateStr),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        color = scheme.onSurfaceVariant
                     )
                 }
             }
             Spacer(Modifier.height(16.dp))
-            androidx.compose.material3.Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                    Row {
-                        DetailCell("Length", video.durationLabel, Modifier.weight(1f))
-                        DetailCell("Size", formatSizeLabel(video.sizeMB), Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    Row {
-                        DetailCell("Format", video.ext.uppercase(), Modifier.weight(1f))
-                        DetailCell(
-                            "Dimensions",
-                            if (video.width > 0 && video.height > 0) "${video.width} × ${video.height}" else "—",
-                            Modifier.weight(1f)
-                        )
+
+            val resolution = if (video.width > 0 && video.height > 0) {
+                listOfNotNull("${video.width} × ${video.height}", qualityName(video.width, video.height)).joinToString(" · ")
+            } else "Unknown"
+            val rows = listOf(
+                Triple(Symbols.Timer, "Length", video.durationLabel),
+                Triple(Symbols.HighQuality, "Resolution", resolution),
+                Triple(Symbols.Storage, "Size", formatSizeLabel(video.sizeMB)),
+                Triple(Symbols.Description, "Format", video.ext.uppercase().ifBlank { "Unknown" }),
+                Triple(Symbols.Folder, "Folder", friendlyFolderPath(video.folderPath))
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                rows.forEachIndexed { i, (icon, label, value) ->
+                    SegmentedListItem(
+                        shapes = ListItemDefaults.segmentedShapes(index = i, count = rows.size),
+                        leadingContent = { Icon(icon, contentDescription = null) },
+                        overlineContent = { Text(label) },
+                        colors = ListItemDefaults.segmentedColors(
+                            containerColor = scheme.surfaceContainerHigh,
+                            leadingContentColor = scheme.onSurfaceVariant,
+                            overlineContentColor = scheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.testTag("detail_row_${label.lowercase()}")
+                    ) {
+                        Text(value, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun DetailCell(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

@@ -968,6 +968,7 @@ class VideoPlayerViewModel : ViewModel() {
         if (context != null) {
             val controller = getOrCreatePlayerController(context)
             val pb = state.playbackSettings
+            controller.setPreferredLanguages(pb.preferredAudioLanguage, pb.preferredSubtitleLanguage)
             controller.prepareMedia(
                 uri = video.contentUri,
                 filePath = video.path,
