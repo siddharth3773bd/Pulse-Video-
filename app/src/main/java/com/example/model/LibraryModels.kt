@@ -28,7 +28,8 @@ enum class NowPlayingAction(val id: String, val label: String) {
     SHUFFLE("shuffle", "Shuffle"),
     REPEAT("repeat", "Repeat"),
     LYRICS("lyrics", "Lyrics"),
-    SLEEP("sleep", "Sleep timer")
+    SLEEP("sleep", "Sleep timer"),
+    QUEUE("queue", "Queue")
 }
 
 enum class LibrarySongSort(val id: String, val label: String) {

@@ -45,7 +45,11 @@ data class AudioPlaybackState(
     /** Time left on the sleep timer in ms, 0 when no countdown is running. */
     val sleepTimerRemainingMs: Long = 0L,
     /** True when playback should pause at the end of the current song. */
-    val sleepAtEndOfSong: Boolean = false
+    val sleepAtEndOfSong: Boolean = false,
+    /** Every song in the play queue, in queue order. */
+    val queue: List<AudioTrackItem> = emptyList(),
+    /** Position of the current song inside [queue]. */
+    val queueIndex: Int = 0
 )
 
 class AudioPlaybackManager private constructor(context: Context) {
@@ -65,6 +69,9 @@ class AudioPlaybackManager private constructor(context: Context) {
 
     private val tracksById = LinkedHashMap<String, AudioTrackItem>()
 
+    /** Cached queue, rebuilt only when the playlist itself changes (not on every position tick). */
+    private var queueSnapshot: List<AudioTrackItem> = emptyList()
+
     // Sleep timer: lives here (not in the UI) so it keeps counting while the screen is off.
     private var sleepTimerEndAtMs: Long = 0L
     private var sleepAtEndOfSongArmed: Boolean = false
@@ -82,6 +89,11 @@ class AudioPlaybackManager private constructor(context: Context) {
             ) {
                 fireSleepTimer(seekToStart = true)
             }
+            syncFromController()
+        }
+
+        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+            rebuildQueueSnapshot()
             syncFromController()
         }
 
@@ -116,6 +128,7 @@ class AudioPlaybackManager private constructor(context: Context) {
                     val controller = future.get()
                     mediaController = controller
                     controller.addListener(playerListener)
+                    rebuildQueueSnapshot()
                     startPositionPolling()
                     val pending = pendingControllerAction
                     pendingControllerAction = null
@@ -320,6 +333,44 @@ class AudioPlaybackManager private constructor(context: Context) {
         return compressed
     }
 
+    private fun rebuildQueueSnapshot() {
+        val controller = mediaController ?: return
+        queueSnapshot = (0 until controller.mediaItemCount).mapNotNull { i ->
+            val item = controller.getMediaItemAt(i)
+            tracksById[item.mediaId] ?: reconstructTrackFromMediaItem(item)
+        }
+    }
+
+    /** Jumps to the song at [index] in the queue and plays it. */
+    fun skipToQueueItem(index: Int) {
+        withController { controller ->
+            if (index in 0 until controller.mediaItemCount) {
+                controller.seekTo(index, 0L)
+                controller.play()
+            }
+            syncFromController()
+        }
+    }
+
+    /** Moves a song inside the queue (drag to reorder). The current song keeps playing. */
+    fun moveQueueItem(from: Int, to: Int) {
+        withController { controller ->
+            val count = controller.mediaItemCount
+            if (from in 0 until count && to in 0 until count && from != to) {
+                controller.moveMediaItem(from, to)
+            }
+        }
+    }
+
+    /** Removes a song from the queue. Removing the current song moves on to the next one. */
+    fun removeQueueItem(index: Int) {
+        withController { controller ->
+            if (index in 0 until controller.mediaItemCount) {
+                controller.removeMediaItem(index)
+            }
+        }
+    }
+
     fun togglePlayPause() {
         withController { controller ->
             if (controller.isPlaying) {
@@ -516,7 +567,9 @@ class AudioPlaybackManager private constructor(context: Context) {
                 durationMs = dur,
                 isEnded = ended,
                 shuffleEnabled = controller.shuffleModeEnabled,
-                repeatMode = controller.repeatMode
+                repeatMode = controller.repeatMode,
+                queue = queueSnapshot,
+                queueIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
             )
         }
     }

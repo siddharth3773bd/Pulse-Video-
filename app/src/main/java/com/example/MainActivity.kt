@@ -782,6 +782,11 @@ fun Material3VideoPlayerScreen(
                     onStartSleepTimer = { minutes -> audioManager.startSleepTimer(minutes) },
                     onSleepAtEndOfSong = { audioManager.startSleepAtEndOfSong() },
                     onCancelSleepTimer = { audioManager.cancelSleepTimer() },
+                    queue = audioState.queue,
+                    queueIndex = audioState.queueIndex,
+                    onSkipToQueueItem = { audioManager.skipToQueueItem(it) },
+                    onMoveQueueItem = { from, to -> audioManager.moveQueueItem(from, to) },
+                    onRemoveQueueItem = { audioManager.removeQueueItem(it) },
                     background = libraryPrefs.nowPlayingBackground,
                     buttonColors = libraryPrefs.nowPlayingButtonColors
                 )

@@ -15,6 +15,8 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -65,6 +67,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AudioTrackItem
 import com.example.model.BlacklistedSong
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOff
@@ -272,6 +276,7 @@ private fun formatDurationLabel(durationMs: Long): String {
     return String.format(Locale.US, "%d:%02d", minutes, seconds)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SongInfoSheet(
     track: AudioTrackItem,
@@ -285,82 +290,101 @@ fun SongInfoSheet(
         tech = readAudioTech(context, track.contentUri)
     }
 
-    val songInfoText = tech?.let { t ->
-        val rate = t.sampleRateHz?.let { String.format(Locale.US, "%.1f kHz", it / 1000.0) } ?: "-"
-        val rateKbps = t.bitrateBps?.let { "${it / 1000} kbps" } ?: "-"
-        "$rate · $rateKbps · ${track.ext.uppercase(Locale.US)}"
-    } ?: "Loading…"
+    fun copy(label: String, value: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(label, value))
+        android.widget.Toast.makeText(context, "$label copied", android.widget.Toast.LENGTH_SHORT).show()
+    }
 
     LibrarySheet(onDismiss = onDismiss) {
+        // Cover + title
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 18.dp),
+                .padding(top = 4.dp, bottom = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AudioArt(
                 uri = track.contentUri,
                 placeholderBackground = palette.surfaceContainerHigh,
                 placeholderTint = palette.primary,
-                modifier = Modifier.size(72.dp),
-                shape = RoundedCornerShape(18.dp),
-                iconSize = 30.dp
+                modifier = Modifier.size(84.dp),
+                shape = RoundedCornerShape(24.dp),
+                iconSize = 34.dp
             )
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = track.title,
-                    color = palette.onSurface,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = track.artist,
-                    color = palette.onSurfaceVariant,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 14.sp,
+                    text = track.artist.ifBlank { "Unknown artist" },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
         }
 
-        InfoCard(label = "Duration", value = formatDurationLabel(track.durationMs), bg = palette.surfaceContainerHigh)
-        InfoCard(label = "Album", value = track.album, bg = palette.surfaceContainerHigh)
-        InfoCard(label = "Artist", value = track.artist, bg = palette.surfaceContainerHigh)
-        InfoCard(label = "Song info", value = songInfoText, bg = palette.surfaceContainerHigh)
-        InfoCard(label = "Path", value = track.path.ifBlank { "-" }, bg = palette.surfaceContainerHigh)
-    }
-}
+        // Technical details as compact pills
+        val pills = listOfNotNull(
+            track.ext.uppercase(Locale.US).takeIf { it.isNotBlank() },
+            formatDurationLabel(track.durationMs),
+            tech?.bitrateBps?.let { "${it / 1000} kbps" },
+            tech?.sampleRateHz?.let { String.format(Locale.US, "%.1f kHz", it / 1000.0) }
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            pills.forEach { pill ->
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Text(
+                        text = pill,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                    )
+                }
+            }
+        }
 
-@Composable
-private fun InfoCard(label: String, value: String, bg: Color) {
-    val palette = LocalM3Palette.current
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = bg,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp)
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
-            Text(
-                text = label,
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 12.sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = value,
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+        // Details: tap a row to copy it
+        val details = listOf(
+            Triple("Album", track.album.ifBlank { "Unknown album" }, Icons.Default.Album),
+            Triple("Artist", track.artist.ifBlank { "Unknown artist" }, Icons.Default.Person),
+            Triple("Location", track.path.ifBlank { "-" }, Icons.Default.Folder)
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+            details.forEachIndexed { index, (label, value, icon) ->
+                SegmentedListItem(
+                    onClick = { copy(label, value) },
+                    shapes = ListItemDefaults.segmentedShapes(index = index, count = details.size),
+                    leadingContent = { Icon(icon, contentDescription = null) },
+                    supportingContent = {
+                        Text(
+                            text = value,
+                            maxLines = if (label == "Location") 4 else 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    colors = blacklistRowColors()
+                ) {
+                    Text(label)
+                }
+            }
         }
     }
 }

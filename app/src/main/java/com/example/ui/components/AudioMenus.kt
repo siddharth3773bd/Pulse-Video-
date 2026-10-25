@@ -152,7 +152,6 @@ fun SongActionsMenu(
     onShare: () -> Unit,
     onSongInfo: () -> Unit,
     onBlacklistSong: () -> Unit,
-    onBlacklistFolder: () -> Unit,
     onDelete: () -> Unit,
     onRemoveFromPlaylist: (() -> Unit)? = null
 ) {
@@ -181,7 +180,6 @@ fun SongActionsMenu(
                 AudioMenuEntry("Remove from playlist", Icons.Default.PlaylistRemove, "song_action_remove_playlist", onClick = it)
             },
             AudioMenuEntry("Blacklist song", Icons.Default.Block, "song_action_blacklist", onClick = onBlacklistSong),
-            AudioMenuEntry("Blacklist folder", Icons.Default.FolderOff, "song_action_blacklist_folder", onClick = onBlacklistFolder),
             AudioMenuEntry("Delete from device", Icons.Default.DeleteOutline, "song_action_delete", destructive = true, onClick = onDelete)
         )
     )

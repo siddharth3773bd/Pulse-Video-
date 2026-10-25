@@ -19,6 +19,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -39,6 +43,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Bedtime
@@ -130,6 +135,7 @@ fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) 
     NowPlayingAction.REPEAT -> Icons.Default.Repeat
     NowPlayingAction.LYRICS -> LyricsIcon
     NowPlayingAction.SLEEP -> Icons.Default.Bedtime
+    NowPlayingAction.QUEUE -> Icons.AutoMirrored.Filled.QueueMusic
 }
 
 /**
@@ -160,6 +166,11 @@ fun NowPlayingScreen(
     onStartSleepTimer: (Int) -> Unit,
     onSleepAtEndOfSong: () -> Unit,
     onCancelSleepTimer: () -> Unit,
+    queue: List<AudioTrackItem>,
+    queueIndex: Int,
+    onSkipToQueueItem: (Int) -> Unit,
+    onMoveQueueItem: (Int, Int) -> Unit,
+    onRemoveQueueItem: (Int) -> Unit,
     modifier: Modifier = Modifier,
     background: NowPlayingBackground = NowPlayingBackground.FOLLOW_THEME,
     buttonColors: NowPlayingButtonColors = NowPlayingButtonColors.DEFAULT
@@ -295,6 +306,8 @@ fun NowPlayingScreen(
         }
 
         // ---- Cover (takes whatever vertical room is left, always square) ----
+        // A HorizontalPager over the queue: swipe left/right for the next/previous song,
+        // double-tap the cover to play or pause.
         BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
@@ -303,14 +316,51 @@ fun NowPlayingScreen(
             contentAlignment = Alignment.Center
         ) {
             val side = if (maxWidth < maxHeight) maxWidth else maxHeight
-            AudioArt(
-                uri = track.contentUri,
-                placeholderBackground = palette.surfaceContainerHighest,
-                placeholderTint = palette.primary,
-                modifier = Modifier.size(side),
-                shape = RoundedCornerShape(28.dp),
-                iconSize = 72.dp
+            val coverTracks = if (queue.isEmpty()) listOf(track) else queue
+            val coverIndex = if (queue.isEmpty()) 0 else queueIndex.coerceIn(0, coverTracks.lastIndex)
+            val coverPager = rememberPagerState(
+                initialPage = coverIndex,
+                pageCount = { coverTracks.size }
             )
+            val skipToLatest by rememberUpdatedState(onSkipToQueueItem)
+            val queueIndexLatest by rememberUpdatedState(coverIndex)
+            // The song changed some other way (buttons, auto-advance): glide the cover along.
+            LaunchedEffect(coverIndex, coverTracks.size) {
+                if (coverPager.currentPage != coverIndex && coverIndex < coverTracks.size) {
+                    coverPager.animateScrollToPage(coverIndex)
+                }
+            }
+            // The user swiped to another cover: play that song.
+            LaunchedEffect(coverPager) {
+                snapshotFlow { coverPager.settledPage }.collect { page ->
+                    if (queue.isNotEmpty() && page != queueIndexLatest) skipToLatest(page)
+                }
+            }
+            HorizontalPager(
+                state = coverPager,
+                pageSpacing = 16.dp,
+                beyondViewportPageCount = 1,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(onDoubleTap = { onTogglePlayPause() })
+                        }
+                        .testTag("now_playing_cover"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AudioArt(
+                        uri = coverTracks[page].contentUri,
+                        placeholderBackground = palette.surfaceContainerHighest,
+                        placeholderTint = palette.primary,
+                        modifier = Modifier.size(side),
+                        shape = RoundedCornerShape(28.dp),
+                        iconSize = 72.dp
+                    )
+                }
+            }
         }
 
         // ---- Title / artist + Like button ----
@@ -552,6 +602,7 @@ fun NowPlayingScreen(
         // Same official container as the main controls: pressing a toggle springs it wider
         // and squeezes its neighbours (ButtonGroup + animateWidth).
         var showSleepSheet by remember { mutableStateOf(false) }
+        var showQueueSheet by remember { mutableStateOf(false) }
         val sleepActive = sleepTimerRemainingMs > 0L || sleepAtEndOfSong
         // The running sleep timer morphs into a wider pill that shows the countdown.
         val sleepWeight by animateFloatAsState(
@@ -577,6 +628,7 @@ fun NowPlayingScreen(
                         NowPlayingAction.REPEAT -> repeatMode != Player.REPEAT_MODE_OFF
                         NowPlayingAction.SLEEP -> sleepActive
                         NowPlayingAction.LYRICS -> false
+                        NowPlayingAction.QUEUE -> false
                     }
                     val icon = when {
                         action == NowPlayingAction.REPEAT && repeatMode == Player.REPEAT_MODE_ONE ->
@@ -588,6 +640,7 @@ fun NowPlayingScreen(
                             NowPlayingAction.SHUFFLE -> onToggleShuffle()
                             NowPlayingAction.REPEAT -> onCycleRepeat()
                             NowPlayingAction.LYRICS -> onLyrics()
+                            NowPlayingAction.QUEUE -> showQueueSheet = true
                             // Tap a running timer to turn it off; tap again to set a new one.
                             NowPlayingAction.SLEEP -> if (sleepActive) {
                                 onCancelSleepTimer()
@@ -660,6 +713,20 @@ fun NowPlayingScreen(
             }
         }
         Spacer(modifier = Modifier.height(20.dp))
+
+        if (showQueueSheet) {
+            QueueSheet(
+                queue = queue.ifEmpty { listOf(track) },
+                currentIndex = if (queue.isEmpty()) 0 else queueIndex,
+                shuffleEnabled = shuffleEnabled,
+                onPlayItem = { index ->
+                    onSkipToQueueItem(index)
+                },
+                onMove = onMoveQueueItem,
+                onRemove = onRemoveQueueItem,
+                onDismiss = { showQueueSheet = false }
+            )
+        }
 
         if (showSleepSheet) {
             SleepTimerSheet(

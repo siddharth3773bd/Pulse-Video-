@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -234,7 +235,6 @@ private fun totalDurationLabel(tracks: List<AudioTrackItem>): String {
 }
 
 /** Last part of a folder path, e.g. "WhatsApp Audio". */
-private fun folderName(path: String): String = path.substringAfterLast('/').ifBlank { path }
 
 // ---------------------------------------------------------------------------------------------
 // Screen
@@ -475,19 +475,6 @@ fun AudioLibraryScreen(
             selectedIds = emptySet()
         }
     }
-    val blacklistFolder: (AudioTrackItem) -> Unit = { track ->
-        val folder = track.folderPath
-        if (folder.isBlank()) {
-            Toast.makeText(context, "Couldn't find this song's folder", Toast.LENGTH_SHORT).show()
-        } else {
-            scope.launch { AppPreferencesRepository.setFolderBlacklisted(context, folder, true) }
-            Toast.makeText(
-                context,
-                "“${folderName(folder)}” blacklisted. Manage in Me › Music.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
 
     /** The ⋮ menu for [track], shown from the row in list [listKey]. */
     val songMenu: @Composable (String, AudioTrackItem, AudioPlaylist?) -> Unit = { listKey, track, playlist ->
@@ -522,7 +509,6 @@ fun AudioLibraryScreen(
             onShare = { shareTrack(context, track) },
             onSongInfo = { infoTrack = track },
             onBlacklistSong = { blacklistTracks(listOf(track)) },
-            onBlacklistFolder = { blacklistFolder(track) },
             onDelete = { deleteTracks(listOf(track)) },
             onRemoveFromPlaylist = playlist?.let { pl ->
                 fun() {
@@ -634,6 +620,7 @@ fun AudioLibraryScreen(
                                         )
                                     }
                                 },
+                                modifier = Modifier.requiredSize(56.dp),
                                 shape = CircleShape,
                                 colors = SearchBarDefaults.colors(
                                     containerColor = Color.Transparent,
