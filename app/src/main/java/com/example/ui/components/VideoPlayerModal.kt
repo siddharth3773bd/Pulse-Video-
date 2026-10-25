@@ -1243,7 +1243,7 @@ private fun SpeedSheet(speed: Float, onSpeed: (Float) -> Unit, onDismiss: () -> 
                 ConnectedChoice(
                     options = row.map { it to (if (it == 1f) "Normal" else speedLabel(it)) },
                     selected = row.firstOrNull { abs(it - speed) < 0.01f },
-                    onSelect = { onSpeed(it) },
+                    onSelect = { v -> if (v != null) onSpeed(v) },
                     tag = { "speed_${it}" }
                 )
             }
@@ -1470,7 +1470,7 @@ private fun SleepTimerSheet(
                         ConnectedChoice(
                             options = row.map { it to minutesLabel(it) },
                             selected = if (atEnd) null else minutes.takeIf { it in row },
-                            onSelect = { minutes = it; atEnd = false },
+                            onSelect = { v -> if (v != null) { minutes = v; atEnd = false } },
                             tag = { "sleep_preset_$it" }
                         )
                     }
