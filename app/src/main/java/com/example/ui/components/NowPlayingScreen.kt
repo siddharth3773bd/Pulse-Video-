@@ -2,6 +2,16 @@
 
 package com.example.ui.components
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.example.model.NowPlayingBackground
+import com.example.model.NowPlayingButtonColors
+import com.example.ui.theme.LocalAlbumArtGradient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -149,9 +159,31 @@ fun NowPlayingScreen(
     onStartSleepTimer: (Int) -> Unit,
     onSleepAtEndOfSong: () -> Unit,
     onCancelSleepTimer: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    background: NowPlayingBackground = NowPlayingBackground.FOLLOW_THEME,
+    buttonColors: NowPlayingButtonColors = NowPlayingButtonColors.DEFAULT
 ) {
-    val palette = LocalM3Palette.current
+    // On image / black backgrounds all text and outline icons switch to white.
+    val onImage = background != NowPlayingBackground.FOLLOW_THEME
+    val themePalette = LocalM3Palette.current
+    val palette = if (onImage) themePalette.copy(onPrimaryContainer = Color.White) else themePalette
+    val scheme = MaterialTheme.colorScheme
+
+    // Button colours (Echo-style choice). Primary / Tertiary come from the current scheme, which
+    // is the album-art scheme when "Colours from: Album art" is on.
+    val (mainContainer, mainContent) = when (buttonColors) {
+        NowPlayingButtonColors.DEFAULT ->
+            if (onImage) Color.White to Color.Black else palette.primary to palette.onPrimary
+        NowPlayingButtonColors.PRIMARY -> scheme.primary to scheme.onPrimary
+        NowPlayingButtonColors.TERTIARY -> scheme.tertiary to scheme.onTertiary
+    }
+    val (sideContainer, sideContent) = when (buttonColors) {
+        NowPlayingButtonColors.DEFAULT ->
+            if (onImage) Color.White.copy(alpha = 0.2f) to Color.White
+            else palette.secondaryContainer to palette.onSecondaryContainer
+        NowPlayingButtonColors.PRIMARY -> scheme.primaryContainer to scheme.onPrimaryContainer
+        NowPlayingButtonColors.TERTIARY -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+    }
     val context = LocalContext.current
     val closeLatest by rememberUpdatedState(onClose)
     val closeThresholdPx = with(LocalDensity.current) { 90.dp.toPx() }
@@ -177,10 +209,16 @@ fun NowPlayingScreen(
     val fraction = dragFraction ?: liveFraction
     val shownPositionMs = (fraction * safeDuration).toLong()
 
+    Box(modifier = modifier.fillMaxSize()) {
+    NowPlayingBackgroundLayer(
+        style = background,
+        track = track,
+        followThemeColor = palette.primaryContainer,
+        modifier = Modifier.matchParentSize()
+    )
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
-            .background(palette.primaryContainer)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -300,8 +338,8 @@ fun NowPlayingScreen(
                 colors = IconButtonDefaults.filledIconToggleButtonColors(
                     containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
                     contentColor = palette.onPrimaryContainer,
-                    checkedContainerColor = palette.primary,
-                    checkedContentColor = palette.onPrimary
+                    checkedContainerColor = mainContainer,
+                    checkedContentColor = mainContent
                 ),
                 modifier = Modifier
                     .size(52.dp)
@@ -324,6 +362,7 @@ fun NowPlayingScreen(
                 onSeekTo(target)
             },
             isPlaying = isPlaying,
+            activeColor = mainContainer,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("audio_seek_slider")
@@ -397,8 +436,8 @@ fun NowPlayingScreen(
                         onClick = onSkipPrevious,
                         shapes = IconButtonDefaults.shapes(),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = palette.secondaryContainer,
-                            contentColor = palette.onSecondaryContainer
+                            containerColor = sideContainer,
+                            contentColor = sideContent
                         ),
                         interactionSource = previousInteraction,
                         modifier = Modifier
@@ -432,8 +471,8 @@ fun NowPlayingScreen(
                         onClick = onTogglePlayPause,
                         shapes = IconButtonDefaults.shapes(),
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = palette.primary,
-                            contentColor = palette.onPrimary
+                            containerColor = mainContainer,
+                            contentColor = mainContent
                         ),
                         interactionSource = playPauseInteraction,
                         modifier = Modifier
@@ -471,8 +510,8 @@ fun NowPlayingScreen(
                         onClick = onSkipNext,
                         shapes = IconButtonDefaults.shapes(),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = palette.secondaryContainer,
-                            contentColor = palette.onSecondaryContainer
+                            containerColor = sideContainer,
+                            contentColor = sideContent
                         ),
                         interactionSource = nextInteraction,
                         modifier = Modifier
@@ -559,8 +598,8 @@ fun NowPlayingScreen(
                                 colors = ToggleButtonDefaults.colors(
                                     containerColor = palette.onPrimaryContainer.copy(alpha = 0.10f),
                                     contentColor = palette.onPrimaryContainer,
-                                    checkedContainerColor = palette.primary,
-                                    checkedContentColor = palette.onPrimary
+                                    checkedContainerColor = mainContainer,
+                                    checkedContentColor = mainContent
                                 ),
                                 contentPadding = PaddingValues(horizontal = 8.dp),
                                 interactionSource = interaction,
@@ -623,6 +662,7 @@ fun NowPlayingScreen(
                 onDismiss = { showSleepSheet = false }
             )
         }
+    }
     }
 }
 
@@ -780,6 +820,72 @@ private fun SleepTimerSheet(
                         fontFamily = PlusJakartaSansFontFamily,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Background behind the Now Playing screen:
+ * Follow theme (solid), Gradient (album-art colours), Blur (album art, blurred) or AMOLED black.
+ * Image backgrounds get a dark scrim so white text stays readable; changes crossfade.
+ */
+@Composable
+private fun NowPlayingBackgroundLayer(
+    style: NowPlayingBackground,
+    track: AudioTrackItem,
+    followThemeColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val gradient = LocalAlbumArtGradient.current
+    when (style) {
+        NowPlayingBackground.FOLLOW_THEME -> Box(modifier.background(followThemeColor))
+        NowPlayingBackground.AMOLED -> Box(modifier.background(Color.Black))
+        NowPlayingBackground.GRADIENT -> {
+            Crossfade(
+                targetState = gradient,
+                animationSpec = tween(800),
+                label = "nowPlayingGradient",
+                modifier = modifier
+            ) { colors ->
+                val brush = if (colors.size >= 3) {
+                    Brush.verticalGradient(0f to colors[0], 0.5f to colors[1], 1f to colors[2])
+                } else {
+                    Brush.verticalGradient(listOf(Color(0xFF1C1C1C), Color.Black))
+                }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(brush)
+                        .background(Color.Black.copy(alpha = 0.2f))
+                )
+            }
+        }
+        NowPlayingBackground.BLUR -> {
+            val bitmap = rememberAudioArtBitmap(track.contentUri)
+            Crossfade(
+                targetState = bitmap,
+                animationSpec = tween(800),
+                label = "nowPlayingBlur",
+                modifier = modifier.background(Color.Black)
+            ) { bmp ->
+                Box(Modifier.fillMaxSize()) {
+                    if (bmp != null) {
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(120.dp)
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.35f))
                     )
                 }
             }

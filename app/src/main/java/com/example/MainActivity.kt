@@ -182,7 +182,10 @@ import com.example.ui.components.TreeHierarchyView
 import com.example.ui.components.VideoGridItem
 import com.example.ui.components.VideoListItem
 import com.example.ui.components.VideoPlayerModal
+import com.example.ui.theme.AlbumArtTheme
 import com.example.ui.theme.LocalM3Palette
+import com.example.model.NowPlayingBackground
+import com.example.model.NowPlayingColorSource
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.PulseVideoTheme
 import com.example.viewmodel.VideoPlayerViewModel
@@ -711,6 +714,11 @@ fun Material3VideoPlayerScreen(
             !uiState.isSelectionMode &&
             !uiState.isPillEditMode
         ) {
+            AlbumArtTheme(
+                track = miniTrack,
+                applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
+                extractColors = false
+            ) {
             AudioMiniPlayer(
                 track = miniTrack,
                 isPlaying = uiState.isAudioPlaying,
@@ -723,6 +731,7 @@ fun Material3VideoPlayerScreen(
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(start = 16.dp, end = 16.dp, bottom = 96.dp)
             )
+            }
         }
 
         // 3c. Now Playing screen (slides up over everything except the video player)
@@ -734,6 +743,11 @@ fun Material3VideoPlayerScreen(
         ) {
             val nowTrack = miniTrack ?: lastNowPlayingTrack
             if (nowTrack != null) {
+                AlbumArtTheme(
+                    track = nowTrack,
+                    applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
+                    extractColors = libraryPrefs.nowPlayingBackground == NowPlayingBackground.GRADIENT
+                ) {
                 NowPlayingScreen(
                     track = nowTrack,
                     isPlaying = uiState.isAudioPlaying,
@@ -763,8 +777,11 @@ fun Material3VideoPlayerScreen(
                     sleepAtEndOfSong = audioState.sleepAtEndOfSong,
                     onStartSleepTimer = { minutes -> audioManager.startSleepTimer(minutes) },
                     onSleepAtEndOfSong = { audioManager.startSleepAtEndOfSong() },
-                    onCancelSleepTimer = { audioManager.cancelSleepTimer() }
+                    onCancelSleepTimer = { audioManager.cancelSleepTimer() },
+                    background = libraryPrefs.nowPlayingBackground,
+                    buttonColors = libraryPrefs.nowPlayingButtonColors
                 )
+                }
             }
         }
 

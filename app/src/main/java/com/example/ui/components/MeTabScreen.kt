@@ -1,5 +1,10 @@
 package com.example.ui.components
 
+import com.example.model.NowPlayingBackground
+import com.example.model.NowPlayingButtonColors
+import com.example.model.NowPlayingColorSource
+import androidx.compose.material.icons.filled.Gradient
+import androidx.compose.material.icons.filled.RadioButtonChecked
 import com.example.data.AppPreferencesRepository
 import com.example.model.LibraryPreferences
 import com.example.model.LibraryTab
@@ -2504,6 +2509,7 @@ private fun MusicSettingsSubPage(
 
     var showTabsSheet by remember { mutableStateOf(false) }
     var showTraySheet by remember { mutableStateOf(false) }
+    var lookChoice by remember { mutableStateOf<String?>(null) }
 
     @Composable
     fun SectionTitle(text: String) {
@@ -2561,6 +2567,41 @@ private fun MusicSettingsSubPage(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+            SectionTitle("Now Playing look")
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ExpressivePreferenceMenuRow(
+                    icon = Icons.Default.Palette,
+                    title = "Colours from",
+                    subtitle = prefs.nowPlayingColorSource.label,
+                    index = 0,
+                    totalCount = 3,
+                    effectiveAmoled = effectiveAmoled,
+                    onClick = { lookChoice = "colors" },
+                    testTag = "music_np_color_source"
+                )
+                ExpressivePreferenceMenuRow(
+                    icon = Icons.Default.Gradient,
+                    title = "Background",
+                    subtitle = prefs.nowPlayingBackground.label,
+                    index = 1,
+                    totalCount = 3,
+                    effectiveAmoled = effectiveAmoled,
+                    onClick = { lookChoice = "background" },
+                    testTag = "music_np_background"
+                )
+                ExpressivePreferenceMenuRow(
+                    icon = Icons.Default.RadioButtonChecked,
+                    title = "Button colours",
+                    subtitle = prefs.nowPlayingButtonColors.label,
+                    index = 2,
+                    totalCount = 3,
+                    effectiveAmoled = effectiveAmoled,
+                    onClick = { lookChoice = "buttons" },
+                    testTag = "music_np_button_colors"
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
             SectionTitle("Hide from library")
             ExpressiveSettingToggleCard(
                 title = "Short clips",
@@ -2583,6 +2624,39 @@ private fun MusicSettingsSubPage(
                 testTag = "music_hide_recordings"
             )
         }
+    }
+
+    when (lookChoice) {
+        "colors" -> NowPlayingChoiceSheet(
+            title = "Colours from",
+            options = NowPlayingColorSource.entries.map { Triple(it, it.label, it.description) },
+            selected = prefs.nowPlayingColorSource,
+            onSelect = { value ->
+                scope.launch { AppPreferencesRepository.setNowPlayingColorSource(context, value) }
+                lookChoice = null
+            },
+            onDismiss = { lookChoice = null }
+        )
+        "background" -> NowPlayingChoiceSheet(
+            title = "Background",
+            options = NowPlayingBackground.entries.map { Triple(it, it.label, it.description) },
+            selected = prefs.nowPlayingBackground,
+            onSelect = { value ->
+                scope.launch { AppPreferencesRepository.setNowPlayingBackground(context, value) }
+                lookChoice = null
+            },
+            onDismiss = { lookChoice = null }
+        )
+        "buttons" -> NowPlayingChoiceSheet(
+            title = "Button colours",
+            options = NowPlayingButtonColors.entries.map { Triple(it, it.label, it.description) },
+            selected = prefs.nowPlayingButtonColors,
+            onSelect = { value ->
+                scope.launch { AppPreferencesRepository.setNowPlayingButtonColors(context, value) }
+                lookChoice = null
+            },
+            onDismiss = { lookChoice = null }
+        )
     }
 
     if (showTabsSheet) {
@@ -2611,5 +2685,52 @@ private fun MusicSettingsSubPage(
             },
             onDismiss = { showTraySheet = false }
         )
+    }
+}
+
+/** Single-choice bottom sheet: official segmented list items with radio buttons. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun <T> NowPlayingChoiceSheet(
+    title: String,
+    options: List<Triple<T, String, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
+            )
+            options.forEachIndexed { index, (value, label, description) ->
+                SegmentedListItem(
+                    selected = value == selected,
+                    onClick = { onSelect(value) },
+                    shapes = ListItemDefaults.segmentedShapes(index = index, count = options.size),
+                    leadingContent = {
+                        RadioButton(selected = value == selected, onClick = null)
+                    },
+                    supportingContent = { Text(description) },
+                    colors = ListItemDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Text(label)
+                }
+            }
+        }
     }
 }

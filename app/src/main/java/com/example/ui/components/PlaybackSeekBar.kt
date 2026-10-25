@@ -64,7 +64,8 @@ fun PlaybackSeekBar(
     onSeekPreview: (Float) -> Unit,
     onSeekFinished: (Float) -> Unit,
     isPlaying: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeColor: Color = MaterialTheme.colorScheme.primary
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -74,7 +75,7 @@ fun PlaybackSeekBar(
     val shownValue = (dragValue ?: progress).coerceIn(0f, 1f)
     val isDragging = isPressed || isDragged || dragValue != null
 
-    val primaryColor = MaterialTheme.colorScheme.primary
+    val primaryColor = activeColor
 
     // New Material 3 Slider API: the slider reads its position from a SliderState.
     val sliderState = remember { SliderState(value = shownValue) }

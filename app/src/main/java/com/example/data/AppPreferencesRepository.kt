@@ -15,6 +15,9 @@ import com.example.model.LayoutMode
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
+import com.example.model.NowPlayingBackground
+import com.example.model.NowPlayingButtonColors
+import com.example.model.NowPlayingColorSource
 import com.example.model.NowPlayingAction
 import com.example.model.MAX_HISTORY_ITEMS
 import com.example.model.PlaybackSettings
@@ -89,6 +92,9 @@ object AppPreferencesRepository {
     private val KEY_LIB_LIKED_IDS = stringSetPreferencesKey("lib_liked_ids")
     private val KEY_LIB_HIDE_SHORT = booleanPreferencesKey("lib_hide_short_audio")
     private val KEY_LIB_HIDE_RECORDINGS = booleanPreferencesKey("lib_hide_recordings")
+    private val KEY_NP_COLOR_SOURCE = stringPreferencesKey("np_color_source")
+    private val KEY_NP_BACKGROUND = stringPreferencesKey("np_background")
+    private val KEY_NP_BUTTON_COLORS = stringPreferencesKey("np_button_colors")
 
     // Playlists & History
     private val KEY_PLAYLISTS_JSON = stringPreferencesKey("playlists_json")
@@ -184,7 +190,13 @@ object AppPreferencesRepository {
                 hiddenTray = trayHidden,
                 likedIds = prefs[KEY_LIB_LIKED_IDS] ?: emptySet(),
                 hideShortAudio = prefs[KEY_LIB_HIDE_SHORT] ?: true,
-                hideRecordings = prefs[KEY_LIB_HIDE_RECORDINGS] ?: true
+                hideRecordings = prefs[KEY_LIB_HIDE_RECORDINGS] ?: true,
+                nowPlayingColorSource = NowPlayingColorSource.entries.find { it.id == prefs[KEY_NP_COLOR_SOURCE] }
+                    ?: NowPlayingColorSource.ALBUM_ART,
+                nowPlayingBackground = NowPlayingBackground.entries.find { it.id == prefs[KEY_NP_BACKGROUND] }
+                    ?: NowPlayingBackground.GRADIENT,
+                nowPlayingButtonColors = NowPlayingButtonColors.entries.find { it.id == prefs[KEY_NP_BUTTON_COLORS] }
+                    ?: NowPlayingButtonColors.DEFAULT
             )
         }
     }
@@ -209,6 +221,18 @@ object AppPreferencesRepository {
             val current = it[KEY_LIB_LIKED_IDS] ?: emptySet()
             it[KEY_LIB_LIKED_IDS] = if (liked) current + trackId else current - trackId
         }
+    }
+
+    suspend fun setNowPlayingColorSource(context: Context, value: NowPlayingColorSource) {
+        context.appDataStore.edit { it[KEY_NP_COLOR_SOURCE] = value.id }
+    }
+
+    suspend fun setNowPlayingBackground(context: Context, value: NowPlayingBackground) {
+        context.appDataStore.edit { it[KEY_NP_BACKGROUND] = value.id }
+    }
+
+    suspend fun setNowPlayingButtonColors(context: Context, value: NowPlayingButtonColors) {
+        context.appDataStore.edit { it[KEY_NP_BUTTON_COLORS] = value.id }
     }
 
     suspend fun setLibraryHideShortAudio(context: Context, hide: Boolean) {

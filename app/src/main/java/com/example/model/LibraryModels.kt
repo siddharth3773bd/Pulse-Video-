@@ -43,6 +43,27 @@ enum class LibrarySongSort(val id: String, val label: String) {
     DURATION("duration", "Duration")
 }
 
+/** Where the Now Playing screen and mini player take their colours from. */
+enum class NowPlayingColorSource(val id: String, val label: String, val description: String) {
+    ALBUM_ART("album_art", "Album art", "Colours picked from the song's cover"),
+    WALLPAPER("wallpaper", "Wallpaper & app theme", "Your wallpaper colours or the app's theme")
+}
+
+/** Background of the Now Playing screen. */
+enum class NowPlayingBackground(val id: String, val label: String, val description: String) {
+    FOLLOW_THEME("follow_theme", "Follow theme", "A solid colour from the current colours"),
+    GRADIENT("gradient", "Gradient", "A gradient made from the album art"),
+    BLUR("blur", "Blur", "The album art, softly blurred"),
+    AMOLED("amoled", "AMOLED black", "Pure black, saves battery on OLED screens")
+}
+
+/** Colours of the Now Playing buttons, seek bar and toggles. */
+enum class NowPlayingButtonColors(val id: String, val label: String, val description: String) {
+    DEFAULT("default", "Default", "White on image backgrounds, theme colours otherwise"),
+    PRIMARY("primary", "Primary colour", "The main colour of the current colours"),
+    TERTIARY("tertiary", "Tertiary colour", "The accent colour of the current colours")
+}
+
 /** Persisted settings of the Library screen. */
 data class LibraryPreferences(
     val tabOrder: List<LibraryTab> = LibraryTab.entries,
@@ -56,7 +77,10 @@ data class LibraryPreferences(
     /** Hide audio shorter than [SHORT_AUDIO_LIMIT_MS] (ringtones, notification sounds, clips). */
     val hideShortAudio: Boolean = true,
     /** Hide voice and call recordings. */
-    val hideRecordings: Boolean = true
+    val hideRecordings: Boolean = true,
+    val nowPlayingColorSource: NowPlayingColorSource = NowPlayingColorSource.ALBUM_ART,
+    val nowPlayingBackground: NowPlayingBackground = NowPlayingBackground.GRADIENT,
+    val nowPlayingButtonColors: NowPlayingButtonColors = NowPlayingButtonColors.DEFAULT
 ) {
     companion object {
         const val SHORT_AUDIO_LIMIT_MS = 30_000L

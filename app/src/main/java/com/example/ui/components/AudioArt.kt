@@ -54,6 +54,33 @@ object AudioArtCache {
     }
 }
 
+/** Loads (or returns the cached) album art for [uri]; null when the file has no art. */
+suspend fun loadAudioArtBitmap(context: android.content.Context, uri: Uri): Bitmap? {
+    val key = uri.toString()
+    AudioArtCache.get(key)?.let { return it }
+    if (AudioArtCache.isMissing(key)) return null
+    val loaded = withContext(Dispatchers.IO) {
+        try {
+            context.contentResolver.loadThumbnail(uri, Size(512, 512), null)
+        } catch (_: Exception) {
+            null
+        }
+    }
+    if (loaded != null) AudioArtCache.put(key, loaded) else AudioArtCache.markMissing(key)
+    return loaded
+}
+
+/** The album art bitmap for [uri] as Compose state (null while loading or when missing). */
+@Composable
+fun rememberAudioArtBitmap(uri: Uri?): Bitmap? {
+    val context = LocalContext.current
+    var bitmap by remember(uri) { mutableStateOf(uri?.let { AudioArtCache.get(it.toString()) }) }
+    LaunchedEffect(uri) {
+        if (uri != null && bitmap == null) bitmap = loadAudioArtBitmap(context, uri)
+    }
+    return bitmap
+}
+
 /**
  * Album art loaded off the main thread with ContentResolver.loadThumbnail.
  * Shows a music-note placeholder while loading or when the file has no art.
