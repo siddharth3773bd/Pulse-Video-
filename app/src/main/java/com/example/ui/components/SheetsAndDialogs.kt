@@ -68,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -133,13 +134,17 @@ private val SortBy.icon: ImageVector
     }
 
 /**
- * Sort panel: Sort by (chips), Order (plain words, usual choice first) and Smart groups.
- * Videos / Folders / Tree are tabs and List / Grid is a header button, so this stays short.
+ * View & sort, kept compact: each part is one short row (Show, Layout, Sort by, Order) plus a
+ * slim Smart groups switch, so the panel only takes the space it needs.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SortAndViewBottomSheet(
     smartGroups: Boolean,
+    viewMode: ViewMode,
+    layoutMode: LayoutMode,
+    onSelectViewMode: (ViewMode) -> Unit,
+    onSelectLayoutMode: (LayoutMode) -> Unit,
     sortBy: SortBy,
     sortDir: SortDir,
     onToggleSmartGroups: () -> Unit,
@@ -150,85 +155,115 @@ fun SortAndViewBottomSheet(
     val scheme = MaterialTheme.colorScheme
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("sort_and_view_sheet")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Sort", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
-
-            SectionLabel("Sort by")
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SortBy.entries.forEach { option ->
-                    val selected = option == sortBy
-                    FilterChip(
-                        selected = selected,
-                        onClick = { if (!selected) onSelectSortField(option) },
-                        label = { Text(option.label) },
-                        leadingIcon = {
-                            Icon(
-                                if (selected) Icons.Default.Check else option.icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = scheme.primary,
-                            selectedLabelColor = scheme.onPrimary,
-                            selectedLeadingIconColor = scheme.onPrimary
-                        ),
-                        modifier = Modifier.testTag("sort_option_btn_${option.id}")
-                    )
-                }
+            CompactRow("Show") {
+                ConnectedChoice(
+                    options = listOf(
+                        Triple(ViewMode.VIDEOS, "Videos", Icons.Default.Movie),
+                        Triple(ViewMode.FOLDERS, "Folders", Icons.Default.Folder),
+                        Triple(ViewMode.TREE, "Tree", Icons.Default.AccountTree)
+                    ),
+                    selected = viewMode,
+                    onSelect = onSelectViewMode,
+                    tag = { "view_mode_btn_${it.id}" }
+                )
             }
-            Spacer(Modifier.height(20.dp))
-
-            SectionLabel("Order")
-            val natural = sortBy.naturalDir
-            val dirs = listOf(natural, if (natural == SortDir.ASC) SortDir.DESC else SortDir.ASC)
-            Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                dirs.forEachIndexed { i, dir ->
-                    ToggleButton(
-                        checked = sortDir == dir,
-                        onCheckedChange = { if (sortDir != dir) onSelectSortDir(dir) },
-                        shapes = if (i == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        else ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                        colors = ToggleButtonDefaults.colors(
-                            containerColor = scheme.surfaceContainerHighest,
-                            contentColor = scheme.onSurface,
-                            checkedContainerColor = scheme.primary,
-                            checkedContentColor = scheme.onPrimary
-                        ),
-                        modifier = Modifier.weight(1f).testTag("sort_dir_${dir.name.lowercase()}")
-                    ) {
-                        Text(if (dir == SortDir.ASC) sortBy.ascFull else sortBy.descFull, maxLines = 1)
+            CompactRow("Layout") {
+                ConnectedChoice(
+                    options = listOf(
+                        Triple(LayoutMode.LIST, "List", Icons.AutoMirrored.Filled.ViewList),
+                        Triple(LayoutMode.GRID, "Grid", Icons.Default.GridView)
+                    ),
+                    selected = layoutMode,
+                    onSelect = onSelectLayoutMode,
+                    tag = { "layout_mode_btn_${it.id}" }
+                )
+            }
+            CompactRow("Sort by") {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    SortBy.entries.forEach { option ->
+                        val selected = option == sortBy
+                        FilterChip(
+                            selected = selected,
+                            onClick = { if (!selected) onSelectSortField(option) },
+                            label = { Text(option.label) },
+                            leadingIcon = if (selected) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                            } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = scheme.primary,
+                                selectedLabelColor = scheme.onPrimary,
+                                selectedLeadingIconColor = scheme.onPrimary
+                            ),
+                            modifier = Modifier.testTag("sort_option_btn_${option.id}")
+                        )
                     }
                 }
             }
-            Spacer(Modifier.height(20.dp))
-
-            SegmentedListItem(
-                checked = smartGroups,
-                onCheckedChange = { onToggleSmartGroups() },
-                shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
-                leadingContent = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
-                supportingContent = { Text("Put episodes of the same series together") },
-                trailingContent = { Switch(checked = smartGroups, onCheckedChange = null) },
-                colors = ListItemDefaults.colors(
-                    containerColor = scheme.surfaceContainerHigh,
-                    selectedContainerColor = scheme.surfaceContainerHigh
-                ),
-                modifier = Modifier.testTag("smart_groups_toggle_card")
-            ) { Text("Smart groups") }
+            CompactRow("Order") {
+                val natural = sortBy.naturalDir
+                val dirs = listOf(natural, if (natural == SortDir.ASC) SortDir.DESC else SortDir.ASC)
+                Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                    dirs.forEachIndexed { i, dir ->
+                        ToggleButton(
+                            checked = sortDir == dir,
+                            onCheckedChange = { if (sortDir != dir) onSelectSortDir(dir) },
+                            shapes = if (i == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            else ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                            colors = ToggleButtonDefaults.colors(
+                                containerColor = scheme.surfaceContainerHighest,
+                                contentColor = scheme.onSurface,
+                                checkedContainerColor = scheme.primary,
+                                checkedContentColor = scheme.onPrimary
+                            ),
+                            modifier = Modifier.weight(1f).testTag("sort_dir_${dir.name.lowercase()}")
+                        ) {
+                            Text(if (dir == SortDir.ASC) sortBy.ascFull else sortBy.descFull, maxLines = 1)
+                        }
+                    }
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large)
+                    .toggleable(value = smartGroups, onValueChange = { onToggleSmartGroups() })
+                    .padding(vertical = 4.dp)
+                    .testTag("smart_groups_toggle_card")
+            ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text("Group series together", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Switch(checked = smartGroups, onCheckedChange = null)
+            }
         }
+    }
+}
+
+/** A small label above one row of choices. */
+@Composable
+private fun CompactRow(label: String, content: @Composable () -> Unit) {
+    Column {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+        )
+        content()
     }
 }
 

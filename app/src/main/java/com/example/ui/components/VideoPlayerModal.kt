@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -315,6 +316,17 @@ fun VideoPlayerModal(
     val skipMs = playbackSettings.skipDurationSec * 1000L
     val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
 
+    // Android's own gesture areas (home bar at the bottom, back at the sides, status at the top).
+    // Swipes that start there belong to the system, so the player ignores them. Without this, the
+    // first swipe up for Home (which only brings the hidden bars back) also changed the volume.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val gestureInsets = WindowInsets.systemGestures
+    val edgeTopPx = maxOf(gestureInsets.getTop(density), with(density) { 40.dp.roundToPx() })
+    val edgeBottomPx = maxOf(gestureInsets.getBottom(density), with(density) { 48.dp.roundToPx() })
+    val layoutDir = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val edgeLeftPx = maxOf(gestureInsets.getLeft(density, layoutDir), with(density) { 24.dp.roundToPx() })
+    val edgeRightPx = maxOf(gestureInsets.getRight(density, layoutDir), with(density) { 24.dp.roundToPx() })
+
     var dragMode by remember { mutableStateOf("NONE") }
     var dragStartSeekMs by remember { mutableLongStateOf(0L) }
     var dragAccumulatedX by remember { mutableFloatStateOf(0f) }
@@ -400,10 +412,12 @@ fun VideoPlayerModal(
                     }
                 )
             }
-            .pointerInput(controlsLocked, playbackSettings, effectiveDurationMs) {
+            .pointerInput(controlsLocked, playbackSettings, effectiveDurationMs, edgeTopPx, edgeBottomPx, edgeLeftPx, edgeRightPx) {
                 detectDragGestures(
                     onDragStart = { start ->
-                        dragMode = "NONE"
+                        val fromSystemEdge = start.y < edgeTopPx || start.y > surfaceHeightPx - edgeBottomPx ||
+                            start.x < edgeLeftPx || start.x > surfaceWidthPx - edgeRightPx
+                        dragMode = if (fromSystemEdge) "IGNORE" else "NONE"
                         dragAccumulatedX = 0f
                         dragAccumulatedY = 0f
                         dragStartX = start.x
@@ -415,7 +429,7 @@ fun VideoPlayerModal(
                     onDragEnd = { dragMode = "NONE" },
                     onDragCancel = { dragMode = "NONE" },
                     onDrag = { change, amount ->
-                        if (controlsLocked) return@detectDragGestures
+                        if (controlsLocked || dragMode == "IGNORE") return@detectDragGestures
                         change.consume()
                         dragAccumulatedX += amount.x
                         dragAccumulatedY += amount.y

@@ -612,34 +612,8 @@ fun Material3VideoPlayerScreen(
                             )
                         }
                     } else null,
-                    scrollBehavior = if (onVideos) videosTopBarScroll else null,
-                    onToggleLayout = if (onVideos && (uiState.viewMode == ViewMode.VIDEOS || uiState.selectedFolderFilter != null)) {
-                        {
-                            viewModel.setLayoutMode(
-                                if (uiState.layoutMode == LayoutMode.GRID) LayoutMode.LIST else LayoutMode.GRID,
-                                context
-                            )
-                        }
-                    } else null
+                    scrollBehavior = if (onVideos) videosTopBarScroll else null
                 )
-                // Videos / Folders / Tree as tabs (like Music's Songs / Albums / …).
-                if (onVideos && uiState.selectedFolderFilter == null && uiState.selectedPlaylistFilter == null &&
-                    !uiState.isSelectionMode
-                ) {
-                    PrimaryTabRow(
-                        selectedTabIndex = uiState.viewMode.ordinal,
-                        containerColor = outerChromeBg
-                    ) {
-                        ViewMode.entries.forEach { mode ->
-                            Tab(
-                                selected = uiState.viewMode == mode,
-                                onClick = { viewModel.setViewMode(mode, context) },
-                                text = { Text(mode.label, maxLines = 1) },
-                                modifier = Modifier.testTag("view_mode_tab_${mode.id}")
-                            )
-                        }
-                    }
-                }
             }
 
             // 2. Main Content Area
@@ -1028,6 +1002,10 @@ fun Material3VideoPlayerScreen(
         if (uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS) {
             SortAndViewBottomSheet(
                 smartGroups = uiState.smartGroups,
+                viewMode = uiState.viewMode,
+                layoutMode = uiState.layoutMode,
+                onSelectViewMode = { viewModel.setViewMode(it, context) },
+                onSelectLayoutMode = { viewModel.setLayoutMode(it, context) },
                 sortBy = uiState.sortBy,
                 sortDir = uiState.sortDir,
                 onToggleSmartGroups = { viewModel.toggleSmartGroups(context) },
@@ -1152,8 +1130,7 @@ private fun M3ExpressiveHeader(
     onOpenSortSheet: () -> Unit,
     onClearSubFilter: () -> Unit,
     searchButton: (@Composable () -> Unit)?,
-    scrollBehavior: TopAppBarScrollBehavior?,
-    onToggleLayout: (() -> Unit)? = null
+    scrollBehavior: TopAppBarScrollBehavior?
 ) {
     val scheme = MaterialTheme.colorScheme
     val outerChromeBg = if (effectiveAmoled) Color.Black else scheme.background
@@ -1222,19 +1199,6 @@ private fun M3ExpressiveHeader(
                     )
                 }
                 uiState.bottomTab == BottomTab.VIDEOS -> {
-                    if (onToggleLayout != null) {
-                        val grid = uiState.layoutMode == LayoutMode.GRID
-                        IconButton(
-                            onClick = onToggleLayout,
-                            shapes = IconButtonDefaults.shapes(),
-                            modifier = Modifier.testTag("header_layout_btn")
-                        ) {
-                            Icon(
-                                if (grid) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                                contentDescription = if (grid) "Show as list" else "Show as grid"
-                            )
-                        }
-                    }
                     IconButton(
                         onClick = onOpenSortSheet,
                         shapes = IconButtonDefaults.shapes(),
