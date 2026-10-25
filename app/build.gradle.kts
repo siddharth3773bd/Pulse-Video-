@@ -13,7 +13,7 @@ android {
   compileSdk { version = release(37) }
 
   defaultConfig {
-    applicationId = "com.aistudio.pulsevideo.m3xplr"
+    applicationId = "app.doppler.player"
     minSdk = 31
     targetSdk = 36
     versionCode = 1

@@ -187,7 +187,7 @@ import com.example.ui.theme.LocalM3Palette
 import com.example.model.NowPlayingBackground
 import com.example.model.NowPlayingColorSource
 import com.example.ui.theme.PlusJakartaSansFontFamily
-import com.example.ui.theme.PulseVideoTheme
+import com.example.ui.theme.DopplerTheme
 import com.example.viewmodel.VideoPlayerViewModel
 import com.example.viewmodel.VideoUiState
 
@@ -211,7 +211,7 @@ class MainActivity : ComponentActivity() {
             }
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-            PulseVideoTheme(
+            DopplerTheme(
                 themeMode = uiState.themeMode,
                 dynamicColor = uiState.dynamicColor,
                 paletteId = uiState.colorTheme,

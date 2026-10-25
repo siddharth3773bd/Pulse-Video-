@@ -79,7 +79,7 @@ import com.example.player.AudioPlaybackManager
 import com.example.player.ExternalAudioInfo
 import com.example.player.ExternalMedia
 import com.example.ui.components.PlaybackSeekBar
-import com.example.ui.theme.PulseVideoTheme
+import com.example.ui.theme.DopplerTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -102,7 +102,7 @@ class AudioPopupActivity : ComponentActivity() {
             val context = LocalContext.current
             val prefsFlow = remember { AppPreferencesRepository.observePreferences(context.applicationContext) }
             val prefs by prefsFlow.collectAsStateWithLifecycle(initialValue = StoredAppPreferences())
-            PulseVideoTheme(
+            DopplerTheme(
                 themeMode = prefs.themeMode,
                 dynamicColor = prefs.dynamicColor,
                 paletteId = prefs.colorTheme,

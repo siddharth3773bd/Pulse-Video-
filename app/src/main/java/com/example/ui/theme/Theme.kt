@@ -18,7 +18,7 @@ import com.example.model.ThemeMode
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun PulseVideoTheme(
+fun DopplerTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
     paletteId: String = "indigo",
@@ -165,7 +165,7 @@ fun MyApplicationTheme(
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    PulseVideoTheme(
+    DopplerTheme(
         themeMode = if (darkTheme) ThemeMode.DARK else ThemeMode.LIGHT,
         dynamicColor = dynamicColor,
         content = content

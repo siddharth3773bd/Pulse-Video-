@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Videos</string>
+    <string name="app_name">Doppler</string>
     <string name="header_videos">Videos</string>
     <string name="header_folders">Folders</string>
     <string name="header_audio">Audio</string>
