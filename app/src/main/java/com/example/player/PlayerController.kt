@@ -53,7 +53,8 @@ interface PlayerController {
         filePath: String? = null,
         startPositionMs: Long = 0L,
         autoPlay: Boolean = true,
-        decoderMode: DecoderMode = DecoderMode.AUTO
+        decoderMode: DecoderMode = DecoderMode.AUTO,
+        title: String? = null
     )
 
     fun play()
@@ -67,6 +68,13 @@ interface PlayerController {
     /** Adds a subtitle file the user picked (.srt, .vtt, .ass, .ssa, .ttml) and turns it on. */
     fun addSubtitleFile(uri: Uri, name: String)
     fun release()
+
+    /** Audio only: stops drawing the picture (the sound and position carry on). */
+    fun setVideoEnabled(enabled: Boolean)
+    /** Keeps the sound playing after leaving the app, with a media notification. */
+    fun setBackgroundAudio(enabled: Boolean)
+    /** 0..1, used by the sleep timer's fade-out. */
+    fun setVolume(volume: Float)
 
     /** The video, drawn with the official Media3 Compose ContentFrame. */
     @Composable

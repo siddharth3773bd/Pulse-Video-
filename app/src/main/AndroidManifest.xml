@@ -93,6 +93,11 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+        <!-- Video sound in the background ("Audio only" in the video player) -->
+        <service
+            android:name=".player.VideoAudioService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>

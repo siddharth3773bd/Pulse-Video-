@@ -985,7 +985,8 @@ class VideoPlayerViewModel : ViewModel() {
                 filePath = video.path,
                 startPositionMs = startPositionMs,
                 autoPlay = true,
-                decoderMode = pb.defaultDecoder
+                decoderMode = pb.defaultDecoder,
+                title = video.title
             )
             recordVideoPlaybackHistory(
                 videoId = video.id,

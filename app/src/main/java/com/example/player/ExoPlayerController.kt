@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -139,6 +140,11 @@ class ExoPlayerController(
 
         exoPlayer = created
         activePlayerInstance = created
+        if (videoDisabled) applyVideoDisabled(created)
+        if (backgroundAudio) {
+            created.setWakeMode(C.WAKE_MODE_LOCAL)
+            VideoAudioService.swapPlayer(created)
+        }
         startPositionPolling()
         return created
     }
@@ -148,9 +154,11 @@ class ExoPlayerController(
         filePath: String?,
         startPositionMs: Long,
         autoPlay: Boolean,
-        decoderMode: DecoderMode
+        decoderMode: DecoderMode,
+        title: String?
     ) {
         val player = ensurePlayer(decoderMode)
+        currentTitle = title
         _state.update {
             it.copy(
                 currentMediaUri = uri.toString(),
@@ -171,6 +179,7 @@ class ExoPlayerController(
             val mediaItem = MediaItem.Builder()
                 .setUri(uri)
                 .setSubtitleConfigurations(subtitleConfigs)
+                .setMediaMetadata(metadata())
                 .build()
             player.setPlaybackParameters(PlaybackParameters(1.0f))
             player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
@@ -181,6 +190,45 @@ class ExoPlayerController(
     }
 
     private var prepareJob: Job? = null
+    private var currentTitle: String? = null
+    private var videoDisabled = false
+    private var backgroundAudio = false
+
+    /** Title shown in the media notification while the sound plays in the background. */
+    private fun metadata(): MediaMetadata = MediaMetadata.Builder()
+        .setTitle(currentTitle)
+        .setDisplayTitle(currentTitle)
+        .setMediaType(MediaMetadata.MEDIA_TYPE_VIDEO)
+        .build()
+
+    private fun applyVideoDisabled(player: ExoPlayer) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, videoDisabled)
+            .build()
+    }
+
+    override fun setVideoEnabled(enabled: Boolean) {
+        videoDisabled = !enabled
+        exoPlayer?.let { applyVideoDisabled(it) }
+    }
+
+    override fun setBackgroundAudio(enabled: Boolean) {
+        if (backgroundAudio == enabled) return
+        backgroundAudio = enabled
+        val player = exoPlayer
+        if (enabled && player != null) {
+            // Keeps the CPU awake while the screen is off so the sound doesn't stop.
+            player.setWakeMode(C.WAKE_MODE_LOCAL)
+            VideoAudioService.start(appContext, player)
+        } else {
+            player?.setWakeMode(C.WAKE_MODE_NONE)
+            VideoAudioService.stop(appContext)
+        }
+    }
+
+    override fun setVolume(volume: Float) {
+        exoPlayer?.volume = volume.coerceIn(0f, 1f)
+    }
     private var currentUri: Uri? = null
     private var baseSubtitles: List<MediaItem.SubtitleConfiguration> = emptyList()
     private val extraSubtitles = mutableListOf<MediaItem.SubtitleConfiguration>()
@@ -206,6 +254,7 @@ class ExoPlayerController(
         val item = MediaItem.Builder()
             .setUri(videoUri)
             .setSubtitleConfigurations(baseSubtitles + extraSubtitles)
+            .setMediaMetadata(metadata())
             .build()
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
@@ -475,6 +524,11 @@ class ExoPlayerController(
     }
 
     override fun release() {
+        if (backgroundAudio) {
+            backgroundAudio = false
+            VideoAudioService.stop(appContext)
+        }
+        videoDisabled = false
         releaseInternalPlayer()
         _state.value = PlayerState()
         _tracks.value = PlayerTracks()
