@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -324,7 +325,12 @@ fun AudioLibraryScreen(
     // Official Material 3 search: the search icon is the collapsed SearchBar, and the full-screen
     // search view expands out of it.
     val textFieldState = rememberTextFieldState()
-    val searchBarState = rememberContainedSearchBarState()
+    // The contained search bar defaults to the "fast" spring, which pops open abruptly.
+    // The slower expressive spatial spring (the one the regular SearchBar uses) feels smoother.
+    val searchBarState = rememberContainedSearchBarState(
+        animationSpecForExpand = MaterialTheme.motionScheme.slowSpatialSpec(),
+        animationSpecForCollapse = MaterialTheme.motionScheme.defaultSpatialSpec()
+    )
     val keyboardController = LocalSoftwareKeyboardController.current
     val query = textFieldState.text.toString()
 
@@ -485,6 +491,7 @@ fun AudioLibraryScreen(
         SongActionsMenu(
             expanded = openSongMenu == menuKey,
             onDismiss = { if (openSongMenu == menuKey) openSongMenu = null },
+            track = track,
             liked = liked,
             canGoToAlbum = LibraryTab.ALBUMS in visibleTabs && albums.any { it.key == albumKey } &&
                 !(detailTabId == LibraryTab.ALBUMS.id && detailKey == albumKey),
@@ -652,7 +659,7 @@ fun AudioLibraryScreen(
                         when (currentTab) {
                             LibraryTab.SONGS -> LibraryActionRow(
                                 label = songCountLabel(sortedSongs.size),
-                                onPlay = { onPlayQueue(sortedSongs, 0, false) }.takeIf { sortedSongs.isNotEmpty() },
+                                onPlay = null,
                                 onShuffle = { shuffle(sortedSongs) }.takeIf { sortedSongs.isNotEmpty() },
                                 sortMenu = { expanded, onDismiss ->
                                     LibrarySortMenu(
@@ -1121,15 +1128,7 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
         if (onShuffle != null) {
             customItem(
                 buttonGroupContent = {
-                    FilledTonalButton(
-                        onClick = onShuffle,
-                        shapes = ButtonDefaults.shapes(),
-                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                        interactionSource = shuffleInteraction,
-                        modifier = Modifier
-                            .animateWidth(shuffleInteraction)
-                            .testTag("library_shuffle_button")
-                    ) {
+                    val shuffleContent: @Composable RowScope.() -> Unit = {
                         Icon(
                             imageVector = Icons.Default.Shuffle,
                             contentDescription = null,
@@ -1137,6 +1136,29 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
                         )
                         Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
                         Text("Shuffle")
+                    }
+                    val shuffleModifier = Modifier
+                        .animateWidth(shuffleInteraction)
+                        .testTag("library_shuffle_button")
+                    if (onPlay == null) {
+                        // Shuffle on its own is the main action, so it is the filled button.
+                        Button(
+                            onClick = onShuffle,
+                            shapes = ButtonDefaults.shapes(),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            interactionSource = shuffleInteraction,
+                            modifier = shuffleModifier,
+                            content = shuffleContent
+                        )
+                    } else {
+                        FilledTonalButton(
+                            onClick = onShuffle,
+                            shapes = ButtonDefaults.shapes(),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            interactionSource = shuffleInteraction,
+                            modifier = shuffleModifier,
+                            content = shuffleContent
+                        )
                     }
                 },
                 menuContent = { menuState ->

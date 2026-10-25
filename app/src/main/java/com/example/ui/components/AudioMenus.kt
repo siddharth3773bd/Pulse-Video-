@@ -3,6 +3,20 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ToggleButton
+import androidx.compose.runtime.rememberCoroutineScope
+import com.example.model.AudioTrackItem
+import com.example.ui.theme.LocalM3Palette
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -135,11 +149,15 @@ fun AudioGroupedMenu(
     }
 }
 
-/** The song ⋮ menu: queue, playlist and library actions, then the actions that hide or delete. */
+/**
+ * The song ⋮ panel (a bottom sheet): a header with the song, four quick actions, then the
+ * rest as grouped rows. The actions that hide or delete a song sit in their own group at the end.
+ */
 @Composable
 fun SongActionsMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
+    track: AudioTrackItem,
     liked: Boolean,
     canGoToAlbum: Boolean,
     canGoToArtist: Boolean,
@@ -155,35 +173,171 @@ fun SongActionsMenu(
     onDelete: () -> Unit,
     onRemoveFromPlaylist: (() -> Unit)? = null
 ) {
-    val groups = listOf(
-        listOf(
-            AudioMenuEntry("Play next", Icons.AutoMirrored.Filled.PlaylistPlay, "song_action_play_next", onClick = onPlayNext),
-            AudioMenuEntry("Add to queue", Icons.AutoMirrored.Filled.QueueMusic, "song_action_add_queue", onClick = onAddToQueue),
-            AudioMenuEntry("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd, "song_action_add_playlist", onClick = onAddToPlaylist)
-        ),
-        listOfNotNull(
-            AudioMenuEntry(
-                if (liked) "Unlike" else "Like",
-                if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                "song_action_like",
-                onClick = onToggleLike
-            ),
-            AudioMenuEntry("Go to album", Icons.Default.Album, "song_action_album", onClick = onGoToAlbum)
-                .takeIf { canGoToAlbum },
-            AudioMenuEntry("Go to artist", Icons.Default.Person, "song_action_artist", onClick = onGoToArtist)
-                .takeIf { canGoToArtist },
-            AudioMenuEntry("Share", Icons.Default.Share, "song_action_share", onClick = onShare),
-            AudioMenuEntry("Song info", Icons.Default.Info, "song_action_info", onClick = onSongInfo)
-        ),
-        listOfNotNull(
-            onRemoveFromPlaylist?.let {
-                AudioMenuEntry("Remove from playlist", Icons.Default.PlaylistRemove, "song_action_remove_playlist", onClick = it)
-            },
-            AudioMenuEntry("Blacklist song", Icons.Default.Block, "song_action_blacklist", onClick = onBlacklistSong),
-            AudioMenuEntry("Delete from device", Icons.Default.DeleteOutline, "song_action_delete", destructive = true, onClick = onDelete)
-        )
-    )
-    AudioGroupedMenu(expanded = expanded, onDismiss = onDismiss, groups = groups)
+    if (!expanded) return
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val palette = LocalM3Palette.current
+
+    // Slide the panel away first, then run the action.
+    fun act(action: () -> Unit) {
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            onDismiss()
+            action()
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        modifier = Modifier.testTag("song_actions_sheet")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AudioArt(
+                    uri = track.contentUri,
+                    placeholderBackground = palette.surfaceContainerHighest,
+                    placeholderTint = palette.primary,
+                    modifier = Modifier.size(56.dp),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = track.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = track.artist.ifBlank { "Unknown artist" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Quick actions
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                QuickAction(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next", "song_action_play_next") { act(onPlayNext) }
+                QuickAction(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue", "song_action_add_queue") { act(onAddToQueue) }
+                QuickAction(
+                    icon = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    label = if (liked) "Liked" else "Like",
+                    tag = "song_action_like",
+                    highlighted = liked
+                ) { act(onToggleLike) }
+                QuickAction(Icons.Default.Share, "Share", "song_action_share") { act(onShare) }
+            }
+
+            // Library actions
+            val main = listOfNotNull(
+                AudioMenuEntry("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd, "song_action_add_playlist", onClick = onAddToPlaylist),
+                AudioMenuEntry("Go to album", Icons.Default.Album, "song_action_album", onClick = onGoToAlbum)
+                    .takeIf { canGoToAlbum },
+                AudioMenuEntry("Go to artist", Icons.Default.Person, "song_action_artist", onClick = onGoToArtist)
+                    .takeIf { canGoToArtist },
+                AudioMenuEntry("Song info", Icons.Default.Info, "song_action_info", onClick = onSongInfo),
+                onRemoveFromPlaylist?.let {
+                    AudioMenuEntry("Remove from playlist", Icons.Default.PlaylistRemove, "song_action_remove_playlist", onClick = it)
+                }
+            )
+            SheetActionGroup(main, onAct = { act(it) })
+            Spacer(modifier = Modifier.height(12.dp))
+            SheetActionGroup(
+                listOf(
+                    AudioMenuEntry("Blacklist song", Icons.Default.Block, "song_action_blacklist", onClick = onBlacklistSong),
+                    AudioMenuEntry("Delete from device", Icons.Default.DeleteOutline, "song_action_delete", destructive = true, onClick = onDelete)
+                ),
+                onAct = { act(it) }
+            )
+        }
+    }
+}
+
+/** A big tonal button with the icon above the label. */
+@Composable
+private fun RowScope.QuickAction(
+    icon: ImageVector,
+    label: String,
+    tag: String,
+    highlighted: Boolean = false,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = if (highlighted) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = if (highlighted) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier
+            .weight(1f)
+            .testTag(tag)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 14.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(icon, contentDescription = null)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/** Rows joined into one rounded group (official SegmentedListItem). */
+@Composable
+private fun SheetActionGroup(entries: List<AudioMenuEntry>, onAct: (() -> Unit) -> Unit) {
+    if (entries.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+        entries.forEachIndexed { index, entry ->
+            val error = MaterialTheme.colorScheme.error
+            SegmentedListItem(
+                onClick = { onAct(entry.onClick) },
+                shapes = ListItemDefaults.segmentedShapes(index = index, count = entries.size),
+                leadingContent = {
+                    Icon(
+                        imageVector = entry.icon,
+                        contentDescription = null,
+                        tint = if (entry.destructive) error else LocalContentColor.current
+                    )
+                },
+                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                modifier = Modifier.testTag(entry.tag)
+            ) {
+                Text(
+                    text = entry.label,
+                    color = if (entry.destructive) error else Color.Unspecified
+                )
+            }
+        }
+    }
 }
 
 /** A playlist's ⋮ menu. */
@@ -227,10 +381,11 @@ private val LibrarySongSort.icon: ImageVector
     }
 
 /**
- * Expressive grouped menu for sorting. "Sort by" (only for songs) and "Order" are separate groups;
- * the current choice uses the selectable item's selected state with a check mark.
+ * Sort panel (a bottom sheet): "Sort by" chips and an Ascending / Descending connected button
+ * group. Changes apply right away, so the list can be watched re-ordering as you pick.
  * [field] is null for albums and artists, which only sort A to Z / Z to A.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LibrarySortMenu(
     expanded: Boolean,
@@ -240,57 +395,83 @@ fun LibrarySortMenu(
     onSelectField: (LibrarySongSort) -> Unit,
     onSelectAscending: (Boolean) -> Unit
 ) {
-    val groupCount = if (field != null) 2 else 1
-    DropdownMenuPopup(
-        expanded = expanded,
+    if (!expanded) return
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("library_sort_menu")
     ) {
-        if (field != null) {
-            DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = 0, count = groupCount)) {
-                MenuDefaults.DropdownMenuGroupLabel { Text("Sort by") }
-                val fields = LibrarySongSort.entries
-                fields.forEachIndexed { index, option ->
-                    SelectableDropdownMenuItem(
-                        selected = option == field,
-                        onClick = {
-                            onDismiss()
-                            if (option != field) onSelectField(option)
-                        },
-                        text = { Text(option.label) },
-                        shapes = MenuDefaults.itemShape(index = index, count = fields.size),
-                        leadingIcon = { Icon(option.icon, contentDescription = null) },
-                        selectedLeadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                        modifier = Modifier.testTag("sort_field_${option.id}")
-                    )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "Sort",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            if (field != null) {
+                Text(
+                    text = "Sort by",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 20.dp)
+                ) {
+                    LibrarySongSort.entries.forEach { option ->
+                        FilterChip(
+                            selected = option == field,
+                            onClick = { if (option != field) onSelectField(option) },
+                            label = { Text(option.label) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (option == field) Icons.Default.Check else option.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            },
+                            modifier = Modifier.testTag("sort_field_${option.id}")
+                        )
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(MenuDefaults.GroupSpacing))
-        }
-        DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = groupCount - 1, count = groupCount)) {
-            MenuDefaults.DropdownMenuGroupLabel { Text("Order") }
-            val labels = listOf(
-                true to (field?.ascendingLabel ?: "A to Z"),
-                false to (field?.descendingLabel ?: "Z to A")
+            Text(
+                text = "Order",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-            labels.forEachIndexed { index, (isAscending, label) ->
-                SelectableDropdownMenuItem(
-                    selected = ascending == isAscending,
-                    onClick = {
-                        onDismiss()
-                        if (ascending != isAscending) onSelectAscending(isAscending)
-                    },
-                    text = { Text(label) },
-                    shapes = MenuDefaults.itemShape(index = index, count = labels.size),
-                    leadingIcon = {
-                        Icon(
-                            if (isAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                            contentDescription = null
-                        )
-                    },
-                    selectedLeadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                    modifier = Modifier.testTag(if (isAscending) "sort_order_asc" else "sort_order_desc")
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                ToggleButton(
+                    checked = ascending,
+                    onCheckedChange = { if (!ascending) onSelectAscending(true) },
+                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("sort_order_asc")
+                ) {
+                    Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(field?.ascendingLabel ?: "A to Z", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                ToggleButton(
+                    checked = !ascending,
+                    onCheckedChange = { if (ascending) onSelectAscending(false) },
+                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("sort_order_desc")
+                ) {
+                    Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(field?.descendingLabel ?: "Z to A", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
