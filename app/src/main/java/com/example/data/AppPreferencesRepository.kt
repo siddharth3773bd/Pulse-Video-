@@ -99,6 +99,10 @@ object AppPreferencesRepository {
     private val KEY_NP_COLOR_SOURCE = stringPreferencesKey("np_color_source")
     private val KEY_NP_BACKGROUND = stringPreferencesKey("np_background")
     private val KEY_NP_BUTTON_COLORS = stringPreferencesKey("np_button_colors")
+    private val KEY_LYR_AUTO = booleanPreferencesKey("lyrics_auto_search")
+    private val KEY_LYR_SIZE = stringPreferencesKey("lyrics_text_size")
+    private val KEY_LYR_CENTER = booleanPreferencesKey("lyrics_align_center")
+    private val KEY_LYR_BLUR = booleanPreferencesKey("lyrics_blur")
     private val KEY_AMB_ART = booleanPreferencesKey("ambient_show_art")
     private val KEY_AMB_TITLE = booleanPreferencesKey("ambient_show_title")
     private val KEY_AMB_ARTIST = booleanPreferencesKey("ambient_show_artist")
@@ -225,6 +229,13 @@ object AppPreferencesRepository {
                     showLyrics = prefs[KEY_AMB_LYRICS] ?: true,
                     amoled = prefs[KEY_AMB_AMOLED] ?: false,
                     openOnRotate = prefs[KEY_AMB_ROTATE] ?: true
+                ),
+                lyrics = com.example.lyrics.LyricsSettings(
+                    autoSearch = prefs[KEY_LYR_AUTO] ?: false,
+                    textSize = com.example.lyrics.LyricsTextSize.entries.find { it.id == prefs[KEY_LYR_SIZE] }
+                        ?: com.example.lyrics.LyricsTextSize.MEDIUM,
+                    alignCenter = prefs[KEY_LYR_CENTER] ?: false,
+                    blur = prefs[KEY_LYR_BLUR] ?: true
                 )
             )
         }
@@ -400,6 +411,15 @@ object AppPreferencesRepository {
         context.appDataStore.edit {
             it[KEY_LIB_SONG_SORT] = sort.id
             it[KEY_LIB_SONG_ASC] = ascending
+        }
+    }
+
+    suspend fun updateLyricsSettings(context: Context, value: com.example.lyrics.LyricsSettings) {
+        context.appDataStore.edit {
+            it[KEY_LYR_AUTO] = value.autoSearch
+            it[KEY_LYR_SIZE] = value.textSize.id
+            it[KEY_LYR_CENTER] = value.alignCenter
+            it[KEY_LYR_BLUR] = value.blur
         }
     }
 

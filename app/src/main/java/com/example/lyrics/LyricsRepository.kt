@@ -1,0 +1,354 @@
+package com.example.lyrics
+
+import android.content.Context
+import android.net.Uri
+import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.extractor.metadata.id3.BinaryFrame
+import androidx.media3.extractor.metadata.id3.TextInformationFrame
+import androidx.media3.extractor.metadata.vorbis.VorbisComment
+import androidx.media3.inspector.MetadataRetriever
+import com.example.model.AudioTrackItem
+import java.io.File
+import java.nio.charset.Charset
+import java.security.MessageDigest
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import kotlin.math.abs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+
+/** What the app has saved for one song. */
+data class SongLyricsRecord(
+    /** Lyrics from a file the user loaded; beats everything else. */
+    val userText: String? = null,
+    /** Lyrics found on LRCLIB (saved so they work offline next time). */
+    val onlineText: String? = null,
+    val instrumental: Boolean = false,
+    /** LRCLIB had nothing for this song (cleared by Search again). */
+    val notFound: Boolean = false,
+    /** "Use online lyrics instead" even though the song file has its own. */
+    val preferOnline: Boolean = false,
+    /** Sync adjustment: positive shows lines later. */
+    val offsetMs: Long = 0L
+)
+
+/**
+ * Finds lyrics for a song. Order: the user's own file, then (if chosen) online, then the
+ * lyrics inside the song file, then LRCLIB. Online results are saved on the phone.
+ */
+object LyricsRepository {
+
+    // ---------------------------------------------------------------- resolve
+
+    /**
+     * Works out what to show for [track].
+     * [allowNetwork] = may search LRCLIB now (auto-search on, or the user asked).
+     */
+    suspend fun resolve(
+        context: Context,
+        track: AudioTrackItem,
+        settings: LyricsSettings,
+        forceOnline: Boolean = false
+    ): LyricsState = withContext(Dispatchers.IO) {
+        val record = readRecord(context, track)
+        val embeddedText = readEmbedded(context, track)
+        val hasEmbedded = !embeddedText.isNullOrBlank()
+
+        fun loaded(text: String, source: LyricsSource): LyricsState {
+            val lyrics = LrcParser.parse(text)
+            return if (lyrics.isEmpty) LyricsState.NotFound
+            else LyricsState.Loaded(lyrics, source, hasEmbedded, record.userText != null, record.offsetMs)
+        }
+
+        // 1. The user's own file.
+        record.userText?.let { return@withContext loaded(it, LyricsSource.USER_FILE) }
+
+        val wantsOnline = forceOnline || record.preferOnline
+        val mayFetch = forceOnline || settings.autoSearch || record.preferOnline
+
+        // 2. Already saved from LRCLIB and wanted (or nothing better).
+        val savedOnline = record.onlineText
+        if (savedOnline != null && (wantsOnline || !hasEmbedded)) {
+            return@withContext loaded(savedOnline, LyricsSource.ONLINE)
+        }
+
+        // 3. Lyrics inside the song file.
+        if (hasEmbedded && !wantsOnline) {
+            val embedded = LrcParser.parse(embeddedText!!)
+            // Plain embedded lyrics: with auto-search on, quietly look for synced ones online.
+            if (!embedded.synced && settings.autoSearch && !record.notFound) {
+                val synced = savedOnline?.takeIf { LrcParser.parse(it).synced }
+                    ?: runCatching { fetchOnline(context, track, record) }.getOrNull()
+                        ?.takeIf { LrcParser.parse(it).synced }
+                if (synced != null) return@withContext loaded(synced, LyricsSource.ONLINE)
+            }
+            return@withContext loaded(embeddedText, LyricsSource.EMBEDDED)
+        }
+
+        // 4. LRCLIB.
+        if (record.instrumental && !forceOnline) return@withContext LyricsState.Instrumental
+        if (record.notFound && !forceOnline) {
+            return@withContext if (hasEmbedded) loaded(embeddedText!!, LyricsSource.EMBEDDED) else LyricsState.NotFound
+        }
+        if (!mayFetch) return@withContext LyricsState.NeedsChoice
+        try {
+            val text = fetchOnline(context, track, record)
+            val fresh = readRecord(context, track)
+            when {
+                text != null -> loaded(text, LyricsSource.ONLINE)
+                fresh.instrumental -> LyricsState.Instrumental
+                hasEmbedded -> loaded(embeddedText!!, LyricsSource.EMBEDDED)
+                else -> LyricsState.NotFound
+            }
+        } catch (_: LyricsNetworkException) {
+            if (hasEmbedded) loaded(embeddedText!!, LyricsSource.EMBEDDED) else LyricsState.NoInternet
+        }
+    }
+
+    /** Searches LRCLIB for [track], saves the outcome and returns the lyrics text (or null). */
+    private suspend fun fetchOnline(context: Context, track: AudioTrackItem, record: SongLyricsRecord): String? {
+        val result = findBest(track)
+        return when {
+            result == null -> {
+                writeRecord(context, track, record.copy(notFound = true, instrumental = false))
+                null
+            }
+            result.hasAnyLyrics -> {
+                val text = result.syncedLyrics ?: result.plainLyrics!!
+                writeRecord(context, track, record.copy(onlineText = text, notFound = false, instrumental = false))
+                text
+            }
+            else -> {
+                writeRecord(context, track, record.copy(instrumental = result.instrumental, notFound = !result.instrumental))
+                null
+            }
+        }
+    }
+
+    /** Tries an exact match first, then cleaned-up names, then a search filtered by song length. */
+    private suspend fun findBest(track: AudioTrackItem): LyricsSearchResult? {
+        val durationSec = (track.durationMs / 1000L).toInt()
+        val artist = track.artist.takeUnless { it.isBlank() || it.equals("Unknown artist", true) }.orEmpty()
+        val album = track.album.takeUnless { it.isBlank() || it.equals("Unknown album", true) }
+        val title = track.title
+        val cleanTitle = cleanTitle(title)
+        val mainArtist = primaryArtist(artist)
+
+        fun good(r: LyricsSearchResult?) = r != null && (r.hasAnyLyrics || r.instrumental)
+
+        if (artist.isNotEmpty()) {
+            LrcLibClient.get(title, artist, album, durationSec).takeIf(::good)?.let { return it }
+            if (cleanTitle != title || mainArtist != artist) {
+                LrcLibClient.get(cleanTitle, mainArtist, null, durationSec).takeIf(::good)?.let { return it }
+            }
+        }
+        val candidates = buildList {
+            if (mainArtist.isNotEmpty()) addAll(LrcLibClient.search(cleanTitle, mainArtist))
+            if (isEmpty()) addAll(LrcLibClient.search(cleanTitle, null))
+        }
+        return pickBest(candidates, durationSec)
+    }
+
+    /** Closest length (within 3 s when the length is known), synced lyrics first. */
+    fun pickBest(candidates: List<LyricsSearchResult>, durationSec: Int): LyricsSearchResult? {
+        val usable = candidates.filter { it.hasAnyLyrics || it.instrumental }
+        val inRange = if (durationSec > 0) usable.filter { abs(it.durationSec - durationSec) <= 3 } else usable
+        return inRange.sortedWith(
+            compareByDescending<LyricsSearchResult> { it.hasSynced }
+                .thenBy { if (durationSec > 0) abs(it.durationSec - durationSec) else 0 }
+        ).firstOrNull()
+    }
+
+    /** "Song (From “Movie”) [Remastered]" -> "Song". */
+    fun cleanTitle(title: String): String {
+        val stripped = title
+            .replace(Regex("""\s*[(\[][^)\]]*[)\]]"""), "")
+            .replace(Regex("""\s+-\s+.*(remaster|version|edit|mix|live|from|feat).*$""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\s+(feat\.?|ft\.?)\s+.*$""", RegexOption.IGNORE_CASE), "")
+            .trim()
+        return stripped.ifBlank { title.trim() }
+    }
+
+    /** "Pritam, Mahmood & Raghav" -> "Pritam". */
+    fun primaryArtist(artist: String): String =
+        artist.split(Regex("""\s*(,|&|;|/|\sx\s|\sfeat\.?\s|\sft\.?\s|\sand\s)\s*""", RegexOption.IGNORE_CASE))
+            .firstOrNull { it.isNotBlank() }?.trim() ?: artist.trim()
+
+    // ---------------------------------------------------------------- user actions
+
+    /** "Search again" with the user's own words. */
+    suspend fun searchManually(title: String, artist: String, album: String): List<LyricsSearchResult> {
+        val results = LrcLibClient.search(title.trim(), artist.trim().ifBlank { null }, album.trim().ifBlank { null })
+        val withAlbumless = if (results.isEmpty() && album.isNotBlank()) {
+            LrcLibClient.search(title.trim(), artist.trim().ifBlank { null })
+        } else results
+        return withAlbumless.filter { it.hasAnyLyrics || it.instrumental }
+            .sortedByDescending { it.hasSynced }
+    }
+
+    /** The user picked [result] from "Search again": use it for this song. */
+    suspend fun useResult(context: Context, track: AudioTrackItem, result: LyricsSearchResult) {
+        val record = readRecord(context, track)
+        val text = result.syncedLyrics ?: result.plainLyrics
+        writeRecord(
+            context, track,
+            record.copy(
+                onlineText = text,
+                instrumental = result.instrumental && text == null,
+                notFound = false,
+                preferOnline = true
+            )
+        )
+    }
+
+    suspend fun setUserFile(context: Context, track: AudioTrackItem, text: String?) {
+        writeRecord(context, track, readRecord(context, track).copy(userText = text))
+    }
+
+    suspend fun setPreferOnline(context: Context, track: AudioTrackItem, prefer: Boolean) {
+        writeRecord(context, track, readRecord(context, track).copy(preferOnline = prefer, notFound = false))
+    }
+
+    suspend fun setOffset(context: Context, track: AudioTrackItem, offsetMs: Long) {
+        writeRecord(context, track, readRecord(context, track).copy(offsetMs = offsetMs))
+    }
+
+    /** Forget a failed search so the next try really asks LRCLIB again. */
+    suspend fun clearNotFound(context: Context, track: AudioTrackItem) {
+        writeRecord(context, track, readRecord(context, track).copy(notFound = false, instrumental = false))
+    }
+
+    /** Reads a picked .lrc / .txt file as text. */
+    suspend fun readTextFile(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@runCatching null
+            decode(bytes)
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    // ---------------------------------------------------------------- storage
+
+    private val cache = ConcurrentHashMap<String, SongLyricsRecord>()
+
+    /** Saved by title + artist + length, so it survives the file being moved or rescanned. */
+    private fun keyOf(track: AudioTrackItem): String {
+        val raw = "${track.title.trim().lowercase(Locale.ROOT)}|${track.artist.trim().lowercase(Locale.ROOT)}|${track.durationMs / 1000L}"
+        val digest = MessageDigest.getInstance("SHA-1").digest(raw.toByteArray())
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun fileOf(context: Context, key: String) = File(File(context.filesDir, "lyrics").apply { mkdirs() }, "$key.json")
+
+    suspend fun readRecord(context: Context, track: AudioTrackItem): SongLyricsRecord = withContext(Dispatchers.IO) {
+        val key = keyOf(track)
+        cache[key]?.let { return@withContext it }
+        val file = fileOf(context, key)
+        val record = if (file.exists()) {
+            runCatching {
+                val o = JSONObject(file.readText())
+                SongLyricsRecord(
+                    userText = o.optString("userText").takeIf { o.has("userText") && !o.isNull("userText") },
+                    onlineText = o.optString("onlineText").takeIf { o.has("onlineText") && !o.isNull("onlineText") },
+                    instrumental = o.optBoolean("instrumental"),
+                    notFound = o.optBoolean("notFound"),
+                    preferOnline = o.optBoolean("preferOnline"),
+                    offsetMs = o.optLong("offsetMs")
+                )
+            }.getOrDefault(SongLyricsRecord())
+        } else SongLyricsRecord()
+        cache[key] = record
+        record
+    }
+
+    private suspend fun writeRecord(context: Context, track: AudioTrackItem, record: SongLyricsRecord) =
+        withContext(Dispatchers.IO) {
+            val key = keyOf(track)
+            cache[key] = record
+            val o = JSONObject().apply {
+                put("title", track.title)
+                put("artist", track.artist)
+                record.userText?.let { put("userText", it) }
+                record.onlineText?.let { put("onlineText", it) }
+                put("instrumental", record.instrumental)
+                put("notFound", record.notFound)
+                put("preferOnline", record.preferOnline)
+                put("offsetMs", record.offsetMs)
+            }
+            runCatching { fileOf(context, key).writeText(o.toString()) }
+        }
+
+    // ---------------------------------------------------------------- embedded lyrics
+
+    private val embeddedCache = ConcurrentHashMap<String, String>()
+    private const val NONE = "\u0000"
+
+    /** Lyrics stored inside the song file (MP3 USLT, M4A ©lyr, FLAC/Ogg LYRICS), via Media3. */
+    @OptIn(UnstableApi::class)
+    suspend fun readEmbedded(context: Context, track: AudioTrackItem): String? = withContext(Dispatchers.IO) {
+        embeddedCache[track.id]?.let { return@withContext it.takeIf { v -> v != NONE } }
+        val found = runCatching {
+            MetadataRetriever.Builder(context, MediaItem.fromUri(track.contentUri)).build().use { retriever ->
+                val groups = retriever.retrieveTrackGroups().get(10, TimeUnit.SECONDS)
+                var text: String? = null
+                loop@ for (g in 0 until groups.length) {
+                    val group = groups[g]
+                    for (f in 0 until group.length) {
+                        val metadata = group.getFormat(f).metadata ?: continue
+                        for (i in 0 until metadata.length()) {
+                            text = when (val entry = metadata[i]) {
+                                is TextInformationFrame ->
+                                    if (entry.id == "USLT") entry.values.joinToString("\n") else null
+                                is BinaryFrame -> if (entry.id == "USLT") parseUslt(entry.data) else null
+                                is VorbisComment ->
+                                    if (entry.key.uppercase(Locale.ROOT) in setOf("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS")) entry.value else null
+                                else -> null
+                            }
+                            if (!text.isNullOrBlank()) break@loop
+                        }
+                    }
+                }
+                text
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+        embeddedCache[track.id] = found ?: NONE
+        found
+    }
+
+    /** ID3 USLT frame: encoding, language, description, then the lyrics. */
+    private fun parseUslt(data: ByteArray): String? {
+        if (data.size < 5) return null
+        val encoding = data[0].toInt()
+        val charset: Charset = when (encoding) {
+            1 -> Charsets.UTF_16
+            2 -> Charsets.UTF_16BE
+            3 -> Charsets.UTF_8
+            else -> Charsets.ISO_8859_1
+        }
+        val wide = encoding == 1 || encoding == 2
+        var i = 4 // skip encoding byte + 3-byte language
+        // Skip the description, which ends in a 0 (or 0 0 for UTF-16).
+        while (i < data.size) {
+            if (wide) {
+                if (i + 1 < data.size && data[i].toInt() == 0 && data[i + 1].toInt() == 0) { i += 2; break }
+                i += 2
+            } else {
+                if (data[i].toInt() == 0) { i += 1; break }
+                i += 1
+            }
+        }
+        if (i >= data.size) return null
+        return String(data, i, data.size - i, charset).trimEnd('\u0000').takeIf { it.isNotBlank() }
+    }
+
+    private fun decode(bytes: ByteArray): String = when {
+        bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte() ->
+            String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
+        bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte() -> String(bytes, Charsets.UTF_16LE).drop(1)
+        bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte() -> String(bytes, Charsets.UTF_16BE).drop(1)
+        else -> String(bytes, Charsets.UTF_8)
+    }
+}

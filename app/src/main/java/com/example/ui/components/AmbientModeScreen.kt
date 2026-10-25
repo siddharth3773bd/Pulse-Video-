@@ -76,6 +76,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.example.lyrics.LyricsSettings
+import com.example.lyrics.LyricsState
 import com.example.model.AmbientSettings
 import com.example.model.AudioTrackItem
 import com.example.model.NowPlayingBackground
@@ -102,6 +104,9 @@ fun AmbientModeScreen(
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
     onClose: () -> Unit,
+    positionMs: Long,
+    lyricsSettings: LyricsSettings,
+    onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     BackHandler(onBack = onClose)
@@ -162,17 +167,31 @@ fun AmbientModeScreen(
                     )
                 }
             }
+            // Ambient never asks anything: it follows the saved lyrics choice quietly.
+            val lyricsHandle = if (showLyrics) rememberLyricsState(track, lyricsSettings) else null
             val lyrics: @Composable (Modifier, TextAlign) -> Unit = { mod, align ->
-                // Lyrics are not built yet; this is where they will appear.
                 Box(modifier = mod, contentAlignment = Alignment.CenterStart) {
-                    Text(
-                        text = "Lyrics will show here",
-                        color = textColor.copy(alpha = 0.35f),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = align,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    when (val st = lyricsHandle?.state) {
+                        is LyricsState.Loaded -> LyricsView(
+                            lyrics = st.lyrics,
+                            positionMs = positionMs,
+                            isPlaying = isPlaying,
+                            offsetMs = st.offsetMs,
+                            settings = lyricsSettings.copy(alignCenter = align == TextAlign.Center),
+                            onSeekTo = onSeekTo,
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalPadding = 0
+                        )
+                        null, LyricsState.Loading -> Unit
+                        else -> Text(
+                            text = if (st == LyricsState.Instrumental) "Instrumental" else "No lyrics",
+                            color = textColor.copy(alpha = 0.35f),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = align,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
 

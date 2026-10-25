@@ -157,6 +157,7 @@ import kotlinx.coroutines.Dispatchers
 import com.example.data.MediaStoreScanner
 import com.example.ui.components.SongInfoSheet
 import com.example.ui.components.AmbientModeScreen
+import com.example.ui.components.LyricsScreen
 import com.example.ui.components.NowPlayingScreen
 import com.example.ui.components.AudioMiniPlayer
 import com.example.player.AudioPlaybackManager
@@ -475,6 +476,8 @@ fun Material3VideoPlayerScreen(
     // Ambient mode: opened from the Now Playing tray, or automatically when the phone is turned
     // sideways on Now Playing (unless closed while sideways; turning upright resets that).
     var ambientRequested by rememberSaveable { mutableStateOf(false) }
+    var showLyrics by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(showNowPlaying) { if (!showNowPlaying) showLyrics = false }
     var ambientDismissedSideways by rememberSaveable { mutableStateOf(false) }
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -804,9 +807,7 @@ fun Material3VideoPlayerScreen(
                     onSkipNext = { viewModel.skipAudioNext() },
                     onToggleShuffle = { audioManager.toggleShuffle() },
                     onCycleRepeat = { audioManager.cycleRepeat() },
-                    onLyrics = {
-                        android.widget.Toast.makeText(context, "Lyrics are coming soon", android.widget.Toast.LENGTH_SHORT).show()
-                    },
+                    onLyrics = { showLyrics = true },
                     onOpenAmbient = { ambientRequested = true },
                     sleepTimerRemainingMs = audioState.sleepTimerRemainingMs,
                     sleepAtEndOfSong = audioState.sleepAtEndOfSong,
@@ -825,7 +826,36 @@ fun Material3VideoPlayerScreen(
             }
         }
 
-        // 3d. Ambient mode (over Now Playing): from the tray button, or by turning the phone sideways.
+        // 3d. Lyrics (over Now Playing)
+        AnimatedVisibility(
+            visible = showLyrics && showNowPlaying && miniTrack != null,
+            enter = slideInVertically(initialOffsetY = { it / 3 }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it / 3 }) + fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val lyricsTrack = miniTrack ?: lastNowPlayingTrack
+            if (lyricsTrack != null) {
+                AlbumArtTheme(track = lyricsTrack, applyScheme = false, extractColors = true) {
+                    LyricsScreen(
+                        track = lyricsTrack,
+                        isPlaying = uiState.isAudioPlaying,
+                        positionMs = audioState.positionMs,
+                        settings = libraryPrefs.lyrics,
+                        amoled = libraryPrefs.nowPlayingBackground == NowPlayingBackground.AMOLED,
+                        onSettingsChange = { value ->
+                            audioUiScope.launch { AppPreferencesRepository.updateLyricsSettings(context, value) }
+                        },
+                        onSeekTo = { audioManager.seekTo(it) },
+                        onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
+                        onSkipNext = { viewModel.skipAudioNext() },
+                        onSkipPrevious = { viewModel.skipAudioPrevious() },
+                        onClose = { showLyrics = false }
+                    )
+                }
+            }
+        }
+
+        // 3e. Ambient mode (over Now Playing): from the tray button, or by turning the phone sideways.
         AnimatedVisibility(
             visible = showAmbient,
             enter = fadeIn(),
@@ -850,7 +880,10 @@ fun Material3VideoPlayerScreen(
                     onClose = {
                         ambientRequested = false
                         if (isLandscape) ambientDismissedSideways = true
-                    }
+                    },
+                    positionMs = audioState.positionMs,
+                    lyricsSettings = libraryPrefs.lyrics,
+                    onSeekTo = { audioManager.seekTo(it) }
                 )
             }
         }

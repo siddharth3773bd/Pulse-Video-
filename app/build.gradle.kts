@@ -108,6 +108,8 @@ dependencies {
   implementation(libs.androidx.media3.ui)
   implementation(libs.androidx.media3.common)
   implementation(libs.androidx.media3.session)
+  // Reads lyrics stored inside song files (official Media3 MetadataRetriever)
+  implementation(libs.androidx.media3.inspector)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)

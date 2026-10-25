@@ -144,7 +144,8 @@ data class LibraryPreferences(
     /** Folders the user blacklisted; everything inside them (and their sub-folders) is hidden. */
     val blacklistedFolders: Set<String> = emptySet(),
     val playlists: List<AudioPlaylist> = emptyList(),
-    val ambient: AmbientSettings = AmbientSettings()
+    val ambient: AmbientSettings = AmbientSettings(),
+    val lyrics: com.example.lyrics.LyricsSettings = com.example.lyrics.LyricsSettings()
 ) {
     val blacklistedIds: Set<String> by lazy { blacklistedSongs.mapTo(HashSet()) { it.id } }
 
