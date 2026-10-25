@@ -28,9 +28,16 @@ jobs:
         with:
           gradle-version: '9.8.2'
 
-      - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+      - name: Build APKs (fast + debug)
+        run: gradle assembleFast assembleDebug --stacktrace
 
+      # The one to install: optimized, smooth.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Doppler-apk
+          path: app/build/outputs/apk/fast/*.apk
+
+      # Slower debug build, only for tracking down problems.
       - uses: actions/upload-artifact@v4
         with:
           name: Doppler-debug-apk

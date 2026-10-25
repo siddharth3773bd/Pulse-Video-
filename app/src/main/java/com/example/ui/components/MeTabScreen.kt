@@ -2107,6 +2107,15 @@ private fun VideoPlaybackSettingsSubPage(
             )
 
             ExpressiveSettingToggleCard(
+                title = "Remember playback position",
+                subtitle = "Reopening a video carries on where you left it, with an option to start over",
+                checked = settings.rememberPosition,
+                effectiveAmoled = effectiveAmoled,
+                onToggle = { onUpdateSettings { it.copy(rememberPosition = !it.rememberPosition) } },
+                testTag = "setting_remember_position"
+            )
+
+            ExpressiveSettingToggleCard(
                 title = "Autoplay next video",
                 subtitle = "When a video ends, play the next one from the same folder",
                 checked = settings.autoplayNext,

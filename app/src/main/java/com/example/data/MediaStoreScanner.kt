@@ -5,6 +5,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -21,6 +22,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 object MediaStoreScanner {
@@ -322,9 +324,25 @@ object MediaStoreScanner {
 
     fun getCachedThumbnail(uriKey: String): Bitmap? = thumbnailCache.get(uriKey)
 
+    // Thumbnails are also kept on disk (small JPEGs in the app's cache folder), so they don't have
+    // to be made again every time the app opens.
+    private const val THUMB_W = 512
+    private const val THUMB_H = 288
+    @Volatile private var thumbDir: File? = null
+
+    private fun thumbFile(context: Context, key: String): File {
+        val dir = thumbDir ?: File(context.cacheDir, "thumbs").also {
+            it.mkdirs()
+            thumbDir = it
+        }
+        val digest = java.security.MessageDigest.getInstance("SHA-1").digest(key.toByteArray())
+        val name = digest.joinToString("") { "%02x".format(it) }
+        return File(dir, "$name.jpg")
+    }
+
     /**
-     * A sharp thumbnail for [videoUri]: MediaStore's own thumbnail at 640x360 (enough for a list row
-     * or a grid card on a high-density screen), falling back to a frame from the video itself.
+     * A sharp thumbnail for [videoUri]: from memory, else from the disk cache, else MediaStore's
+     * own thumbnail (falling back to a frame from the video), which is then saved to disk.
      */
     suspend fun loadVideoThumbnail(
         context: Context,
@@ -333,18 +351,32 @@ object MediaStoreScanner {
     ): Bitmap? = withContext(thumbnailDispatcher) {
         val cacheKey = videoUri.toString()
         thumbnailCache.get(cacheKey)?.let { return@withContext it }
+        // Scrolled past already? Don't spend time on it.
+        ensureActive()
 
-        var bmp: Bitmap? = try {
-            context.contentResolver.loadThumbnail(videoUri, Size(640, 360), null)
-        } catch (_: Exception) {
-            null
+        val file = thumbFile(context, cacheKey)
+        var bmp: Bitmap? = if (file.exists()) {
+            try {
+                BitmapFactory.decodeFile(file.path)
+            } catch (_: Throwable) {
+                null
+            }
+        } else null
+        val fromDisk = bmp != null
+
+        if (bmp == null) {
+            bmp = try {
+                context.contentResolver.loadThumbnail(videoUri, Size(THUMB_W, THUMB_H), null)
+            } catch (_: Exception) {
+                null
+            }
         }
         if (bmp == null) {
             val retriever = MediaMetadataRetriever()
             try {
                 retriever.setDataSource(context, videoUri)
                 bmp = retriever.getScaledFrameAtTime(
-                    1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 640, 360
+                    1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, THUMB_W, THUMB_H
                 )
             } catch (_: Exception) {
             } finally {
@@ -354,13 +386,30 @@ object MediaStoreScanner {
                 }
             }
         }
-        if (bmp != null) {
-            thumbnailCache.put(cacheKey, bmp)
+        val result = bmp
+        if (result != null) {
+            if (!fromDisk) {
+                try {
+                    val tmp = File(file.path + ".tmp")
+                    tmp.outputStream().use { out -> result.compress(Bitmap.CompressFormat.JPEG, 88, out) }
+                    tmp.renameTo(file)
+                } catch (_: Throwable) {
+                }
+            }
+            // Upload to the GPU now, off the main thread, so it doesn't stutter the scroll later.
+            result.prepareToDraw()
+            thumbnailCache.put(cacheKey, result)
         }
-        bmp
+        result
     }
 
     fun evictThumbnail(uriKey: String) {
         thumbnailCache.remove(uriKey)
+        thumbDir?.let { dir ->
+            runCatching {
+                val digest = java.security.MessageDigest.getInstance("SHA-1").digest(uriKey.toByteArray())
+                File(dir, digest.joinToString("") { "%02x".format(it) } + ".jpg").delete()
+            }
+        }
     }
 }

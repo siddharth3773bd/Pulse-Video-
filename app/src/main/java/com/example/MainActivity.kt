@@ -196,7 +196,6 @@ import com.example.ui.components.RenameVideoDialog
 import com.example.ui.components.FoldersLibraryView
 import com.example.ui.components.MeTabScreen
 import com.example.ui.components.MediaPermissionPromptCard
-import com.example.ui.components.ResumePlaybackBottomSheet
 import com.example.ui.components.SortAndViewBottomSheet
 import com.example.ui.components.TreeHierarchyView
 import com.example.ui.components.VideoGridItem
@@ -220,15 +219,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // Same instance that the compose viewModel() call below returns for this activity.
         externalViewModel = androidx.lifecycle.ViewModelProvider(this)[VideoPlayerViewModel::class.java]
+        externalViewModel.initializeAndScan(this)
         if (savedInstanceState == null) {
             handleExternalVideoIntent(intent)
         }
+        holdSplashUntilReady()
         setContent {
             val viewModel: VideoPlayerViewModel = viewModel()
             val context = LocalContext.current
-            LaunchedEffect(Unit) {
-                viewModel.initializeAndScan(context)
-            }
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
             DopplerTheme(
@@ -250,6 +248,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Keeps Android's splash screen up until the first screen is ready (settings read and the
+     * library scanned), so the permission card and a loading spinner don't flash in between.
+     * Never longer than 1.5 s.
+     */
+    private fun holdSplashUntilReady() {
+        val content = findViewById<android.view.View>(android.R.id.content)
+        val start = android.os.SystemClock.uptimeMillis()
+        content.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                val s = externalViewModel.uiState.value
+                val ready = (s.prefsLoaded && (s.videosLoaded || !s.hasVideoPermission)) ||
+                    s.playingVideo != null ||
+                    android.os.SystemClock.uptimeMillis() - start > 1_500L
+                if (ready) content.viewTreeObserver.removeOnPreDrawListener(this)
+                return ready
+            }
+        })
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -977,27 +995,6 @@ fun Material3VideoPlayerScreen(
         }
 
         // 4. Overlays, Menus, Bottom Sheets & Dialogs
-        if (uiState.resumePromptTarget != null) {
-            val promptTarget = uiState.resumePromptTarget
-            ResumePlaybackBottomSheet(
-                target = promptTarget,
-                onResumeFromSaved = {
-                    viewModel.startVideoPlaybackAt(
-                        video = promptTarget.video,
-                        startPositionMs = promptTarget.resumePositionMs,
-                        context = context
-                    )
-                },
-                onStartFromBeginning = {
-                    viewModel.startVideoPlaybackAt(
-                        video = promptTarget.video,
-                        startPositionMs = 0L,
-                        context = context
-                    )
-                },
-                onDismiss = { viewModel.dismissResumePrompt() }
-            )
-        }
 
         if (uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS) {
             SortAndViewBottomSheet(
@@ -1072,6 +1069,10 @@ fun Material3VideoPlayerScreen(
                 playerController = controller,
                 playbackSettings = uiState.playbackSettings,
                 showResolutionTier = uiState.showResolutionTier,
+                resumedFromMs = uiState.resumedFromMs,
+                nextVideo = remember(activePlaying.id, uiState.videos, uiState.sortBy, uiState.sortDir) {
+                    viewModel.peekNextInFolder()
+                },
                 onSavePosition = { posMs, durMs, forcePersist ->
                     viewModel.recordVideoPlaybackHistory(
                         videoId = activePlaying.id,

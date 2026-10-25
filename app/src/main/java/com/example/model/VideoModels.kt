@@ -8,7 +8,7 @@ import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
-const val MAX_HISTORY_ITEMS = 25
+const val MAX_HISTORY_ITEMS = 300
 
 @Immutable
 data class VideoItem(
@@ -197,6 +197,8 @@ data class PlaybackSettings(
     val showRemainingTime: Boolean = false,
     /** When a video ends, play the next one from the same folder. */
     val autoplayNext: Boolean = true,
+    /** Reopening a video carries on where it was left (with a "Start over" option). */
+    val rememberPosition: Boolean = true,
     /** Keep playing in a small window when leaving the app during a video. */
     val pictureInPicture: Boolean = true,
     val subtitleSize: SubtitleSize = SubtitleSize.MEDIUM,

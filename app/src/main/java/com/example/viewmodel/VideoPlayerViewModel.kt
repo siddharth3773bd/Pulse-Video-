@@ -95,6 +95,8 @@ data class VideoUiState(
     val playlistTargetIds: List<String> = emptyList(),
     val sortSheetOpen: Boolean = false,
     val resumePromptTarget: ResumePromptTarget? = null,
+    /** Where the playing video was resumed from (0 = started from the beginning). */
+    val resumedFromMs: Long = 0L,
     val playingVideo: VideoItem? = null,
     val playingAudio: AudioTrackItem? = null,
     val isAudioPlaying: Boolean = false,
@@ -207,6 +209,9 @@ class VideoPlayerViewModel : ViewModel() {
         if (existing != null) return existing
         return ExoPlayerController(context.applicationContext).also {
             videoPlayerController = it
+            viewModelScope.launch {
+                it.autoAdvanced.collect { uri -> onVideoAutoAdvanced(uri) }
+            }
         }
     }
 
@@ -222,6 +227,15 @@ class VideoPlayerViewModel : ViewModel() {
     fun initializeAndScan(context: Context) {
         val appContext = context.applicationContext
         savedAppContext = appContext
+        // Known straight away, so the "access needed" card never flashes on start.
+        if (!prefsInitialized) {
+            _uiState.update {
+                it.copy(
+                    hasVideoPermission = MediaStoreScanner.hasVideoPermission(appContext),
+                    hasAudioPermission = MediaStoreScanner.hasAudioPermission(appContext)
+                )
+            }
+        }
         getOrCreatePlayerController(appContext)
         getOrCreateAudioPlaybackManager(appContext)
         if (!prefsInitialized) {
@@ -956,15 +970,11 @@ class VideoPlayerViewModel : ViewModel() {
         val savedPosMs = existingEntry?.positionMs ?: 0L
         val fraction = savedPosMs.toFloat() / durMs.toFloat()
 
-        if (existingEntry != null && savedPosMs >= 5_000L && fraction <= 0.95f) {
-            _uiState.update {
-                it.copy(
-                    resumePromptTarget = ResumePromptTarget(
-                        video = video,
-                        resumePositionMs = savedPosMs
-                    )
-                )
-            }
+        if (state.playbackSettings.rememberPosition && existingEntry != null &&
+            savedPosMs >= 5_000L && fraction <= 0.95f
+        ) {
+            // Carry on straight away; the player shows a small "Start over" pill.
+            startVideoPlaybackAt(video = video, startPositionMs = savedPosMs, context = context, resumed = true)
         } else {
             startVideoPlaybackAt(video = video, startPositionMs = 0L, context = context)
         }
@@ -973,7 +983,8 @@ class VideoPlayerViewModel : ViewModel() {
     fun startVideoPlaybackAt(
         video: VideoItem,
         startPositionMs: Long,
-        context: Context? = null
+        context: Context? = null,
+        resumed: Boolean = false
     ) {
         pauseAudioSession()
         val state = _uiState.value
@@ -1000,7 +1011,8 @@ class VideoPlayerViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 resumePromptTarget = null,
-                playingVideo = video
+                playingVideo = video,
+                resumedFromMs = if (resumed) startPositionMs else 0L
             )
         }
     }
@@ -1122,6 +1134,43 @@ class VideoPlayerViewModel : ViewModel() {
      * Autoplay: plays the next video from the same folder, in the order the list shows.
      * Returns false at the end of the folder.
      */
+    /** The video that autoplay would play after the current one (same folder, list order). */
+    fun peekNextInFolder(): VideoItem? {
+        val state = _uiState.value
+        val current = state.playingVideo ?: return null
+        val inFolder = state.filteredAndSortedVideos.filter { it.folderPath == current.folderPath }
+            .ifEmpty {
+                state.videos.filter { it.folderPath == current.folderPath }.sortedBy { it.title.lowercase() }
+            }
+        val idx = inFolder.indexOfFirst { it.id == current.id }
+        return if (idx < 0) null else inFolder.getOrNull(idx + 1)
+    }
+
+    /** The player moved on to the queued next video by itself: show it as the playing one. */
+    private fun onVideoAutoAdvanced(uri: String) {
+        val state = _uiState.value
+        val previous = state.playingVideo ?: return
+        val next = state.videos.firstOrNull { it.contentUri.toString() == uri } ?: return
+        val ctx = savedAppContext
+        // The finished one counts as watched to the end.
+        recordVideoPlaybackHistory(
+            videoId = previous.id,
+            positionMs = previous.durationMs,
+            durationMs = previous.durationMs,
+            forcePersist = true,
+            context = ctx
+        )
+        recordVideoPlaybackHistory(
+            videoId = next.id,
+            positionMs = 0L,
+            durationMs = next.durationMs,
+            forcePersist = true,
+            moveToTop = true,
+            context = ctx
+        )
+        _uiState.update { it.copy(playingVideo = next, resumedFromMs = 0L) }
+    }
+
     fun playNextInFolder(context: Context): Boolean {
         val state = _uiState.value
         val current = state.playingVideo ?: return false

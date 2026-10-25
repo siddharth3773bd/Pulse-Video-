@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -176,6 +177,8 @@ fun VideoPlayerModal(
     playerController: PlayerController,
     playbackSettings: PlaybackSettings,
     showResolutionTier: Boolean,
+    resumedFromMs: Long,
+    nextVideo: VideoItem?,
     onSavePosition: (positionMs: Long, durationMs: Long, forcePersist: Boolean) -> Unit,
     onPreviousVideo: () -> Unit,
     onNextVideo: () -> Unit,
@@ -211,6 +214,15 @@ fun VideoPlayerModal(
     var sleepDeadline by remember { mutableStateOf<Long?>(null) }
     var sleepEndOfVideo by remember { mutableStateOf(false) }
     var sleepRemainingMs by remember { mutableLongStateOf(0L) }
+
+    // "Resumed from 0:10 · Start over" pill, shown for a few seconds after resuming.
+    var showResumedPill by remember(video.id) { mutableStateOf(resumedFromMs > 0L) }
+    LaunchedEffect(video.id, showResumedPill) {
+        if (showResumedPill) {
+            delay(4_000L)
+            showResumedPill = false
+        }
+    }
 
     var surfaceWidthPx by remember { mutableIntStateOf(1) }
     var surfaceHeightPx by remember { mutableIntStateOf(1) }
@@ -291,7 +303,15 @@ fun VideoPlayerModal(
         }
     }
 
-    // ---- Autoplay the next video in the folder ----
+    // ---- Autoplay: the next video waits inside the player, so it starts without a pause ----
+    LaunchedEffect(video.id, nextVideo?.id, playbackSettings.autoplayNext, sleepEndOfVideo) {
+        val next = nextVideo
+        if (playbackSettings.autoplayNext && !sleepEndOfVideo && next != null) {
+            playerController.queueNext(next.contentUri, next.path, next.title)
+        } else {
+            playerController.queueNext(null)
+        }
+    }
     val endedLatest by rememberUpdatedState(onPlaybackEnded)
     LaunchedEffect(playerState.isEnded, video.id) {
         if (playerState.isEnded) {
@@ -300,7 +320,7 @@ fun VideoPlayerModal(
                 controlsVisible = true
                 gestureHud = Icons.Rounded.Bedtime to "Sleep timer: stopped"
             } else if (playbackSettings.autoplayNext) {
-                delay(700L)
+                // Normally the queued video has already taken over; this is only a fallback.
                 if (!endedLatest()) controlsVisible = true
             } else {
                 controlsVisible = true
@@ -577,7 +597,43 @@ fun VideoPlayerModal(
             }
         }
 
-        // 4. Controls
+        // 4. Resumed pill (Material 3 snackbar)
+        AnimatedVisibility(
+            visible = showResumedPill && !inPip && !controlsLocked,
+            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                androidx.compose.animation.slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it / 2 },
+            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                androidx.compose.animation.slideOutVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(start = 16.dp, end = 16.dp, bottom = if (controlsVisible) 148.dp else 24.dp)
+        ) {
+            androidx.compose.material3.Snackbar(
+                action = {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            playerController.seekTo(0L)
+                            showResumedPill = false
+                            gestureHud = Icons.Rounded.Replay to "From the beginning"
+                        },
+                        shapes = ButtonDefaults.shapes(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.inversePrimary)
+                    ) { Text("Start over") }
+                },
+                dismissAction = {
+                    IconButton(onClick = { showResumedPill = false }, shapes = IconButtonDefaults.shapes()) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Dismiss")
+                    }
+                },
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier.widthIn(max = 480.dp).testTag("player_resumed_pill")
+            ) {
+                Text("Resumed from ${formatDurationMs(resumedFromMs)}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+
+        // 5. Controls
         AnimatedVisibility(
             visible = controlsVisible && !inPip,
             enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),

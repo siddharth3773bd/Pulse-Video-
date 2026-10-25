@@ -268,8 +268,9 @@ fun VideoThumbnailBox(
     ) {
         val loaded = bitmap
         if (loaded != null) {
+            val image = remember(loaded) { loaded.asImageBitmap() }
             Image(
-                bitmap = loaded.asImageBitmap(),
+                bitmap = image,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

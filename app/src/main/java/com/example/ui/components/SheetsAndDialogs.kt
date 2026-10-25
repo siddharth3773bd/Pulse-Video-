@@ -2,6 +2,10 @@
 
 package com.example.ui.components
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -189,26 +193,34 @@ fun SortAndViewBottomSheet(
                 )
             }
             CompactRow("Sort by") {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    SortBy.entries.forEach { option ->
+                // Four equal, connected buttons: picking one never changes any widths, so the
+                // row doesn't jump or wrap.
+                Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                    val options = SortBy.entries
+                    options.forEachIndexed { i, option ->
                         val selected = option == sortBy
-                        FilterChip(
-                            selected = selected,
-                            onClick = { if (!selected) onSelectSortField(option) },
-                            label = { Text(option.label) },
-                            leadingIcon = if (selected) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = scheme.primary,
-                                selectedLabelColor = scheme.onPrimary,
-                                selectedLeadingIconColor = scheme.onPrimary
+                        ToggleButton(
+                            checked = selected,
+                            onCheckedChange = { if (!selected) onSelectSortField(option) },
+                            shapes = when (i) {
+                                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                            },
+                            colors = ToggleButtonDefaults.colors(
+                                containerColor = scheme.surfaceContainerHighest,
+                                contentColor = scheme.onSurface,
+                                checkedContainerColor = scheme.primary,
+                                checkedContentColor = scheme.onPrimary
                             ),
-                            modifier = Modifier.testTag("sort_option_btn_${option.id}")
-                        )
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .semantics { role = Role.RadioButton }
+                                .testTag("sort_option_btn_${option.id}")
+                        ) {
+                            Text(option.label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }

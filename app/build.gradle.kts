@@ -49,6 +49,16 @@ android {
       // AI Studio.
       signingConfig = signingConfigs.getByName("release")
     }
+    // Same as release but signed with the repo's key, so it installs over the other builds.
+    // Not debuggable and shrunk with R8, so it runs much smoother than the debug build.
+    create("fast") {
+      initWith(getByName("release"))
+      isMinifyEnabled = true
+      isShrinkResources = true
+      isDebuggable = false
+      signingConfig = signingConfigs.getByName("debugConfig")
+      matchingFallbacks += listOf("release")
+    }
     debug {
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
@@ -64,6 +74,7 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  lint { checkReleaseBuilds = false }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

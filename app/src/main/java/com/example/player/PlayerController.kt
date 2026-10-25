@@ -48,6 +48,15 @@ interface PlayerController {
     val state: StateFlow<PlayerState>
     val tracks: StateFlow<PlayerTracks>
 
+    /** Emits the uri of the next video when the player moved on to it by itself (autoplay). */
+    val autoAdvanced: kotlinx.coroutines.flow.SharedFlow<String>
+
+    /**
+     * Lines up the next video inside the player, so it starts the moment this one ends (no
+     * loading pause). Null clears it.
+     */
+    fun queueNext(uri: Uri?, filePath: String? = null, title: String? = null)
+
     fun prepareMedia(
         uri: Uri,
         filePath: String? = null,

@@ -57,6 +57,9 @@ class ExoPlayerController(
     private val _state = MutableStateFlow(PlayerState())
     override val state: StateFlow<PlayerState> = _state.asStateFlow()
 
+    private val _autoAdvanced = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+    override val autoAdvanced: kotlinx.coroutines.flow.SharedFlow<String> = _autoAdvanced
+
     private val _tracks = MutableStateFlow(PlayerTracks())
     override val tracks: StateFlow<PlayerTracks> = _tracks.asStateFlow()
 
@@ -80,6 +83,31 @@ class ExoPlayerController(
 
         override fun onTracksChanged(tracks: Tracks) {
             parseAvailableTracks(tracks)
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || mediaItem == null) return
+            val player = exoPlayer ?: return
+            // The queued video is now playing: it becomes "the" video.
+            val config = mediaItem.localConfiguration
+            currentUri = config?.uri
+            currentTitle = mediaItem.mediaMetadata.title?.toString()
+            baseSubtitles = config?.subtitleConfigurations ?: emptyList()
+            extraSubtitles.clear()
+            pendingNext = null
+            if (player.currentMediaItemIndex > 0) {
+                player.removeMediaItems(0, player.currentMediaItemIndex)
+            }
+            _state.update {
+                it.copy(
+                    currentMediaUri = mediaItem.mediaId,
+                    positionMs = 0L,
+                    isEnded = false,
+                    activeSubtitleText = "",
+                    cues = emptyList()
+                )
+            }
+            _autoAdvanced.tryEmit(mediaItem.mediaId)
         }
 
         override fun onCues(cueGroup: CueGroup) {
@@ -177,10 +205,12 @@ class ExoPlayerController(
             baseSubtitles = subtitleConfigs
             currentUri = uri
             val mediaItem = MediaItem.Builder()
+                .setMediaId(uri.toString())
                 .setUri(uri)
                 .setSubtitleConfigurations(subtitleConfigs)
                 .setMediaMetadata(metadata())
                 .build()
+            pendingNext = null
             player.setPlaybackParameters(PlaybackParameters(1.0f))
             player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
             player.prepare()
@@ -191,6 +221,36 @@ class ExoPlayerController(
 
     private var prepareJob: Job? = null
     private var currentTitle: String? = null
+    private var pendingNext: MediaItem? = null
+    private var queueJob: Job? = null
+
+    override fun queueNext(uri: Uri?, filePath: String?, title: String?) {
+        queueJob?.cancel()
+        queueJob = scope.launch {
+            // Wait until the current video has been handed to the player.
+            prepareJob?.join()
+            val player = exoPlayer ?: return@launch
+            val item = if (uri == null) null else {
+                val subs = withContext(Dispatchers.IO) { discoverExternalSubtitles(filePath) }
+                MediaItem.Builder()
+                    .setMediaId(uri.toString())
+                    .setUri(uri)
+                    .setSubtitleConfigurations(subs)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(title)
+                            .setDisplayTitle(title)
+                            .setMediaType(MediaMetadata.MEDIA_TYPE_VIDEO)
+                            .build()
+                    )
+                    .build()
+            }
+            pendingNext = item
+            val after = player.currentMediaItemIndex + 1
+            if (player.mediaItemCount > after) player.removeMediaItems(after, player.mediaItemCount)
+            if (item != null) player.addMediaItem(item)
+        }
+    }
     private var videoDisabled = false
     private var backgroundAudio = false
 
@@ -253,6 +313,7 @@ class ExoPlayerController(
         val wasPlaying = player.playWhenReady
         val item = MediaItem.Builder()
             .setUri(videoUri)
+            .setMediaId(videoUri.toString())
             .setSubtitleConfigurations(baseSubtitles + extraSubtitles)
             .setMediaMetadata(metadata())
             .build()
@@ -261,6 +322,7 @@ class ExoPlayerController(
             .setPreferredTextLanguage("und")
             .build()
         player.setMediaItem(item, position)
+        pendingNext?.let { player.addMediaItem(it) }
         player.prepare()
         player.playWhenReady = wasPlaying
         _tracks.update { it.copy(subtitlesEnabled = true) }
@@ -512,6 +574,8 @@ class ExoPlayerController(
     }
 
     private fun releaseInternalPlayer() {
+        queueJob?.cancel()
+        pendingNext = null
         positionPollJob?.cancel()
         prepareJob?.cancel()
         try {
