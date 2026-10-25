@@ -56,6 +56,10 @@ data class AudioTrackItem(
     /** MediaStore IS_RECORDING (Android 12+): the file was made by a recorder app. */
     val isRecording: Boolean = false
 ) {
+    /** The folder the file sits in, e.g. "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio". */
+    val folderPath: String
+        get() = path.substringBeforeLast('/', "").trimEnd('/')
+
     /** Voice/call recordings: flagged by MediaStore or stored in a Recordings folder. */
     val looksLikeRecording: Boolean
         get() {
@@ -124,7 +128,7 @@ enum class SortDir {
 }
 
 enum class BottomTab(val id: String, val label: String) {
-    AUDIO("audio", "Audio"),
+    AUDIO("audio", "Music"),
     VIDEOS("videos", "Videos"),
     ME("me", "Me")
 }

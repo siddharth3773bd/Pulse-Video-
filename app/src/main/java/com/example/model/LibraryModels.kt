@@ -2,7 +2,6 @@ package com.example.model
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlaylistPlay
@@ -13,8 +12,7 @@ enum class LibraryTab(val id: String, val label: String) {
     SONGS("songs", "Songs"),
     ALBUMS("albums", "Albums"),
     ARTISTS("artists", "Artists"),
-    PLAYLISTS("playlists", "Playlists"),
-    LIKED("liked", "Liked");
+    PLAYLISTS("playlists", "Playlists");
 
     val icon: ImageVector
         get() = when (this) {
@@ -22,7 +20,6 @@ enum class LibraryTab(val id: String, val label: String) {
             ALBUMS -> Icons.Default.Album
             ARTISTS -> Icons.Default.Person
             PLAYLISTS -> Icons.Default.PlaylistPlay
-            LIKED -> Icons.Default.Favorite
         }
 }
 
@@ -35,13 +32,46 @@ enum class NowPlayingAction(val id: String, val label: String) {
 }
 
 enum class LibrarySongSort(val id: String, val label: String) {
-    DEFAULT("default", "Default Order"),
+    DEFAULT("default", "Default"),
     TITLE("title", "Title"),
     ARTIST("artist", "Artist"),
     ALBUM("album", "Album"),
-    DATE_ADDED("date_added", "Date Added"),
-    DURATION("duration", "Duration")
+    DATE_ADDED("date_added", "Date added"),
+    DURATION("duration", "Duration");
+
+    /** Names for the two sort directions, e.g. "A to Z" / "Z to A". */
+    val ascendingLabel: String
+        get() = when (this) {
+            DEFAULT -> "Normal"
+            TITLE, ARTIST, ALBUM -> "A to Z"
+            DATE_ADDED -> "Oldest first"
+            DURATION -> "Shortest first"
+        }
+    val descendingLabel: String
+        get() = when (this) {
+            DEFAULT -> "Reversed"
+            TITLE, ARTIST, ALBUM -> "Z to A"
+            DATE_ADDED -> "Newest first"
+            DURATION -> "Longest first"
+        }
 }
+
+/** A song hidden from the library. Title and artist are kept so the list still reads well. */
+data class BlacklistedSong(
+    val id: String,
+    val title: String,
+    val artist: String
+)
+
+/** A user-made music playlist. Tracks are stored by their id (content URI). */
+data class AudioPlaylist(
+    val id: String,
+    val name: String,
+    val trackIds: List<String>
+)
+
+/** Id of the built-in "Liked songs" playlist shown first in the Playlists tab. */
+const val LIKED_PLAYLIST_ID = "liked"
 
 /** Where the Now Playing screen and mini player take their colours from. */
 enum class NowPlayingColorSource(val id: String, val label: String, val description: String) {
@@ -80,18 +110,34 @@ data class LibraryPreferences(
     val hideRecordings: Boolean = true,
     val nowPlayingColorSource: NowPlayingColorSource = NowPlayingColorSource.ALBUM_ART,
     val nowPlayingBackground: NowPlayingBackground = NowPlayingBackground.GRADIENT,
-    val nowPlayingButtonColors: NowPlayingButtonColors = NowPlayingButtonColors.DEFAULT
+    val nowPlayingButtonColors: NowPlayingButtonColors = NowPlayingButtonColors.DEFAULT,
+    /** Songs the user blacklisted (hidden from the library, still on the device). */
+    val blacklistedSongs: List<BlacklistedSong> = emptyList(),
+    /** Folders the user blacklisted; everything inside them (and their sub-folders) is hidden. */
+    val blacklistedFolders: Set<String> = emptySet(),
+    val playlists: List<AudioPlaylist> = emptyList()
 ) {
+    val blacklistedIds: Set<String> by lazy { blacklistedSongs.mapTo(HashSet()) { it.id } }
+
+    /** True when [track] sits in a blacklisted folder or one of its sub-folders. */
+    fun isInBlacklistedFolder(track: AudioTrackItem): Boolean {
+        if (blacklistedFolders.isEmpty()) return false
+        val dir = track.folderPath
+        return blacklistedFolders.any { dir == it || dir.startsWith("$it/") }
+    }
+
     companion object {
         const val SHORT_AUDIO_LIMIT_MS = 30_000L
     }
 
     /** Applies the library filters to the scanned tracks. */
     fun filterTracks(tracks: List<AudioTrackItem>): List<AudioTrackItem> =
-        if (!hideShortAudio && !hideRecordings) tracks
+        if (!hideShortAudio && !hideRecordings && blacklistedSongs.isEmpty() && blacklistedFolders.isEmpty()) tracks
         else tracks.filter { t ->
             !(hideShortAudio && t.durationMs in 1 until SHORT_AUDIO_LIMIT_MS) &&
-                !(hideRecordings && t.looksLikeRecording)
+                !(hideRecordings && t.looksLikeRecording) &&
+                t.id !in blacklistedIds &&
+                !isInBlacklistedFolder(t)
         }
 
     /** Tray buttons in the user's order with hidden ones removed. */

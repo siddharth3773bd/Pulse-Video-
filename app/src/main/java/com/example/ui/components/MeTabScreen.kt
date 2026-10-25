@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import com.example.model.AudioTrackItem
+import androidx.compose.material.icons.filled.FolderOff
+import androidx.compose.material.icons.filled.Block
 import com.example.model.NowPlayingBackground
 import com.example.model.NowPlayingButtonColors
 import com.example.model.NowPlayingColorSource
@@ -261,6 +264,7 @@ fun MeTabScreen(
             )
 
             MeSubPage.MUSIC_SETTINGS -> MusicSettingsSubPage(
+                audioTracks = uiState.audioTracks,
                 effectiveAmoled = effectiveAmoled,
                 onBack = onCloseSubPage
             )
@@ -2298,7 +2302,7 @@ private fun NavigationCustomizeSubPage(
 ) {
     val palette = LocalM3Palette.current
     val fixedOrderTabs = listOf(
-        Triple(BottomTab.AUDIO, "Audio", Icons.Default.MusicNote to "Play local music and audio tracks"),
+        Triple(BottomTab.AUDIO, "Music", Icons.Default.MusicNote to "Play local music and audio tracks"),
         Triple(BottomTab.VIDEOS, "Videos", Icons.Default.PlayArrow to "Main video library with list, grid and tree views"),
         Triple(BottomTab.ME, "Me", Icons.Default.Person to "Playlists, watch history and app preferences")
     )
@@ -2497,6 +2501,7 @@ private fun ExpressiveSettingToggleCard(
 // ============================================================================
 @Composable
 private fun MusicSettingsSubPage(
+    audioTracks: List<AudioTrackItem>,
     effectiveAmoled: Boolean,
     onBack: () -> Unit
 ) {
@@ -2510,6 +2515,13 @@ private fun MusicSettingsSubPage(
     var showTabsSheet by remember { mutableStateOf(false) }
     var showTraySheet by remember { mutableStateOf(false) }
     var lookChoice by remember { mutableStateOf<String?>(null) }
+    var showBlacklistedSongs by remember { mutableStateOf(false) }
+    var showBlacklistedFolders by remember { mutableStateOf(false) }
+    val musicFolders = remember(audioTracks) {
+        audioTracks.groupBy { it.folderPath }
+            .filterKeys { it.isNotBlank() }
+            .map { (path, list) -> MusicFolder(path = path, songCount = list.size) }
+    }
 
     @Composable
     fun SectionTitle(text: String) {
@@ -2623,7 +2635,55 @@ private fun MusicSettingsSubPage(
                 },
                 testTag = "music_hide_recordings"
             )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ExpressivePreferenceMenuRow(
+                    icon = Icons.Default.Block,
+                    title = "Blacklisted songs",
+                    subtitle = when (val n = prefs.blacklistedSongs.size) {
+                        0 -> "None. Hide a song from its ⋮ menu"
+                        1 -> "1 song hidden"
+                        else -> "$n songs hidden"
+                    },
+                    index = 0,
+                    totalCount = 2,
+                    effectiveAmoled = effectiveAmoled,
+                    onClick = { showBlacklistedSongs = true },
+                    testTag = "music_blacklisted_songs"
+                )
+                ExpressivePreferenceMenuRow(
+                    icon = Icons.Default.FolderOff,
+                    title = "Blacklisted folders",
+                    subtitle = when (val n = prefs.blacklistedFolders.size) {
+                        0 -> "None. Hide whole folders, like WhatsApp audio"
+                        1 -> "1 folder hidden"
+                        else -> "$n folders hidden"
+                    },
+                    index = 1,
+                    totalCount = 2,
+                    effectiveAmoled = effectiveAmoled,
+                    onClick = { showBlacklistedFolders = true },
+                    testTag = "music_blacklisted_folders"
+                )
+            }
         }
+    }
+
+    if (showBlacklistedSongs) {
+        BlacklistedSongsSheet(
+            songs = prefs.blacklistedSongs,
+            onRestore = { id -> scope.launch { AppPreferencesRepository.removeBlacklistedSong(context, id) } },
+            onDismiss = { showBlacklistedSongs = false }
+        )
+    }
+    if (showBlacklistedFolders) {
+        BlacklistedFoldersSheet(
+            folders = musicFolders,
+            blacklisted = prefs.blacklistedFolders,
+            onSetBlacklisted = { path, hidden ->
+                scope.launch { AppPreferencesRepository.setFolderBlacklisted(context, path, hidden) }
+            },
+            onDismiss = { showBlacklistedFolders = false }
+        )
     }
 
     when (lookChoice) {

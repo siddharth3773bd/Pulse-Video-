@@ -64,6 +64,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AudioTrackItem
+import com.example.model.BlacklistedSong
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOff
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
@@ -208,104 +216,6 @@ fun ManageTabsSheet(
                     fontFamily = PlusJakartaSansFontFamily,
                     fontWeight = FontWeight.SemiBold
                 )
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Sort sheet
-// ---------------------------------------------------------------------------------------------
-
-@Composable
-fun LibrarySortSheet(
-    showFields: Boolean,
-    field: LibrarySongSort,
-    ascending: Boolean,
-    onSelectField: (LibrarySongSort) -> Unit,
-    onToggleOrder: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val palette = LocalM3Palette.current
-    LibrarySheet(onDismiss = onDismiss) {
-        SheetTitle(title = "Sort by")
-
-        Surface(
-            onClick = onToggleOrder,
-            shape = RoundedCornerShape(24.dp),
-            color = palette.secondaryContainer,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(palette.onSecondaryContainer.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (ascending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                        contentDescription = null,
-                        tint = palette.onSecondaryContainer
-                    )
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column {
-                    Text(
-                        text = "Order",
-                        color = palette.onSecondaryContainer.copy(alpha = 0.8f),
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = if (ascending) "Ascending" else "Descending",
-                        color = palette.onSecondaryContainer,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        if (showFields) {
-            Spacer(modifier = Modifier.height(14.dp))
-            LibrarySongSort.entries.forEach { option ->
-                val isSelected = option == field
-                Surface(
-                    onClick = { onSelectField(option) },
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (isSelected) palette.secondaryContainer else palette.surfaceContainerHigh,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(start = 18.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = option.label,
-                            color = if (isSelected) palette.onSecondaryContainer else palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { onSelectField(option) },
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = palette.primary,
-                                unselectedColor = palette.onSurfaceVariant
-                            )
-                        )
-                    }
-                }
             }
         }
     }
@@ -542,6 +452,128 @@ private fun <T> ReorderableToggleList(
                                 tint = palette.onSurfaceVariant
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Blacklist (Me > Music > Hide from library)
+// ---------------------------------------------------------------------------------------------
+
+@Composable
+private fun blacklistRowColors() = ListItemDefaults.colors(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+)
+
+/** Songs hidden with ⋮ › Blacklist song. "Restore" puts a song back in the library. */
+@Composable
+fun BlacklistedSongsSheet(
+    songs: List<BlacklistedSong>,
+    onRestore: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    LibrarySheet(onDismiss = onDismiss) {
+        SheetTitle(
+            title = "Blacklisted songs",
+            subtitle = "Hidden from your library. The files stay on your device."
+        )
+        if (songs.isEmpty()) {
+            Text(
+                text = "Nothing here yet. Use ⋮ › Blacklist song on any song, or long-press several.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+            songs.forEachIndexed { index, song ->
+                key(song.id) {
+                    SegmentedListItem(
+                        shapes = ListItemDefaults.segmentedShapes(index = index, count = songs.size),
+                        leadingContent = { Icon(Icons.Default.Block, contentDescription = null) },
+                        supportingContent = {
+                            Text(song.artist.ifBlank { "Unknown artist" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        },
+                        trailingContent = {
+                            TextButton(
+                                onClick = { onRestore(song.id) },
+                                shapes = ButtonDefaults.shapes()
+                            ) {
+                                Text("Restore")
+                            }
+                        },
+                        colors = blacklistRowColors()
+                    ) {
+                        Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A folder that holds music, with how many songs are in it. */
+data class MusicFolder(val path: String, val songCount: Int)
+
+/** Shorter, readable folder path: drops the "/storage/emulated/0/" prefix. */
+private fun displayFolderPath(path: String): String =
+    path.removePrefix("/storage/emulated/0/").removePrefix("/storage/emulated/0")
+
+/**
+ * Every folder that holds music, each with a switch. A blacklisted folder hides its songs and the
+ * songs of its sub-folders, including ones added later.
+ */
+@Composable
+fun BlacklistedFoldersSheet(
+    folders: List<MusicFolder>,
+    blacklisted: Set<String>,
+    onSetBlacklisted: (String, Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Blacklisted folders first, then the busiest folders. Keep folders that no longer hold songs.
+    val known = folders.map { it.path }.toSet()
+    val all = (folders + blacklisted.filter { it !in known }.map { MusicFolder(it, 0) })
+        .sortedWith(compareBy<MusicFolder>({ it.path !in blacklisted }, { -it.songCount }, { it.path.lowercase() }))
+    LibrarySheet(onDismiss = onDismiss) {
+        SheetTitle(
+            title = "Blacklisted folders",
+            subtitle = "Songs in a blacklisted folder, and its sub-folders, are hidden from your library. " +
+                "Handy for WhatsApp audio and voice notes."
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+            all.forEachIndexed { index, folder ->
+                val hidden = folder.path in blacklisted
+                key(folder.path) {
+                    SegmentedListItem(
+                        checked = hidden,
+                        onCheckedChange = { onSetBlacklisted(folder.path, it) },
+                        shapes = ListItemDefaults.segmentedShapes(index = index, count = all.size),
+                        leadingContent = {
+                            Icon(
+                                imageVector = if (hidden) Icons.Default.FolderOff else Icons.Default.Folder,
+                                contentDescription = null
+                            )
+                        },
+                        supportingContent = {
+                            val count = if (folder.songCount == 1) "1 song" else "${folder.songCount} songs"
+                            Text(
+                                text = "${displayFolderPath(folder.path)} · $count",
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        trailingContent = { Switch(checked = hidden, onCheckedChange = null) },
+                        colors = blacklistRowColors()
+                    ) {
+                        Text(
+                            text = folder.path.substringAfterLast('/').ifBlank { folder.path },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }

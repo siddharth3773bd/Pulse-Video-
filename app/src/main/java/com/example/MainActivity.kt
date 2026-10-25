@@ -447,6 +447,8 @@ fun Material3VideoPlayerScreen(
     val audioUiScope = rememberCoroutineScope()
     val miniTrack = uiState.playingAudio
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
+    // Long-press selection in the Music tab: its own toolbar replaces the nav pill and mini player.
+    var audioSelectionActive by remember { mutableStateOf(false) }
     var nowPlayingInfoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
     var lastNowPlayingTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
     LaunchedEffect(miniTrack) {
@@ -555,7 +557,7 @@ fun Material3VideoPlayerScreen(
                                     (activity == null || !ActivityCompat.shouldShowRequestPermissionRationale(activity, permName))
                                 MediaPermissionPromptCard(
                                     title = "Audio access needed",
-                                    explanation = "Grant audio permission so Videos can scan and play music stored on your device.",
+                                    explanation = "Grant audio permission so Doppler can scan and play music stored on your device.",
                                     showOpenSettingsButton = uiState.audioPermissionAsked || showSettings,
                                     onGrantPermission = {
                                         audioPermissionLauncher.launch(permName)
@@ -582,9 +584,10 @@ fun Material3VideoPlayerScreen(
                                     onSeekAudio = { viewModel.seekAudio(it) },
                                     onSkipPrevious = { viewModel.skipAudioPrevious() },
                                     onSkipNext = { viewModel.skipAudioNext() },
-                                    onPlayNext = { track -> audioManager.playNext(track) },
-                                    onAddToQueue = { track -> audioManager.addToQueue(track) },
-                                    onLibraryChanged = { viewModel.refreshPermissionsAndScan(context) }
+                                    onPlayNext = { list -> audioManager.playNext(list) },
+                                    onAddToQueue = { list -> audioManager.addToQueue(list) },
+                                    onLibraryChanged = { viewModel.refreshPermissionsAndScan(context) },
+                                    onSelectionModeChange = { audioSelectionActive = it }
                                 )
                             }
                         }
@@ -596,7 +599,7 @@ fun Material3VideoPlayerScreen(
                                     (activity == null || !ActivityCompat.shouldShowRequestPermissionRationale(activity, permName))
                                 MediaPermissionPromptCard(
                                     title = "Video access needed",
-                                    explanation = "Grant video permission so Videos can scan and play video files stored on your device.",
+                                    explanation = "Grant video permission so Doppler can scan and play video files stored on your device.",
                                     showOpenSettingsButton = uiState.videoPermissionAsked || showSettings,
                                     onGrantPermission = {
                                         videoPermissionLauncher.launch(permName)
@@ -692,7 +695,7 @@ fun Material3VideoPlayerScreen(
                         )
                     }
                 )
-            } else {
+            } else if (!(audioSelectionActive && uiState.bottomTab == BottomTab.AUDIO)) {
                 MainNavigationPill(
                     bottomTab = uiState.bottomTab,
                     activeTabs = uiState.activeTabs,
@@ -712,6 +715,7 @@ fun Material3VideoPlayerScreen(
             miniTrack != null &&
             !showNowPlaying &&
             !uiState.isSelectionMode &&
+            !audioSelectionActive &&
             !uiState.isPillEditMode
         ) {
             AlbumArtTheme(
@@ -980,7 +984,7 @@ private fun M3ExpressiveHeader(
 
     val titleText = when {
         activeSubTitle != null -> activeSubTitle
-        uiState.bottomTab == BottomTab.AUDIO -> "Audio"
+        uiState.bottomTab == BottomTab.AUDIO -> "Music"
         uiState.bottomTab == BottomTab.ME -> "Me"
         else -> "Videos"
     }
@@ -1568,7 +1572,7 @@ private fun MainNavigationPill(
 
     val allFixedTabs = remember {
         listOf(
-            Triple(BottomTab.AUDIO, "Audio", Icons.Default.MusicNote),
+            Triple(BottomTab.AUDIO, "Music", Icons.Default.MusicNote),
             Triple(BottomTab.VIDEOS, "Videos", Icons.Default.PlayArrow),
             Triple(BottomTab.ME, "Me", Icons.Default.Person)
         )

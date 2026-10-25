@@ -12,6 +12,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.example.model.BottomTab
 import com.example.model.DecoderMode
 import com.example.model.LayoutMode
+import com.example.model.AudioPlaylist
+import com.example.model.AudioTrackItem
+import com.example.model.BlacklistedSong
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
@@ -95,6 +98,9 @@ object AppPreferencesRepository {
     private val KEY_NP_COLOR_SOURCE = stringPreferencesKey("np_color_source")
     private val KEY_NP_BACKGROUND = stringPreferencesKey("np_background")
     private val KEY_NP_BUTTON_COLORS = stringPreferencesKey("np_button_colors")
+    private val KEY_LIB_BLACKLIST_SONGS = stringPreferencesKey("lib_blacklist_songs_json")
+    private val KEY_LIB_BLACKLIST_FOLDERS = stringSetPreferencesKey("lib_blacklist_folders")
+    private val KEY_LIB_PLAYLISTS = stringPreferencesKey("lib_audio_playlists_json")
 
     // Playlists & History
     private val KEY_PLAYLISTS_JSON = stringPreferencesKey("playlists_json")
@@ -196,7 +202,10 @@ object AppPreferencesRepository {
                 nowPlayingBackground = NowPlayingBackground.entries.find { it.id == prefs[KEY_NP_BACKGROUND] }
                     ?: NowPlayingBackground.GRADIENT,
                 nowPlayingButtonColors = NowPlayingButtonColors.entries.find { it.id == prefs[KEY_NP_BUTTON_COLORS] }
-                    ?: NowPlayingButtonColors.DEFAULT
+                    ?: NowPlayingButtonColors.DEFAULT,
+                blacklistedSongs = parseBlacklistedSongs(prefs[KEY_LIB_BLACKLIST_SONGS]),
+                blacklistedFolders = prefs[KEY_LIB_BLACKLIST_FOLDERS] ?: emptySet(),
+                playlists = parseAudioPlaylists(prefs[KEY_LIB_PLAYLISTS])
             )
         }
     }
@@ -220,6 +229,130 @@ object AppPreferencesRepository {
         context.appDataStore.edit {
             val current = it[KEY_LIB_LIKED_IDS] ?: emptySet()
             it[KEY_LIB_LIKED_IDS] = if (liked) current + trackId else current - trackId
+        }
+    }
+
+    suspend fun setTracksLiked(context: Context, trackIds: Collection<String>, liked: Boolean) {
+        context.appDataStore.edit {
+            val current = it[KEY_LIB_LIKED_IDS] ?: emptySet()
+            it[KEY_LIB_LIKED_IDS] = if (liked) current + trackIds else current - trackIds.toSet()
+        }
+    }
+
+    // ---- Blacklist -------------------------------------------------------------------------
+
+    suspend fun blacklistSongs(context: Context, tracks: List<AudioTrackItem>) {
+        context.appDataStore.edit {
+            val current = parseBlacklistedSongs(it[KEY_LIB_BLACKLIST_SONGS])
+            val known = current.mapTo(HashSet()) { s -> s.id }
+            val added = tracks.filter { t -> t.id !in known }
+                .map { t -> BlacklistedSong(id = t.id, title = t.title, artist = t.artist) }
+            it[KEY_LIB_BLACKLIST_SONGS] = serializeBlacklistedSongs(current + added)
+        }
+    }
+
+    suspend fun removeBlacklistedSong(context: Context, id: String) {
+        context.appDataStore.edit {
+            val current = parseBlacklistedSongs(it[KEY_LIB_BLACKLIST_SONGS])
+            it[KEY_LIB_BLACKLIST_SONGS] = serializeBlacklistedSongs(current.filter { s -> s.id != id })
+        }
+    }
+
+    suspend fun setFolderBlacklisted(context: Context, folderPath: String, blacklisted: Boolean) {
+        if (folderPath.isBlank()) return
+        context.appDataStore.edit {
+            val current = it[KEY_LIB_BLACKLIST_FOLDERS] ?: emptySet()
+            it[KEY_LIB_BLACKLIST_FOLDERS] = if (blacklisted) current + folderPath else current - folderPath
+        }
+    }
+
+    private fun serializeBlacklistedSongs(songs: List<BlacklistedSong>): String {
+        val arr = JSONArray()
+        songs.forEach { song ->
+            arr.put(JSONObject().put("id", song.id).put("title", song.title).put("artist", song.artist))
+        }
+        return arr.toString()
+    }
+
+    private fun parseBlacklistedSongs(json: String?): List<BlacklistedSong> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                val id = obj.optString("id")
+                if (id.isBlank()) null
+                else BlacklistedSong(id = id, title = obj.optString("title", "Unknown"), artist = obj.optString("artist", ""))
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    // ---- Music playlists -------------------------------------------------------------------
+
+    private suspend fun editAudioPlaylists(context: Context, transform: (List<AudioPlaylist>) -> List<AudioPlaylist>) {
+        context.appDataStore.edit {
+            val current = parseAudioPlaylists(it[KEY_LIB_PLAYLISTS])
+            it[KEY_LIB_PLAYLISTS] = serializeAudioPlaylists(transform(current))
+        }
+    }
+
+    /** Creates a playlist holding [trackIds] and returns its id. */
+    suspend fun createAudioPlaylist(context: Context, name: String, trackIds: List<String> = emptyList()): String {
+        val id = "apl_${System.currentTimeMillis()}"
+        editAudioPlaylists(context) { it + AudioPlaylist(id = id, name = name.trim().ifBlank { "Playlist" }, trackIds = trackIds.distinct()) }
+        return id
+    }
+
+    suspend fun renameAudioPlaylist(context: Context, id: String, name: String) {
+        editAudioPlaylists(context) { list ->
+            list.map { if (it.id == id) it.copy(name = name.trim().ifBlank { it.name }) else it }
+        }
+    }
+
+    suspend fun deleteAudioPlaylist(context: Context, id: String) {
+        editAudioPlaylists(context) { list -> list.filter { it.id != id } }
+    }
+
+    suspend fun addToAudioPlaylist(context: Context, id: String, trackIds: List<String>) {
+        editAudioPlaylists(context) { list ->
+            list.map { if (it.id == id) it.copy(trackIds = (it.trackIds + trackIds).distinct()) else it }
+        }
+    }
+
+    suspend fun removeFromAudioPlaylist(context: Context, id: String, trackIds: Collection<String>) {
+        val remove = trackIds.toSet()
+        editAudioPlaylists(context) { list ->
+            list.map { if (it.id == id) it.copy(trackIds = it.trackIds.filter { t -> t !in remove }) else it }
+        }
+    }
+
+    private fun serializeAudioPlaylists(playlists: List<AudioPlaylist>): String {
+        val arr = JSONArray()
+        playlists.forEach { pl ->
+            val ids = JSONArray()
+            pl.trackIds.forEach { ids.put(it) }
+            arr.put(JSONObject().put("id", pl.id).put("name", pl.name).put("tracks", ids))
+        }
+        return arr.toString()
+    }
+
+    private fun parseAudioPlaylists(json: String?): List<AudioPlaylist> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                val ids = obj.optJSONArray("tracks") ?: JSONArray()
+                AudioPlaylist(
+                    id = obj.optString("id", "apl_$i"),
+                    name = obj.optString("name", "Playlist"),
+                    trackIds = (0 until ids.length()).map { j -> ids.getString(j) }
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

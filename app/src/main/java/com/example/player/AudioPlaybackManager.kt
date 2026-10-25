@@ -211,29 +211,37 @@ class AudioPlaybackManager private constructor(context: Context) {
     }
 
     /** Inserts [track] right after the current song. Starts playback if nothing is loaded. */
-    fun playNext(track: AudioTrackItem) = insertIntoQueue(track, next = true)
+    fun playNext(track: AudioTrackItem) = insertIntoQueue(listOf(track), next = true)
 
     /** Appends [track] to the end of the queue. Starts playback if nothing is loaded. */
-    fun addToQueue(track: AudioTrackItem) = insertIntoQueue(track, next = false)
+    fun addToQueue(track: AudioTrackItem) = insertIntoQueue(listOf(track), next = false)
 
-    private fun insertIntoQueue(track: AudioTrackItem, next: Boolean) {
-        tracksById[track.id] = track
+    /** Inserts [tracks], in order, right after the current song. */
+    fun playNext(tracks: List<AudioTrackItem>) = insertIntoQueue(tracks, next = true)
+
+    /** Appends [tracks], in order, to the end of the queue. */
+    fun addToQueue(tracks: List<AudioTrackItem>) = insertIntoQueue(tracks, next = false)
+
+    private fun insertIntoQueue(tracks: List<AudioTrackItem>, next: Boolean) {
+        if (tracks.isEmpty()) return
+        tracks.forEach { tracksById[it.id] = it }
         if (_state.value.currentTrack == null) {
-            playQueue(listOf(track), 0)
+            playQueue(tracks, 0)
             return
         }
         scope.launch {
-            val art = withContext(Dispatchers.IO) { loadTrackArtworkBytes(track) }
-            val item = buildMediaItem(track, art)
+            val items = withContext(Dispatchers.IO) {
+                tracks.map { track -> buildMediaItem(track, loadTrackArtworkBytes(track)) }
+            }
             withController { controller ->
                 if (controller.mediaItemCount == 0) {
-                    controller.setMediaItem(item)
+                    controller.setMediaItems(items)
                     controller.prepare()
                     controller.play()
                 } else if (next) {
-                    controller.addMediaItem(controller.currentMediaItemIndex + 1, item)
+                    controller.addMediaItems(controller.currentMediaItemIndex + 1, items)
                 } else {
-                    controller.addMediaItem(item)
+                    controller.addMediaItems(items)
                 }
                 syncFromController()
             }
