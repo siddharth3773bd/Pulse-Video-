@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.model.AmbientSettings
 import com.example.model.BottomTab
 import com.example.model.DecoderMode
 import com.example.model.LayoutMode
@@ -98,6 +99,12 @@ object AppPreferencesRepository {
     private val KEY_NP_COLOR_SOURCE = stringPreferencesKey("np_color_source")
     private val KEY_NP_BACKGROUND = stringPreferencesKey("np_background")
     private val KEY_NP_BUTTON_COLORS = stringPreferencesKey("np_button_colors")
+    private val KEY_AMB_ART = booleanPreferencesKey("ambient_show_art")
+    private val KEY_AMB_TITLE = booleanPreferencesKey("ambient_show_title")
+    private val KEY_AMB_ARTIST = booleanPreferencesKey("ambient_show_artist")
+    private val KEY_AMB_LYRICS = booleanPreferencesKey("ambient_show_lyrics")
+    private val KEY_AMB_AMOLED = booleanPreferencesKey("ambient_amoled")
+    private val KEY_AMB_ROTATE = booleanPreferencesKey("ambient_open_on_rotate")
     private val KEY_LIB_BLACKLIST_SONGS = stringPreferencesKey("lib_blacklist_songs_json")
     private val KEY_LIB_BLACKLIST_FOLDERS = stringSetPreferencesKey("lib_blacklist_folders")
     private val KEY_LIB_PLAYLISTS = stringPreferencesKey("lib_audio_playlists_json")
@@ -210,7 +217,15 @@ object AppPreferencesRepository {
                     ?: NowPlayingButtonColors.DEFAULT,
                 blacklistedSongs = parseBlacklistedSongs(prefs[KEY_LIB_BLACKLIST_SONGS]),
                 blacklistedFolders = prefs[KEY_LIB_BLACKLIST_FOLDERS] ?: emptySet(),
-                playlists = parseAudioPlaylists(prefs[KEY_LIB_PLAYLISTS])
+                playlists = parseAudioPlaylists(prefs[KEY_LIB_PLAYLISTS]),
+                ambient = AmbientSettings(
+                    showArtwork = prefs[KEY_AMB_ART] ?: true,
+                    showTitle = prefs[KEY_AMB_TITLE] ?: true,
+                    showArtist = prefs[KEY_AMB_ARTIST] ?: true,
+                    showLyrics = prefs[KEY_AMB_LYRICS] ?: true,
+                    amoled = prefs[KEY_AMB_AMOLED] ?: false,
+                    openOnRotate = prefs[KEY_AMB_ROTATE] ?: true
+                )
             )
         }
     }
@@ -385,6 +400,17 @@ object AppPreferencesRepository {
         context.appDataStore.edit {
             it[KEY_LIB_SONG_SORT] = sort.id
             it[KEY_LIB_SONG_ASC] = ascending
+        }
+    }
+
+    suspend fun updateAmbientSettings(context: Context, value: AmbientSettings) {
+        context.appDataStore.edit {
+            it[KEY_AMB_ART] = value.showArtwork
+            it[KEY_AMB_TITLE] = value.showTitle
+            it[KEY_AMB_ARTIST] = value.showArtist
+            it[KEY_AMB_LYRICS] = value.showLyrics
+            it[KEY_AMB_AMOLED] = value.amoled
+            it[KEY_AMB_ROTATE] = value.openOnRotate
         }
     }
 

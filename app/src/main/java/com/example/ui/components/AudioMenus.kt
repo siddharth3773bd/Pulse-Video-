@@ -159,13 +159,11 @@ fun SongActionsMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     track: AudioTrackItem,
-    liked: Boolean,
     canGoToAlbum: Boolean,
     canGoToArtist: Boolean,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     onAddToPlaylist: () -> Unit,
-    onToggleLike: () -> Unit,
     onGoToAlbum: () -> Unit,
     onGoToArtist: () -> Unit,
     onShare: () -> Unit,
@@ -240,18 +238,12 @@ fun SongActionsMenu(
             ) {
                 QuickAction(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next", "song_action_play_next") { act(onPlayNext) }
                 QuickAction(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue", "song_action_add_queue") { act(onAddToQueue) }
-                QuickAction(
-                    icon = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    label = if (liked) "Liked" else "Like",
-                    tag = "song_action_like",
-                    highlighted = liked
-                ) { act(onToggleLike) }
+                QuickAction(Icons.AutoMirrored.Filled.PlaylistAdd, "Add to playlist", "song_action_add_playlist") { act(onAddToPlaylist) }
                 QuickAction(Icons.Default.Share, "Share", "song_action_share") { act(onShare) }
             }
 
             // Library actions
             val main = listOfNotNull(
-                AudioMenuEntry("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd, "song_action_add_playlist", onClick = onAddToPlaylist),
                 AudioMenuEntry("Go to album", Icons.Default.Album, "song_action_album", onClick = onGoToAlbum)
                     .takeIf { canGoToAlbum },
                 AudioMenuEntry("Go to artist", Icons.Default.Person, "song_action_artist", onClick = onGoToArtist)
@@ -305,7 +297,9 @@ private fun RowScope.QuickAction(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                minLines = 2,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }

@@ -26,6 +26,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -133,7 +139,6 @@ import androidx.compose.ui.unit.dp
 import com.example.data.AppPreferencesRepository
 import com.example.model.AudioPlaylist
 import com.example.model.AudioTrackItem
-import com.example.model.LIKED_PLAYLIST_ID
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
@@ -345,9 +350,6 @@ fun AudioLibraryScreen(
     val sortedSongs = remember(libraryTracks, prefs.songSort, prefs.songAscending) {
         sortSongs(libraryTracks, prefs.songSort, prefs.songAscending)
     }
-    val likedSongs = remember(sortedSongs, prefs.likedIds) {
-        sortedSongs.filter { it.id in prefs.likedIds }
-    }
     val albums = remember(libraryTracks, prefs.groupAscending) { buildAlbums(libraryTracks, prefs.groupAscending) }
     val artists = remember(libraryTracks, prefs.groupAscending) { buildArtists(libraryTracks, prefs.groupAscending) }
 
@@ -377,28 +379,17 @@ fun AudioLibraryScreen(
                     tracks = artist.tracks
                 )
             }
-            LibraryTab.PLAYLISTS -> if (detailKey == LIKED_PLAYLIST_ID) {
+            LibraryTab.PLAYLISTS -> prefs.playlists.firstOrNull { it.id == detailKey }?.let { playlist ->
+                val list = playlistTracks(playlist)
                 DetailInfo(
-                    title = "Liked songs",
-                    subtitle = "${songCountLabel(likedSongs.size)} · ${totalDurationLabel(likedSongs)}",
-                    artUri = null,
+                    title = playlist.name,
+                    subtitle = "${songCountLabel(list.size)} · ${totalDurationLabel(list)}",
+                    artUri = list.firstOrNull()?.contentUri,
                     artShape = RoundedCornerShape(28.dp),
-                    placeholderIcon = Icons.Default.Favorite,
-                    tracks = likedSongs
+                    placeholderIcon = Icons.AutoMirrored.Filled.PlaylistPlay,
+                    tracks = list,
+                    playlist = playlist
                 )
-            } else {
-                prefs.playlists.firstOrNull { it.id == detailKey }?.let { playlist ->
-                    val list = playlistTracks(playlist)
-                    DetailInfo(
-                        title = playlist.name,
-                        subtitle = "${songCountLabel(list.size)} · ${totalDurationLabel(list)}",
-                        artUri = list.firstOrNull()?.contentUri,
-                        artShape = RoundedCornerShape(28.dp),
-                        placeholderIcon = Icons.AutoMirrored.Filled.PlaylistPlay,
-                        tracks = list,
-                        playlist = playlist
-                    )
-                }
             }
             else -> null
         }
@@ -439,6 +430,12 @@ fun AudioLibraryScreen(
     BackHandler(enabled = inDetail && !selectionMode) { closeDetail() }
 
     val background = headerBackground
+    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    // Bring the title bar back whenever the page or mode changes.
+    LaunchedEffect(currentTab, detailTabId, detailKey, selectionMode) {
+        topBarScroll.state.heightOffset = 0f
+    }
+    var sortSheetOpen by remember { mutableStateOf(false) }
 
     val playFromList: (List<AudioTrackItem>, Int) -> Unit = { list, index ->
         val target = list.getOrNull(index)
@@ -486,12 +483,10 @@ fun AudioLibraryScreen(
         val menuKey = "$listKey|${track.id}"
         val albumKey = albumKeyOf(track)
         val artistKey = track.artist.lowercase()
-        val liked = track.id in prefs.likedIds
         SongActionsMenu(
             expanded = openSongMenu == menuKey,
             onDismiss = { if (openSongMenu == menuKey) openSongMenu = null },
             track = track,
-            liked = liked,
             canGoToAlbum = LibraryTab.ALBUMS in visibleTabs && albums.any { it.key == albumKey } &&
                 !(detailTabId == LibraryTab.ALBUMS.id && detailKey == albumKey),
             canGoToArtist = LibraryTab.ARTISTS in visibleTabs && artists.any { it.key == artistKey } &&
@@ -499,9 +494,6 @@ fun AudioLibraryScreen(
             onPlayNext = { onPlayNext(listOf(track)) },
             onAddToQueue = { onAddToQueue(listOf(track)) },
             onAddToPlaylist = { addToPlaylistTracks = listOf(track) },
-            onToggleLike = {
-                scope.launch { AppPreferencesRepository.setTrackLiked(context, track.id, !liked) }
-            },
             onGoToAlbum = {
                 scope.launch { searchBarState.animateToCollapsed() }
                 openDetail(LibraryTab.ALBUMS, albumKey)
@@ -585,6 +577,7 @@ fun AudioLibraryScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .nestedScroll(topBarScroll.nestedScrollConnection)
                         .testTag("audio_library_screen")
                 ) {
                     MusicHeader(
@@ -592,7 +585,6 @@ fun AudioLibraryScreen(
                         selectionCount = selectedIds.size,
                         detailTitle = currentDetail?.title,
                         allSelected = currentSongList != null && selectedTracks.size == currentSongList.size,
-                        allSelectedLiked = selectedTracks.isNotEmpty() && selectedTracks.all { it.id in prefs.likedIds },
                         onClearSelection = { selectedIds = emptySet() },
                         onToggleSelectAll = {
                             selectedIds = if (currentSongList != null && selectedTracks.size < currentSongList.size) {
@@ -601,14 +593,20 @@ fun AudioLibraryScreen(
                                 emptySet()
                             }
                         },
-                        onLikeSelected = {
-                            val likeAll = !selectedTracks.all { it.id in prefs.likedIds }
-                            scope.launch {
-                                AppPreferencesRepository.setTracksLiked(context, selectedTracks.map { it.id }, likeAll)
-                            }
-                        },
                         onBack = closeDetail,
                         detailActions = detailActions,
+                        scrollBehavior = topBarScroll,
+                        sortButton = if (currentTab == LibraryTab.PLAYLISTS) null else {
+                            {
+                                IconButton(
+                                    onClick = { sortSheetOpen = true },
+                                    shapes = IconButtonDefaults.shapes(),
+                                    modifier = Modifier.testTag("library_sort_button")
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+                                }
+                            }
+                        },
                         searchButton = {
                             // The collapsed search bar is just the search icon.
                             SearchBar(
@@ -654,75 +652,6 @@ fun AudioLibraryScreen(
                         }
                     }
 
-                    if (!inDetail) {
-                        when (currentTab) {
-                            LibraryTab.SONGS -> LibraryActionRow(
-                                label = songCountLabel(sortedSongs.size),
-                                onPlay = null,
-                                onShuffle = { shuffle(sortedSongs) }.takeIf { sortedSongs.isNotEmpty() },
-                                sortMenu = { expanded, onDismiss ->
-                                    LibrarySortMenu(
-                                        expanded = expanded,
-                                        onDismiss = onDismiss,
-                                        field = prefs.songSort,
-                                        ascending = prefs.songAscending,
-                                        onSelectField = { field ->
-                                            // A new field starts in its natural order (newest, longest, A to Z).
-                                            scope.launch {
-                                                AppPreferencesRepository.updateLibrarySongSort(context, field, field.naturalAscending)
-                                            }
-                                        },
-                                        onSelectAscending = { asc ->
-                                            scope.launch {
-                                                AppPreferencesRepository.updateLibrarySongSort(context, prefs.songSort, asc)
-                                            }
-                                        }
-                                    )
-                                }
-                            )
-                            LibraryTab.ALBUMS, LibraryTab.ARTISTS -> LibraryActionRow(
-                                label = if (currentTab == LibraryTab.ALBUMS) albumCountLabel(albums.size)
-                                else artistCountLabel(artists.size),
-                                onPlay = null,
-                                onShuffle = null,
-                                sortMenu = { expanded, onDismiss ->
-                                    LibrarySortMenu(
-                                        expanded = expanded,
-                                        onDismiss = onDismiss,
-                                        field = null,
-                                        ascending = prefs.groupAscending,
-                                        onSelectField = {},
-                                        onSelectAscending = { asc ->
-                                            scope.launch { AppPreferencesRepository.updateLibraryGroupAscending(context, asc) }
-                                        }
-                                    )
-                                }
-                            )
-                            LibraryTab.PLAYLISTS -> LibraryActionRow(
-                                label = playlistCountLabel(prefs.playlists.size),
-                                onPlay = null,
-                                onShuffle = null,
-                                sortMenu = null,
-                                leading = {
-                                    FilledTonalButton(
-                                        onClick = { playlistDialog = PlaylistDialog.Create(emptyList()) },
-                                        shapes = ButtonDefaults.shapes(),
-                                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                                        modifier = Modifier.testTag("library_new_playlist_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(ButtonDefaults.IconSize)
-                                        )
-                                        Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
-                                        Text("New playlist")
-                                    }
-                                }
-                            )
-                        }
-                    }
-
                     HorizontalPager(
                         state = pagerState,
                         key = { index -> visibleTabs.getOrNull(index)?.id ?: index.toString() },
@@ -756,24 +685,54 @@ fun AudioLibraryScreen(
                                         subtitle = "Music files stored on your device will appear here."
                                     )
                                 } else {
-                                    Songs(listKey = "songs", songs = sortedSongs)
+                                    Songs(
+                                        listKey = "songs",
+                                        songs = sortedSongs,
+                                        header = {
+                                            LibraryActionRow(
+                                                label = songCountLabel(sortedSongs.size),
+                                                onShuffle = { shuffle(sortedSongs) }
+                                            )
+                                        }
+                                    )
                                 }
                             }
                             tab == LibraryTab.ALBUMS -> AlbumsGrid(
                                 albums = albums,
+                                header = { LibraryActionRow(label = albumCountLabel(albums.size)) },
                                 onOpen = { album -> openDetail(LibraryTab.ALBUMS, album.key) }
                             )
                             tab == LibraryTab.ARTISTS -> ArtistsList(
                                 artists = artists,
+                                header = { LibraryActionRow(label = artistCountLabel(artists.size)) },
                                 onOpen = { artist -> openDetail(LibraryTab.ARTISTS, artist.key) }
                             )
                             tab == LibraryTab.PLAYLISTS -> PlaylistsList(
-                                likedCount = likedSongs.size,
                                 playlists = prefs.playlists,
+                                header = {
+                                    LibraryActionRow(
+                                        label = playlistCountLabel(prefs.playlists.size),
+                                        leading = {
+                                            FilledTonalButton(
+                                                onClick = { playlistDialog = PlaylistDialog.Create(emptyList()) },
+                                                shapes = ButtonDefaults.shapes(),
+                                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                                modifier = Modifier.testTag("library_new_playlist_button")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Add,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(ButtonDefaults.IconSize)
+                                                )
+                                                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                                                Text("New playlist")
+                                            }
+                                        }
+                                    )
+                                },
                                 firstTrackOf = { playlist -> playlist.trackIds.firstNotNullOfOrNull { tracksById[it] } },
                                 countOf = { playlist -> playlistTracks(playlist).size },
                                 openMenuId = openPlaylistMenu,
-                                onOpenLiked = { openDetail(LibraryTab.PLAYLISTS, LIKED_PLAYLIST_ID) },
                                 onOpen = { playlist -> openDetail(LibraryTab.PLAYLISTS, playlist.id) },
                                 onMore = { playlist -> openPlaylistMenu = "list|${playlist.id}" },
                                 menu = { playlist ->
@@ -877,6 +836,34 @@ fun AudioLibraryScreen(
     }
 
     // ---- Sheets and dialogs -----------------------------------------------------------------
+    if (currentTab == LibraryTab.SONGS) {
+        LibrarySortMenu(
+            expanded = sortSheetOpen,
+            onDismiss = { sortSheetOpen = false },
+            field = prefs.songSort,
+            ascending = prefs.songAscending,
+            onSelectField = { field ->
+                // A new field starts in its natural order (newest, longest, A to Z).
+                scope.launch {
+                    AppPreferencesRepository.updateLibrarySongSort(context, field, field.naturalAscending)
+                }
+            },
+            onSelectAscending = { asc ->
+                scope.launch { AppPreferencesRepository.updateLibrarySongSort(context, prefs.songSort, asc) }
+            }
+        )
+    } else {
+        LibrarySortMenu(
+            expanded = sortSheetOpen,
+            onDismiss = { sortSheetOpen = false },
+            field = null,
+            ascending = prefs.groupAscending,
+            onSelectField = {},
+            onSelectAscending = { asc ->
+                scope.launch { AppPreferencesRepository.updateLibraryGroupAscending(context, asc) }
+            }
+        )
+    }
     infoTrack?.let { track ->
         SongInfoSheet(track = track, onDismiss = { infoTrack = null })
     }
@@ -980,102 +967,86 @@ private fun MusicHeader(
     selectionCount: Int,
     detailTitle: String?,
     allSelected: Boolean,
-    allSelectedLiked: Boolean,
     onClearSelection: () -> Unit,
     onToggleSelectAll: () -> Unit,
-    onLikeSelected: () -> Unit,
     onBack: () -> Unit,
     detailActions: @Composable () -> Unit,
-    searchButton: @Composable () -> Unit
+    sortButton: (@Composable () -> Unit)?,
+    searchButton: @Composable () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior
 ) {
     val headerBg by animateColorAsState(
         targetValue = if (selectionCount > 0) MaterialTheme.colorScheme.surfaceContainerHigh else background,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "musicHeaderBg"
     )
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(headerBg)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    // Official top app bar with the "enter always" scroll behaviour: it slides away while you
+    // scroll down the list and comes back as soon as you scroll up.
+    TopAppBar(
+        title = {
             when {
-                selectionCount > 0 -> {
-                    IconButton(
-                        onClick = onClearSelection,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.testTag("selection_close_btn")
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel selection")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "$selectionCount selected",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("selection_count")
-                    )
-                    IconButton(
-                        onClick = onLikeSelected,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.testTag("selection_like_btn")
-                    ) {
-                        Icon(
-                            imageVector = if (allSelectedLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (allSelectedLiked) "Unlike" else "Like"
-                        )
-                    }
-                    IconButton(
-                        onClick = onToggleSelectAll,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.testTag("selection_all_btn")
-                    ) {
-                        Icon(
-                            imageVector = if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
-                            contentDescription = if (allSelected) "Deselect all" else "Select all"
-                        )
-                    }
+                selectionCount > 0 -> Text(
+                    text = "$selectionCount selected",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.testTag("selection_count")
+                )
+                detailTitle != null -> Text(
+                    text = detailTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                else -> Text(
+                    text = "Music",
+                    style = MaterialTheme.typography.headlineLargeEmphasized,
+                    maxLines = 1,
+                    modifier = Modifier.testTag("music_title")
+                )
+            }
+        },
+        navigationIcon = {
+            when {
+                selectionCount > 0 -> IconButton(
+                    onClick = onClearSelection,
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("selection_close_btn")
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Cancel selection")
                 }
-                detailTitle != null -> {
-                    IconButton(
-                        onClick = onBack,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.testTag("music_detail_back_btn")
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = detailTitle,
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    detailActions()
+                detailTitle != null -> IconButton(
+                    onClick = onBack,
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("music_detail_back_btn")
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
+            }
+        },
+        actions = {
+            when {
+                selectionCount > 0 -> IconButton(
+                    onClick = onToggleSelectAll,
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("selection_all_btn")
+                ) {
+                    Icon(
+                        imageVector = if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
+                        contentDescription = if (allSelected) "Deselect all" else "Select all"
+                    )
+                }
+                detailTitle != null -> detailActions()
                 else -> {
-                    Text(
-                        text = "Music",
-                        style = MaterialTheme.typography.headlineLargeEmphasized,
-                        maxLines = 1,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("music_title")
-                    )
+                    sortButton?.invoke()
                     searchButton()
                 }
             }
-        }
-    }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = headerBg,
+            scrolledContainerColor = headerBg
+        ),
+        scrollBehavior = scrollBehavior
+    )
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1176,51 +1147,37 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
 }
 
 /**
- * Play and Shuffle (or another [leading] button) on the left; the count and the Sort button,
- * which opens the Expressive sort menu, on the right.
+ * First row of a library list (it scrolls away with the list): Shuffle or another [leading]
+ * button on the left and the item count. With no button the count sits on the left.
  */
 @Composable
 private fun LibraryActionRow(
     label: String,
-    onPlay: (() -> Unit)?,
-    onShuffle: (() -> Unit)?,
-    sortMenu: (@Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit)?,
+    onShuffle: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null
 ) {
-    var sortExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .padding(start = 16.dp, end = 8.dp),
+            .heightIn(min = 40.dp)
+            .padding(bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val hasButton = leading != null || onShuffle != null
         if (leading != null) {
             leading()
-        } else if (onPlay != null || onShuffle != null) {
-            PlayShuffleButtons(onPlay = onPlay, onShuffle = onShuffle)
+        } else if (onShuffle != null) {
+            PlayShuffleButtons(onPlay = null, onShuffle = onShuffle)
         }
-        Spacer(modifier = Modifier.weight(1f))
+        if (hasButton) Spacer(modifier = Modifier.weight(1f))
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.testTag("library_count_label")
+            modifier = Modifier
+                .padding(horizontal = 4.dp)
+                .testTag("library_count_label")
         )
-        if (sortMenu != null) {
-            Box {
-                IconButton(
-                    onClick = { sortExpanded = true },
-                    shapes = IconButtonDefaults.shapes(),
-                    modifier = Modifier.testTag("library_sort_button")
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
-                }
-                sortMenu(sortExpanded) { sortExpanded = false }
-            }
-        } else {
-            Spacer(modifier = Modifier.size(8.dp))
-        }
     }
 }
 
@@ -1455,6 +1412,7 @@ private fun segmentedListColors() = ListItemDefaults.colors(
 @Composable
 private fun AlbumsGrid(
     albums: List<AlbumGroup>,
+    header: @Composable () -> Unit,
     onOpen: (AlbumGroup) -> Unit
 ) {
     val palette = LocalM3Palette.current
@@ -1483,6 +1441,7 @@ private fun AlbumsGrid(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item(key = "header", span = { GridItemSpan(maxLineSpan) }, contentType = "header") { header() }
         items(albums, key = { it.key }) { album ->
             Card(
                 onClick = { onOpen(album) },
@@ -1523,6 +1482,7 @@ private fun AlbumsGrid(
 @Composable
 private fun ArtistsList(
     artists: List<ArtistGroup>,
+    header: @Composable () -> Unit,
     onOpen: (ArtistGroup) -> Unit
 ) {
     val palette = LocalM3Palette.current
@@ -1549,6 +1509,7 @@ private fun ArtistsList(
         ),
         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
     ) {
+        item(key = "header", contentType = "header") { header() }
         itemsIndexed(artists, key = { _, a -> a.key }) { index, artist ->
             SegmentedListItem(
                 onClick = { onOpen(artist) },
@@ -1585,21 +1546,20 @@ private fun ArtistsList(
 // Playlists
 // ---------------------------------------------------------------------------------------------
 
-/** "Liked songs" pinned first, then the user's playlists. */
+/** The user's playlists. */
 @Composable
 private fun PlaylistsList(
-    likedCount: Int,
     playlists: List<AudioPlaylist>,
+    header: @Composable () -> Unit,
     firstTrackOf: (AudioPlaylist) -> AudioTrackItem?,
     countOf: (AudioPlaylist) -> Int,
     openMenuId: String?,
-    onOpenLiked: () -> Unit,
     onOpen: (AudioPlaylist) -> Unit,
     onMore: (AudioPlaylist) -> Unit,
     menu: @Composable (AudioPlaylist) -> Unit
 ) {
     val palette = LocalM3Palette.current
-    val rows = playlists.size + 1
+    val rows = playlists.size
     val listState = rememberLazyListState()
     LazyColumn(
         state = listState,
@@ -1615,37 +1575,12 @@ private fun PlaylistsList(
         ),
         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
     ) {
-        item(key = LIKED_PLAYLIST_ID) {
-            SegmentedListItem(
-                onClick = onOpenLiked,
-                shapes = ListItemDefaults.segmentedShapes(index = 0, count = rows),
-                leadingContent = {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(52.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Favorite, contentDescription = null)
-                        }
-                    }
-                },
-                supportingContent = { Text(songCountLabel(likedCount)) },
-                trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-                },
-                colors = segmentedListColors(),
-                modifier = Modifier.testTag("playlist_row_liked")
-            ) {
-                Text("Liked songs")
-            }
-        }
+        item(key = "header", contentType = "header") { header() }
         itemsIndexed(playlists, key = { _, p -> p.id }) { index, playlist ->
             val first = firstTrackOf(playlist)
             SegmentedListItem(
                 onClick = { onOpen(playlist) },
-                shapes = ListItemDefaults.segmentedShapes(index = index + 1, count = rows),
+                shapes = ListItemDefaults.segmentedShapes(index = index, count = rows),
                 leadingContent = {
                     if (first != null) {
                         AudioArt(

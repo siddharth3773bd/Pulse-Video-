@@ -156,6 +156,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import com.example.data.MediaStoreScanner
 import com.example.ui.components.SongInfoSheet
+import com.example.ui.components.AmbientModeScreen
 import com.example.ui.components.NowPlayingScreen
 import com.example.ui.components.AudioMiniPlayer
 import com.example.player.AudioPlaybackManager
@@ -471,6 +472,18 @@ fun Material3VideoPlayerScreen(
     val audioUiScope = rememberCoroutineScope()
     val miniTrack = uiState.playingAudio
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
+    // Ambient mode: opened from the Now Playing tray, or automatically when the phone is turned
+    // sideways on Now Playing (unless closed while sideways; turning upright resets that).
+    var ambientRequested by rememberSaveable { mutableStateOf(false) }
+    var ambientDismissedSideways by rememberSaveable { mutableStateOf(false) }
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    LaunchedEffect(isLandscape) { if (!isLandscape) ambientDismissedSideways = false }
+    LaunchedEffect(showNowPlaying) { if (!showNowPlaying) ambientRequested = false }
+    val showAmbient = showNowPlaying && miniTrack != null && (
+        ambientRequested ||
+            (isLandscape && libraryPrefs.ambient.openOnRotate && !ambientDismissedSideways)
+        )
     // Long-press selection in the Music tab: its own toolbar replaces the nav pill and mini player.
     var audioSelectionActive by remember { mutableStateOf(false) }
     var nowPlayingInfoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
@@ -783,7 +796,6 @@ fun Material3VideoPlayerScreen(
                     durationMs = audioState.durationMs,
                     shuffleEnabled = audioState.shuffleEnabled,
                     repeatMode = audioState.repeatMode,
-                    liked = nowTrack.id in libraryPrefs.likedIds,
                     trayActions = libraryPrefs.visibleTray,
                     onClose = { showNowPlaying = false },
                     onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
@@ -792,15 +804,10 @@ fun Material3VideoPlayerScreen(
                     onSkipNext = { viewModel.skipAudioNext() },
                     onToggleShuffle = { audioManager.toggleShuffle() },
                     onCycleRepeat = { audioManager.cycleRepeat() },
-                    onToggleLike = {
-                        val liked = nowTrack.id in libraryPrefs.likedIds
-                        audioUiScope.launch {
-                            AppPreferencesRepository.setTrackLiked(context, nowTrack.id, !liked)
-                        }
-                    },
                     onLyrics = {
                         android.widget.Toast.makeText(context, "Lyrics are coming soon", android.widget.Toast.LENGTH_SHORT).show()
                     },
+                    onOpenAmbient = { ambientRequested = true },
                     sleepTimerRemainingMs = audioState.sleepTimerRemainingMs,
                     sleepAtEndOfSong = audioState.sleepAtEndOfSong,
                     onStartSleepTimer = { minutes -> audioManager.startSleepTimer(minutes) },
@@ -815,6 +822,36 @@ fun Material3VideoPlayerScreen(
                     buttonColors = libraryPrefs.nowPlayingButtonColors
                 )
                 }
+            }
+        }
+
+        // 3d. Ambient mode (over Now Playing): from the tray button, or by turning the phone sideways.
+        AnimatedVisibility(
+            visible = showAmbient,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val ambientTrack = miniTrack ?: lastNowPlayingTrack
+            if (ambientTrack != null) {
+                AmbientModeScreen(
+                    track = ambientTrack,
+                    isPlaying = uiState.isAudioPlaying,
+                    queue = audioState.queue,
+                    queueIndex = audioState.queueIndex,
+                    settings = libraryPrefs.ambient,
+                    onSettingsChange = { value ->
+                        audioUiScope.launch { AppPreferencesRepository.updateAmbientSettings(context, value) }
+                    },
+                    onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
+                    onSkipToQueueItem = { audioManager.skipToQueueItem(it) },
+                    onSkipNext = { viewModel.skipAudioNext() },
+                    onSkipPrevious = { viewModel.skipAudioPrevious() },
+                    onClose = {
+                        ambientRequested = false
+                        if (isLandscape) ambientDismissedSideways = true
+                    }
+                )
             }
         }
 

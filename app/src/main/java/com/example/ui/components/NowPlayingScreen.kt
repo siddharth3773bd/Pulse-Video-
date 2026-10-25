@@ -45,6 +45,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -133,9 +134,9 @@ val LyricsIcon: ImageVector by lazy {
 fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) {
     NowPlayingAction.SHUFFLE -> Icons.Default.Shuffle
     NowPlayingAction.REPEAT -> Icons.Default.Repeat
-    NowPlayingAction.LYRICS -> LyricsIcon
     NowPlayingAction.SLEEP -> Icons.Default.Bedtime
     NowPlayingAction.QUEUE -> Icons.AutoMirrored.Filled.QueueMusic
+    NowPlayingAction.AMBIENT -> Icons.Default.Landscape
 }
 
 /**
@@ -150,7 +151,6 @@ fun NowPlayingScreen(
     durationMs: Long,
     shuffleEnabled: Boolean,
     repeatMode: Int,
-    liked: Boolean,
     trayActions: List<NowPlayingAction>,
     onClose: () -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -159,8 +159,8 @@ fun NowPlayingScreen(
     onSkipNext: () -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
-    onToggleLike: () -> Unit,
     onLyrics: () -> Unit,
+    onOpenAmbient: () -> Unit,
     sleepTimerRemainingMs: Long,
     sleepAtEndOfSong: Boolean,
     onStartSleepTimer: (Int) -> Unit,
@@ -306,64 +306,23 @@ fun NowPlayingScreen(
         }
 
         // ---- Cover (takes whatever vertical room is left, always square) ----
-        // A HorizontalPager over the queue: swipe left/right for the next/previous song,
-        // double-tap the cover to play or pause.
-        BoxWithConstraints(
+        // Swipe left/right for the next/previous song, double-tap to play or pause.
+        ArtworkPager(
+            track = track,
+            queue = queue,
+            queueIndex = queueIndex,
+            isPlaying = isPlaying,
+            onTogglePlayPause = onTogglePlayPause,
+            onSkipToQueueItem = onSkipToQueueItem,
+            placeholderBackground = palette.surfaceContainerHighest,
+            placeholderTint = palette.primary,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            val side = if (maxWidth < maxHeight) maxWidth else maxHeight
-            val coverTracks = if (queue.isEmpty()) listOf(track) else queue
-            val coverIndex = if (queue.isEmpty()) 0 else queueIndex.coerceIn(0, coverTracks.lastIndex)
-            val coverPager = rememberPagerState(
-                initialPage = coverIndex,
-                pageCount = { coverTracks.size }
-            )
-            val skipToLatest by rememberUpdatedState(onSkipToQueueItem)
-            val queueIndexLatest by rememberUpdatedState(coverIndex)
-            // The song changed some other way (buttons, auto-advance): glide the cover along.
-            LaunchedEffect(coverIndex, coverTracks.size) {
-                if (coverPager.currentPage != coverIndex && coverIndex < coverTracks.size) {
-                    coverPager.animateScrollToPage(coverIndex)
-                }
-            }
-            // The user swiped to another cover: play that song.
-            LaunchedEffect(coverPager) {
-                snapshotFlow { coverPager.settledPage }.collect { page ->
-                    if (queue.isNotEmpty() && page != queueIndexLatest) skipToLatest(page)
-                }
-            }
-            HorizontalPager(
-                state = coverPager,
-                pageSpacing = 16.dp,
-                beyondViewportPageCount = 1,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTapGestures(onDoubleTap = { onTogglePlayPause() })
-                        }
-                        .testTag("now_playing_cover"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AudioArt(
-                        uri = coverTracks[page].contentUri,
-                        placeholderBackground = palette.surfaceContainerHighest,
-                        placeholderTint = palette.primary,
-                        modifier = Modifier.size(side),
-                        shape = RoundedCornerShape(28.dp),
-                        iconSize = 72.dp
-                    )
-                }
-            }
-        }
+                .padding(vertical = 8.dp)
+        )
 
-        // ---- Title / artist + Like button ----
+        // ---- Title / artist + Lyrics button ----
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -390,23 +349,18 @@ fun NowPlayingScreen(
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
-            FilledIconToggleButton(
-                checked = liked,
-                onCheckedChange = { onToggleLike() },
-                colors = IconButtonDefaults.filledIconToggleButtonColors(
+            FilledTonalIconButton(
+                onClick = onLyrics,
+                shapes = IconButtonDefaults.shapes(),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
                     containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
-                    contentColor = palette.onPrimaryContainer,
-                    checkedContainerColor = mainContainer,
-                    checkedContentColor = mainContent
+                    contentColor = palette.onPrimaryContainer
                 ),
                 modifier = Modifier
                     .size(52.dp)
-                    .testTag("now_playing_like")
+                    .testTag("now_playing_lyrics")
             ) {
-                Icon(
-                    imageVector = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (liked) "Remove from liked songs" else "Add to liked songs"
-                )
+                Icon(imageVector = LyricsIcon, contentDescription = "Lyrics")
             }
         }
 
@@ -627,8 +581,8 @@ fun NowPlayingScreen(
                         NowPlayingAction.SHUFFLE -> shuffleEnabled
                         NowPlayingAction.REPEAT -> repeatMode != Player.REPEAT_MODE_OFF
                         NowPlayingAction.SLEEP -> sleepActive
-                        NowPlayingAction.LYRICS -> false
                         NowPlayingAction.QUEUE -> false
+                        NowPlayingAction.AMBIENT -> false
                     }
                     val icon = when {
                         action == NowPlayingAction.REPEAT && repeatMode == Player.REPEAT_MODE_ONE ->
@@ -639,8 +593,8 @@ fun NowPlayingScreen(
                         when (action) {
                             NowPlayingAction.SHUFFLE -> onToggleShuffle()
                             NowPlayingAction.REPEAT -> onCycleRepeat()
-                            NowPlayingAction.LYRICS -> onLyrics()
                             NowPlayingAction.QUEUE -> showQueueSheet = true
+                            NowPlayingAction.AMBIENT -> onOpenAmbient()
                             // Tap a running timer to turn it off; tap again to set a new one.
                             NowPlayingAction.SLEEP -> if (sleepActive) {
                                 onCancelSleepTimer()
@@ -960,7 +914,7 @@ private fun SleepTimerSheet(
  * Image backgrounds get a dark scrim so white text stays readable; changes crossfade.
  */
 @Composable
-private fun NowPlayingBackgroundLayer(
+internal fun NowPlayingBackgroundLayer(
     style: NowPlayingBackground,
     track: AudioTrackItem,
     followThemeColor: Color,

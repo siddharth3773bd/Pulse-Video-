@@ -27,10 +27,25 @@ enum class LibraryTab(val id: String, val label: String) {
 enum class NowPlayingAction(val id: String, val label: String) {
     SHUFFLE("shuffle", "Shuffle"),
     REPEAT("repeat", "Repeat"),
-    LYRICS("lyrics", "Lyrics"),
     SLEEP("sleep", "Sleep timer"),
-    QUEUE("queue", "Queue")
+    QUEUE("queue", "Queue"),
+    AMBIENT("ambient", "Ambient mode")
 }
+
+/**
+ * Ambient mode: a full-screen, always-on view of the song (artwork, name, artist, lyrics).
+ * Song name and artist only show with the artwork; artwork and lyrics can't both be off.
+ */
+data class AmbientSettings(
+    val showArtwork: Boolean = true,
+    val showTitle: Boolean = true,
+    val showArtist: Boolean = true,
+    val showLyrics: Boolean = true,
+    /** Pure black background with white text instead of the album-art colours. */
+    val amoled: Boolean = false,
+    /** Turning the phone sideways on Now Playing opens ambient mode. */
+    val openOnRotate: Boolean = true
+)
 
 enum class LibrarySongSort(val id: String, val label: String) {
     DATE_ADDED("date_added", "Date added"),
@@ -128,7 +143,8 @@ data class LibraryPreferences(
     val blacklistedSongs: List<BlacklistedSong> = emptyList(),
     /** Folders the user blacklisted; everything inside them (and their sub-folders) is hidden. */
     val blacklistedFolders: Set<String> = emptySet(),
-    val playlists: List<AudioPlaylist> = emptyList()
+    val playlists: List<AudioPlaylist> = emptyList(),
+    val ambient: AmbientSettings = AmbientSettings()
 ) {
     val blacklistedIds: Set<String> by lazy { blacklistedSongs.mapTo(HashSet()) { it.id } }
 

@@ -2614,6 +2614,24 @@ private fun MusicSettingsSubPage(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+            SectionTitle("Ambient mode")
+            ExpressiveSettingToggleCard(
+                title = "Open when turned sideways",
+                subtitle = "Turning the phone on Now Playing opens ambient mode. Its other options are in its ⋮ menu",
+                checked = prefs.ambient.openOnRotate,
+                effectiveAmoled = effectiveAmoled,
+                onToggle = {
+                    scope.launch {
+                        AppPreferencesRepository.updateAmbientSettings(
+                            context,
+                            prefs.ambient.copy(openOnRotate = !prefs.ambient.openOnRotate)
+                        )
+                    }
+                },
+                testTag = "music_ambient_rotate"
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
             SectionTitle("Hide from library")
             ExpressiveSettingToggleCard(
                 title = "Short clips",
