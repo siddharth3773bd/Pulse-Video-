@@ -93,18 +93,18 @@ fun VideoActionsMenu(
     onDetails: () -> Unit,
     onDelete: () -> Unit
 ) {
-    AudioGroupedMenu(
+    ExpressiveMenu(
         expanded = expanded,
         onDismiss = onDismiss,
         groups = listOf(
             listOf(
-                AudioMenuEntry("Add to playlist", Symbols.PlaylistAdd, "menu_action_add_to_playlist", onClick = onAddToPlaylist),
-                AudioMenuEntry("Rename", Symbols.Edit, "menu_action_rename", onClick = onRename),
-                AudioMenuEntry("Share", Symbols.Share, "menu_action_share", onClick = onShare),
-                AudioMenuEntry("Details", Symbols.Info, "menu_action_details", onClick = onDetails)
+                MenuEntry("Add to playlist", Symbols.PlaylistAdd, "menu_action_add_to_playlist", onClick = onAddToPlaylist),
+                MenuEntry("Rename", Symbols.Edit, "menu_action_rename", onClick = onRename),
+                MenuEntry("Share", Symbols.Share, "menu_action_share", onClick = onShare),
+                MenuEntry("Details", Symbols.Info, "menu_action_details", onClick = onDetails)
             ),
             listOf(
-                AudioMenuEntry("Delete", Symbols.DeleteOutline, "menu_action_delete", destructive = true, onClick = onDelete)
+                MenuEntry("Delete", Symbols.DeleteOutline, "menu_action_delete", destructive = true, onClick = onDelete)
             )
         )
     )

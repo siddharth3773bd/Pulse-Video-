@@ -343,7 +343,7 @@ fun VideoThumbnailBox(
 }
 
 @Composable
-private fun SelectionCheck(selected: Boolean) {
+internal fun SelectionCheck(selected: Boolean) {
     val scheme = MaterialTheme.colorScheme
     val container by animateColorAsState(
         targetValue = if (selected) scheme.primary else Color.Black.copy(alpha = 0.35f),

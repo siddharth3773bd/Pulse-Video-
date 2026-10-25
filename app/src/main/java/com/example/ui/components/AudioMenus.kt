@@ -4,30 +4,13 @@ package com.example.ui.components
 
 import com.example.ui.icons.Symbols
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.ToggleButtonDefaults
-import androidx.compose.runtime.rememberCoroutineScope
-import com.example.model.AudioTrackItem
-import com.example.ui.theme.LocalM3Palette
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -44,13 +27,11 @@ import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,7 +55,7 @@ import com.example.model.LibrarySongSort
 // ---------------------------------------------------------------------------------------------
 
 /** One action in a grouped menu. */
-data class AudioMenuEntry(
+data class MenuEntry(
     val label: String,
     val icon: ImageVector,
     val tag: String,
@@ -89,10 +69,10 @@ data class AudioMenuEntry(
  * shapes, separated by [MenuDefaults.GroupSpacing]. Picking an item closes the menu first.
  */
 @Composable
-fun AudioGroupedMenu(
+fun ExpressiveMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    groups: List<List<AudioMenuEntry>>,
+    groups: List<List<MenuEntry>>,
     modifier: Modifier = Modifier
 ) {
     val visibleGroups = groups.filter { it.isNotEmpty() }
@@ -129,14 +109,13 @@ fun AudioGroupedMenu(
 }
 
 /**
- * The song ⋮ panel (a bottom sheet): a header with the song, four quick actions, then the
- * rest as grouped rows. The actions that hide or delete a song sit in their own group at the end.
+ * A song's ⋮ menu: the official Material 3 Expressive pop-up menu (the same as a video's ⋮),
+ * anchored to the button. Three groups: play/share, go to/info, then blacklist and delete.
  */
 @Composable
 fun SongActionsMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    track: AudioTrackItem,
     canGoToAlbum: Boolean,
     canGoToArtist: Boolean,
     onPlayNext: () -> Unit,
@@ -150,167 +129,32 @@ fun SongActionsMenu(
     onDelete: () -> Unit,
     onRemoveFromPlaylist: (() -> Unit)? = null
 ) {
-    if (!expanded) return
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
-    val palette = LocalM3Palette.current
-
-    // Slide the panel away first, then run the action.
-    fun act(action: () -> Unit) {
-        scope.launch { sheetState.hide() }.invokeOnCompletion {
-            onDismiss()
-            action()
-        }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        modifier = Modifier.testTag("song_actions_sheet")
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp)
-        ) {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AudioArt(
-                    uri = track.contentUri,
-                    placeholderBackground = palette.surfaceContainerHighest,
-                    placeholderTint = palette.primary,
-                    modifier = Modifier.size(56.dp),
-                    shape = RoundedCornerShape(16.dp)
-                )
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = track.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = track.artist.ifBlank { "Unknown artist" },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Quick actions
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp, bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                QuickAction(Symbols.PlaylistPlay, "Play next", "song_action_play_next") { act(onPlayNext) }
-                QuickAction(Symbols.QueueMusic, "Add to queue", "song_action_add_queue") { act(onAddToQueue) }
-                QuickAction(Symbols.PlaylistAdd, "Add to playlist", "song_action_add_playlist") { act(onAddToPlaylist) }
-                QuickAction(Symbols.Share, "Share", "song_action_share") { act(onShare) }
-            }
-
-            // Library actions
-            val main = listOfNotNull(
-                AudioMenuEntry("Go to album", Symbols.Album, "song_action_album", onClick = onGoToAlbum)
+    ExpressiveMenu(
+        expanded = expanded,
+        onDismiss = onDismiss,
+        groups = listOf(
+            listOf(
+                MenuEntry("Play next", Symbols.PlaylistPlay, "song_action_play_next", onClick = onPlayNext),
+                MenuEntry("Add to queue", Symbols.QueueMusic, "song_action_add_queue", onClick = onAddToQueue),
+                MenuEntry("Add to playlist", Symbols.PlaylistAdd, "song_action_add_playlist", onClick = onAddToPlaylist),
+                MenuEntry("Share", Symbols.Share, "song_action_share", onClick = onShare)
+            ),
+            listOfNotNull(
+                MenuEntry("Go to album", Symbols.Album, "song_action_album", onClick = onGoToAlbum)
                     .takeIf { canGoToAlbum },
-                AudioMenuEntry("Go to artist", Symbols.Person, "song_action_artist", onClick = onGoToArtist)
+                MenuEntry("Go to artist", Symbols.Person, "song_action_artist", onClick = onGoToArtist)
                     .takeIf { canGoToArtist },
-                AudioMenuEntry("Song info", Symbols.Info, "song_action_info", onClick = onSongInfo),
+                MenuEntry("Song info", Symbols.Info, "song_action_info", onClick = onSongInfo),
                 onRemoveFromPlaylist?.let {
-                    AudioMenuEntry("Remove from playlist", Symbols.PlaylistRemove, "song_action_remove_playlist", onClick = it)
+                    MenuEntry("Remove from playlist", Symbols.PlaylistRemove, "song_action_remove_playlist", onClick = it)
                 }
+            ),
+            listOf(
+                MenuEntry("Blacklist song", Symbols.Block, "song_action_blacklist", onClick = onBlacklistSong),
+                MenuEntry("Delete from device", Symbols.DeleteOutline, "song_action_delete", destructive = true, onClick = onDelete)
             )
-            SheetActionGroup(main, onAct = { act(it) })
-            Spacer(modifier = Modifier.height(12.dp))
-            SheetActionGroup(
-                listOf(
-                    AudioMenuEntry("Blacklist song", Symbols.Block, "song_action_blacklist", onClick = onBlacklistSong),
-                    AudioMenuEntry("Delete from device", Symbols.DeleteOutline, "song_action_delete", destructive = true, onClick = onDelete)
-                ),
-                onAct = { act(it) }
-            )
-        }
-    }
-}
-
-/** A big tonal button with the icon above the label. */
-@Composable
-private fun RowScope.QuickAction(
-    icon: ImageVector,
-    label: String,
-    tag: String,
-    highlighted: Boolean = false,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = if (highlighted) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = if (highlighted) MaterialTheme.colorScheme.onPrimaryContainer
-        else MaterialTheme.colorScheme.onSecondaryContainer,
-        modifier = Modifier
-            .weight(1f)
-            .testTag(tag)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 14.dp, horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(icon, contentDescription = null)
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                minLines = 2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-/** Rows joined into one rounded group (official SegmentedListItem). */
-@Composable
-private fun SheetActionGroup(entries: List<AudioMenuEntry>, onAct: (() -> Unit) -> Unit) {
-    if (entries.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-        entries.forEachIndexed { index, entry ->
-            val error = MaterialTheme.colorScheme.error
-            SegmentedListItem(
-                onClick = { onAct(entry.onClick) },
-                shapes = ListItemDefaults.segmentedShapes(index = index, count = entries.size),
-                leadingContent = {
-                    Icon(
-                        imageVector = entry.icon,
-                        contentDescription = null,
-                        tint = if (entry.destructive) error else LocalContentColor.current
-                    )
-                },
-                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                modifier = Modifier.testTag(entry.tag)
-            ) {
-                Text(
-                    text = entry.label,
-                    color = if (entry.destructive) error else Color.Unspecified
-                )
-            }
-        }
-    }
+        )
+    )
 }
 
 /** A playlist's ⋮ menu. */
@@ -323,17 +167,17 @@ fun PlaylistActionsMenu(
     onRename: () -> Unit,
     onDelete: () -> Unit
 ) {
-    AudioGroupedMenu(
+    ExpressiveMenu(
         expanded = expanded,
         onDismiss = onDismiss,
         groups = listOf(
             listOf(
-                AudioMenuEntry("Play next", Symbols.PlaylistPlay, "playlist_action_play_next", onClick = onPlayNext),
-                AudioMenuEntry("Add to queue", Symbols.QueueMusic, "playlist_action_add_queue", onClick = onAddToQueue)
+                MenuEntry("Play next", Symbols.PlaylistPlay, "playlist_action_play_next", onClick = onPlayNext),
+                MenuEntry("Add to queue", Symbols.QueueMusic, "playlist_action_add_queue", onClick = onAddToQueue)
             ),
             listOf(
-                AudioMenuEntry("Rename", Symbols.Edit, "playlist_action_rename", onClick = onRename),
-                AudioMenuEntry("Delete playlist", Symbols.DeleteOutline, "playlist_action_delete", destructive = true, onClick = onDelete)
+                MenuEntry("Rename", Symbols.Edit, "playlist_action_rename", onClick = onRename),
+                MenuEntry("Delete playlist", Symbols.DeleteOutline, "playlist_action_delete", destructive = true, onClick = onDelete)
             )
         )
     )
@@ -343,21 +187,11 @@ fun PlaylistActionsMenu(
 // Sort menu
 // ---------------------------------------------------------------------------------------------
 
-private val LibrarySongSort.icon: ImageVector
-    get() = when (this) {
-        LibrarySongSort.TITLE -> Symbols.SortByAlpha
-        LibrarySongSort.ARTIST -> Symbols.Person
-        LibrarySongSort.ALBUM -> Symbols.Album
-        LibrarySongSort.DATE_ADDED -> Symbols.CalendarToday
-        LibrarySongSort.DURATION -> Symbols.Timer
-    }
-
 /**
- * Sort panel (a bottom sheet): "Sort by" chips and an order choice as an Expressive connected
- * button group. The order buttons are plain words (no arrows) with the usual choice first.
- * Changes apply right away. [field] is null for albums and artists, which only sort A to Z / Z to A.
+ * Sort panel (a bottom sheet), styled like the Videos one: "Sort by" and "Order" as the official
+ * Expressive standard button group. Changes apply right away. [field] is null for albums and
+ * artists, which only sort A to Z / Z to A.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LibrarySortMenu(
     expanded: Boolean,
@@ -368,7 +202,6 @@ fun LibrarySortMenu(
     onSelectAscending: (Boolean) -> Unit
 ) {
     if (!expanded) return
-    val scheme = MaterialTheme.colorScheme
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -377,91 +210,48 @@ fun LibrarySortMenu(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Sort",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
             if (field != null) {
-                SortSectionLabel("Sort by")
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(bottom = 20.dp)
-                ) {
-                    LibrarySongSort.entries.forEach { option ->
-                        val selected = option == field
-                        FilterChip(
-                            selected = selected,
-                            onClick = { if (!selected) onSelectField(option) },
-                            label = { Text(option.label) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (selected) Symbols.Check else option.icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                )
-                            },
-                            // Same highlight as the selected order button below.
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = scheme.primary,
-                                selectedLabelColor = scheme.onPrimary,
-                                selectedLeadingIconColor = scheme.onPrimary
-                            ),
-                            modifier = Modifier.testTag("sort_field_${option.id}")
-                        )
+                CompactRow("Sort by") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LibrarySongSort.entries.chunked(3).forEach { row ->
+                            ChoiceButtonGroup(
+                                options = row.map { it to it.label },
+                                selected = field.takeIf { it in row },
+                                onSelect = { option -> if (option != null) onSelectField(option) },
+                                tag = { "sort_field_${it?.id}" }
+                            )
+                        }
                     }
                 }
             }
-            SortSectionLabel("Order")
             // The usual choice for this field comes first: Newest, Longest, A to Z.
             val naturalAscending = field?.naturalAscending ?: true
-            val choices = listOf(naturalAscending, !naturalAscending)
-            Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                choices.forEachIndexed { index, isAscending ->
-                    val label = if (isAscending) field?.ascendingLabel ?: "A to Z"
-                    else field?.descendingLabel ?: "Z to A"
-                    ToggleButton(
-                        checked = ascending == isAscending,
-                        onCheckedChange = { if (ascending != isAscending) onSelectAscending(isAscending) },
-                        shapes = if (index == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        else ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                        colors = ToggleButtonDefaults.colors(
-                            containerColor = scheme.surfaceContainerHighest,
-                            contentColor = scheme.onSurface,
-                            checkedContainerColor = scheme.primary,
-                            checkedContentColor = scheme.onPrimary
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag(if (isAscending) "sort_order_asc" else "sort_order_desc")
-                    ) {
-                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
+            CompactRow("Order") {
+                ChoiceButtonGroup(
+                    options = listOf(naturalAscending, !naturalAscending).map { isAscending ->
+                        isAscending to if (isAscending) field?.ascendingLabel ?: "A to Z" else field?.descendingLabel ?: "Z to A"
+                    },
+                    selected = ascending,
+                    onSelect = { onSelectAscending(it) },
+                    tag = { if (it) "sort_order_asc" else "sort_order_desc" }
+                )
             }
         }
     }
-}
-
-@Composable
-private fun SortSectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 8.dp)
-    )
 }
 
 // ---------------------------------------------------------------------------------------------
 // Selection toolbar (long-press)
 // ---------------------------------------------------------------------------------------------
 
-/** Official floating toolbar with the actions for the selected songs. */
+/**
+ * Actions for the selected songs: the official floating toolbar in its vibrant colours (same as
+ * Videos), icon buttons with their names in tooltips.
+ */
 @Composable
 fun AudioSelectionToolbar(
     onPlayNext: () -> Unit,
@@ -473,50 +263,17 @@ fun AudioSelectionToolbar(
 ) {
     HorizontalFloatingToolbar(
         expanded = true,
-        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-            toolbarContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            toolbarContentColor = MaterialTheme.colorScheme.onSurface
-        ),
+        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
         modifier = modifier.testTag("audio_selection_toolbar")
     ) {
-        SelectionToolbarButton(Symbols.PlaylistPlay, "Next", onPlayNext, "selection_play_next")
-        SelectionToolbarButton(Symbols.QueueMusic, "Queue", onAddToQueue, "selection_add_queue")
-        SelectionToolbarButton(Symbols.PlaylistAdd, "Playlist", onAddToPlaylist, "selection_add_playlist")
-        SelectionToolbarButton(Symbols.Block, "Blacklist", onBlacklist, "selection_blacklist")
-        SelectionToolbarButton(
-            Symbols.DeleteOutline,
-            "Delete",
-            onDelete,
-            "selection_delete",
-            tint = MaterialTheme.colorScheme.error
-        )
+        TooltipIconButton("Play next", Symbols.PlaylistPlay, onPlayNext, Modifier.testTag("selection_play_next"), tooltipAbove = true)
+        TooltipIconButton("Add to queue", Symbols.QueueMusic, onAddToQueue, Modifier.testTag("selection_add_queue"), tooltipAbove = true)
+        TooltipIconButton("Add to playlist", Symbols.PlaylistAdd, onAddToPlaylist, Modifier.testTag("selection_add_playlist"), tooltipAbove = true)
+        TooltipIconButton("Blacklist", Symbols.Block, onBlacklist, Modifier.testTag("selection_blacklist"), tooltipAbove = true)
+        TooltipIconButton("Delete from device", Symbols.DeleteOutline, onDelete, Modifier.testTag("selection_delete"), tooltipAbove = true)
     }
 }
 
-@Composable
-private fun SelectionToolbarButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    tag: String,
-    tint: Color = LocalContentColor.current
-) {
-    TextButton(
-        onClick = onClick,
-        shapes = ButtonDefaults.shapes(),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-        modifier = Modifier
-            .widthIn(min = 60.dp)
-            .height(54.dp)
-            .testTag(tag)
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(text = label, color = tint, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------------------------
 // Playlists: add-to sheet and name dialog

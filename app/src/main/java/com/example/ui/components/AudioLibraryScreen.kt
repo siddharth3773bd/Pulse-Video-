@@ -7,6 +7,29 @@
 package com.example.ui.components
 
 import com.example.ui.icons.Symbols
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.material3.AppBarWithSearch
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemColors
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.SearchBarScrollBehavior
+import androidx.compose.material3.SearchBarState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -17,7 +40,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -30,7 +52,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.foundation.layout.RowScope
@@ -43,7 +64,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -80,11 +100,9 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SearchBarValue
-import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -93,18 +111,18 @@ import androidx.compose.material3.nonInteractiveScrollbar
 import androidx.compose.material3.rememberContainedSearchBarState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -113,9 +131,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -126,11 +142,10 @@ import com.example.model.AudioTrackItem
 import com.example.model.LibraryPreferences
 import com.example.model.LibrarySongSort
 import com.example.model.LibraryTab
-import com.example.ui.theme.LocalM3Palette
 import kotlinx.coroutines.launch
 
-/** Bottom padding of every list so the last rows scroll above the nav pill (and the mini player). */
-private val LocalLibraryBottomPadding = compositionLocalOf { 132.dp }
+/** Bottom padding of every list, so the last rows clear the mini player and the selection toolbar. */
+private val LocalLibraryBottomPadding = compositionLocalOf { 16.dp }
 
 private data class AlbumGroup(
     val key: String,
@@ -223,31 +238,24 @@ private fun totalDurationLabel(tracks: List<AudioTrackItem>): String {
     return if (minutes >= 60) "${minutes / 60} h ${minutes % 60} min" else "$minutes min"
 }
 
-/** Last part of a folder path, e.g. "WhatsApp Audio". */
-
 // ---------------------------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Music library, built from official Material 3 components:
- * a "Music" title with a search icon that opens the full-screen search, PrimaryScrollableTabRow,
- * an action row (Play + Shuffle, count, Sort menu) and a HorizontalPager of segmented lists.
- * Long-press a song to select several; the selection gets its own floating toolbar.
+ * Music library, built from official Material 3 Expressive components, laid out like Videos:
+ * the search app bar (scrolls away, comes back on scroll up) with the full-screen search, fixed
+ * tabs, and a HorizontalPager of plain list rows. Long-press a song to select several; the
+ * selection gets a pinned top bar and its own floating toolbar.
  */
 @Composable
 fun AudioLibraryScreen(
     tracks: List<AudioTrackItem>,
     playingAudio: AudioTrackItem?,
     isAudioPlaying: Boolean,
-    audioProgress: Float,
-    amoledBlack: Boolean,
     headerBackground: Color,
     onPlayQueue: (List<AudioTrackItem>, Int, Boolean) -> Unit,
     onTogglePlayPause: () -> Unit,
-    onSeekAudio: (Float) -> Unit,
-    onSkipPrevious: () -> Unit,
-    onSkipNext: () -> Unit,
     modifier: Modifier = Modifier,
     extraBottomPadding: Dp = 0.dp,
     onPlayNext: (List<AudioTrackItem>) -> Unit = {},
@@ -310,8 +318,7 @@ fun AudioLibraryScreen(
     var detailTabId by rememberSaveable { mutableStateOf<String?>(null) }
     var detailKey by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Official Material 3 search: the search icon is the collapsed SearchBar, and the full-screen
-    // search view expands out of it.
+    // Official Material 3 search: the header's search bar expands into the full-screen search.
     val textFieldState = rememberTextFieldState()
     // The contained search bar defaults to the "fast" spring, which pops open abruptly.
     // The slower expressive spatial spring (the one the regular SearchBar uses) feels smoother.
@@ -319,7 +326,6 @@ fun AudioLibraryScreen(
         animationSpecForExpand = MaterialTheme.motionScheme.slowSpatialSpec(),
         animationSpecForCollapse = MaterialTheme.motionScheme.defaultSpatialSpec()
     )
-    val keyboardController = LocalSoftwareKeyboardController.current
     val query = textFieldState.text.toString()
 
     var infoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
@@ -414,10 +420,13 @@ fun AudioLibraryScreen(
     BackHandler(enabled = inDetail && !selectionMode) { closeDetail() }
 
     val background = headerBackground
-    val topBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    // Bring the title bar back whenever the page or mode changes.
+    // The search app bar shows on the main pages; album/artist/playlist pages and selection get a
+    // pinned top app bar instead (same as Videos).
+    val searchHeader = !inDetail && !selectionMode
+    val searchScroll = SearchBarDefaults.enterAlwaysSearchBarScrollBehavior()
+    // Bring the search bar back whenever the page or mode changes.
     LaunchedEffect(currentTab, detailTabId, detailKey, selectionMode) {
-        topBarScroll.state.heightOffset = 0f
+        searchScroll.scrollState.scrollOffset = 0f
     }
     var sortSheetOpen by remember { mutableStateOf(false) }
 
@@ -470,7 +479,6 @@ fun AudioLibraryScreen(
         SongActionsMenu(
             expanded = openSongMenu == menuKey,
             onDismiss = { if (openSongMenu == menuKey) openSongMenu = null },
-            track = track,
             canGoToAlbum = LibraryTab.ALBUMS in visibleTabs && albums.any { it.key == albumKey } &&
                 !(detailTabId == LibraryTab.ALBUMS.id && detailKey == albumKey),
             canGoToArtist = LibraryTab.ARTISTS in visibleTabs && artists.any { it.key == artistKey } &&
@@ -513,6 +521,7 @@ fun AudioLibraryScreen(
         SongsList(
             songs = songs,
             playingAudio = playingAudio,
+            isAudioPlaying = isAudioPlaying,
             selectionMode = selectable && selectionMode,
             selectedIds = selectedIds,
             header = header,
@@ -532,13 +541,12 @@ fun AudioLibraryScreen(
     val detailActions: @Composable () -> Unit = {
         if (detailPlaylist != null) {
             Box {
-                IconButton(
+                TooltipIconButton(
+                    label = "Playlist options",
+                    icon = Symbols.MoreVert,
                     onClick = { openPlaylistMenu = "detail|${detailPlaylist.id}" },
-                    shapes = IconButtonDefaults.shapes(),
                     modifier = Modifier.testTag("playlist_detail_more_btn")
-                ) {
-                    Icon(Symbols.MoreVert, contentDescription = "Playlist options")
-                }
+                )
                 PlaylistActionsMenu(
                     expanded = openPlaylistMenu == "detail|${detailPlaylist.id}",
                     onDismiss = { openPlaylistMenu = null },
@@ -551,7 +559,7 @@ fun AudioLibraryScreen(
         }
     }
 
-    // The navigation bar sits below this screen, so lists only need a little room at the end —
+    // The navigation bar sits below this screen, so lists only need a little room at the end:
     // more while selecting (the selection toolbar floats over the list then).
     val listBottomPadding = if (selectionMode) {
         96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -566,14 +574,20 @@ fun AudioLibraryScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .nestedScroll(topBarScroll.nestedScrollConnection)
+                        .then(
+                            if (searchHeader) Modifier.nestedScroll(searchScroll.nestedScrollConnection)
+                            else Modifier
+                        )
                         .testTag("audio_library_screen")
                 ) {
                     MusicHeader(
                         background = background,
+                        searchState = searchBarState,
+                        textFieldState = textFieldState,
+                        searchScrollBehavior = searchScroll,
                         selectionCount = selectedIds.size,
-                        detailTitle = currentDetail?.title,
                         allSelected = currentSongList != null && selectedTracks.size == currentSongList.size,
+                        detailTitle = currentDetail?.title,
                         onClearSelection = { selectedIds = emptySet() },
                         onToggleSelectAll = {
                             selectedIds = if (currentSongList != null && selectedTracks.size < currentSongList.size) {
@@ -584,58 +598,38 @@ fun AudioLibraryScreen(
                         },
                         onBack = closeDetail,
                         detailActions = detailActions,
-                        scrollBehavior = topBarScroll,
-                        sortButton = if (currentTab == LibraryTab.PLAYLISTS) null else {
-                            {
-                                IconButton(
+                        headerAction = {
+                            // One action beside the search bar: Sort, or New playlist on Playlists.
+                            if (currentTab == LibraryTab.PLAYLISTS) {
+                                TooltipIconButton(
+                                    label = "New playlist",
+                                    icon = Symbols.Add,
+                                    onClick = { playlistDialog = PlaylistDialog.Create(emptyList()) },
+                                    modifier = Modifier.testTag("library_new_playlist_button")
+                                )
+                            } else {
+                                TooltipIconButton(
+                                    label = "Sort",
+                                    icon = Symbols.Sort,
                                     onClick = { sortSheetOpen = true },
-                                    shapes = IconButtonDefaults.shapes(),
                                     modifier = Modifier.testTag("library_sort_button")
-                                ) {
-                                    Icon(Symbols.Sort, contentDescription = "Sort")
-                                }
+                                )
                             }
-                        },
-                        searchButton = {
-                            // The collapsed search bar is just the search icon.
-                            SearchBar(
-                                state = searchBarState,
-                                inputField = {
-                                    IconButton(
-                                        onClick = { scope.launch { searchBarState.animateToExpanded() } },
-                                        shapes = IconButtonDefaults.shapes(),
-                                        modifier = Modifier.testTag("header_search_btn")
-                                    ) {
-                                        Icon(
-                                            imageVector = Symbols.Search,
-                                            contentDescription = "Search music",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.requiredSize(56.dp),
-                                shape = CircleShape,
-                                colors = SearchBarDefaults.colors(
-                                    containerColor = Color.Transparent,
-                                    inputFieldColors = SearchBarDefaults.inputFieldColors()
-                                ),
-                                tonalElevation = 0.dp,
-                                shadowElevation = 0.dp
-                            )
                         }
                     )
 
                     if (!inDetail && visibleTabs.size > 1) {
-                        PrimaryScrollableTabRow(
+                        // Fixed tabs: Music has at most four, so they share the width evenly.
+                        PrimaryTabRow(
                             selectedTabIndex = currentPage,
-                            containerColor = background,
-                            edgePadding = 16.dp
+                            containerColor = background
                         ) {
                             visibleTabs.forEachIndexed { index, tab ->
                                 Tab(
                                     selected = index == currentPage,
                                     onClick = { if (!selectionMode) selectTab(tab) },
-                                    text = { Text(text = tab.label, maxLines = 1) }
+                                    text = { Text(text = tab.label, maxLines = 1) },
+                                    modifier = Modifier.testTag("library_tab_${tab.id}")
                                 )
                             }
                         }
@@ -688,7 +682,7 @@ fun AudioLibraryScreen(
                             }
                             tab == LibraryTab.ALBUMS -> AlbumsGrid(
                                 albums = albums,
-                                header = { LibraryActionRow(label = albumCountLabel(albums.size)) },
+                                header = { LibraryActionRow(label = albumCountLabel(albums.size), horizontalPadding = 0.dp) },
                                 onOpen = { album -> openDetail(LibraryTab.ALBUMS, album.key) }
                             )
                             tab == LibraryTab.ARTISTS -> ArtistsList(
@@ -698,30 +692,9 @@ fun AudioLibraryScreen(
                             )
                             tab == LibraryTab.PLAYLISTS -> PlaylistsList(
                                 playlists = prefs.playlists,
-                                header = {
-                                    LibraryActionRow(
-                                        label = playlistCountLabel(prefs.playlists.size),
-                                        leading = {
-                                            FilledTonalButton(
-                                                onClick = { playlistDialog = PlaylistDialog.Create(emptyList()) },
-                                                shapes = ButtonDefaults.shapes(),
-                                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                                                modifier = Modifier.testTag("library_new_playlist_button")
-                                            ) {
-                                                Icon(
-                                                    imageVector = Symbols.Add,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(ButtonDefaults.IconSize)
-                                                )
-                                                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
-                                                Text("New playlist")
-                                            }
-                                        }
-                                    )
-                                },
+                                header = { LibraryActionRow(label = playlistCountLabel(prefs.playlists.size)) },
                                 firstTrackOf = { playlist -> playlist.trackIds.firstNotNullOfOrNull { tracksById[it] } },
                                 countOf = { playlist -> playlistTracks(playlist).size },
-                                openMenuId = openPlaylistMenu,
                                 onOpen = { playlist -> openDetail(LibraryTab.PLAYLISTS, playlist.id) },
                                 onMore = { playlist -> openPlaylistMenu = "list|${playlist.id}" },
                                 menu = { playlist ->
@@ -758,6 +731,17 @@ fun AudioLibraryScreen(
                             .padding(16.dp)
                     )
                 }
+
+                // Status bar protection while the search bar is scrolled away (same as Videos).
+                if (searchHeader) {
+                    Spacer(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .windowInsetsTopHeight(WindowInsets.statusBars)
+                            .background(background.copy(alpha = 0.92f))
+                    )
+                }
             }
         }
     }
@@ -766,39 +750,7 @@ fun AudioLibraryScreen(
     val searchColors = SearchBarDefaults.containedColors(state = searchBarState)
     ExpandedFullScreenContainedSearchBar(
         state = searchBarState,
-        inputField = {
-            SearchBarDefaults.InputField(
-                textFieldState = textFieldState,
-                searchBarState = searchBarState,
-                colors = searchColors.inputFieldColors,
-                onSearch = { keyboardController?.hide() },
-                placeholder = {
-                    Text(
-                        text = "Search your music",
-                        modifier = Modifier.clearAndSetSemantics {}
-                    )
-                },
-                leadingIcon = {
-                    IconButton(
-                        onClick = { scope.launch { searchBarState.animateToCollapsed() } },
-                        shapes = IconButtonDefaults.shapes()
-                    ) {
-                        Icon(Symbols.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(
-                            onClick = { textFieldState.clearText() },
-                            shapes = IconButtonDefaults.shapes()
-                        ) {
-                            Icon(Symbols.Close, contentDescription = "Clear search")
-                        }
-                    }
-                },
-                modifier = Modifier.testTag("library_search_field")
-            )
-        },
+        inputField = { LibrarySearchInputField(searchBarState, textFieldState, placeholder = "Search music") },
         colors = searchColors
     ) {
         val results = remember(sortedSongs, query) {
@@ -947,95 +899,77 @@ private fun shareTrack(context: Context, track: AudioTrackItem) {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Same header as the Videos and Me tabs: a large title with the search icon on the right.
- * Inside an album, artist or playlist it shows Back; while selecting it shows the selection.
+ * Same header as Videos. Main pages: the official search app bar with one action beside it.
+ * While selecting: a pinned top app bar with the count, Close and Select all. Inside an album,
+ * artist or playlist: a pinned top app bar with Back.
  */
 @Composable
 private fun MusicHeader(
     background: Color,
+    searchState: SearchBarState,
+    textFieldState: TextFieldState,
+    searchScrollBehavior: SearchBarScrollBehavior,
     selectionCount: Int,
-    detailTitle: String?,
     allSelected: Boolean,
+    detailTitle: String?,
     onClearSelection: () -> Unit,
     onToggleSelectAll: () -> Unit,
     onBack: () -> Unit,
     detailActions: @Composable () -> Unit,
-    sortButton: (@Composable () -> Unit)?,
-    searchButton: @Composable () -> Unit,
-    scrollBehavior: TopAppBarScrollBehavior
+    headerAction: @Composable () -> Unit
 ) {
-    val headerBg by animateColorAsState(
-        targetValue = if (selectionCount > 0) MaterialTheme.colorScheme.surfaceContainerHigh else background,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "musicHeaderBg"
-    )
-    // Official top app bar with the "enter always" scroll behaviour: it slides away while you
-    // scroll down the list and comes back as soon as you scroll up.
-    TopAppBar(
-        title = {
-            when {
-                selectionCount > 0 -> Text(
+    when {
+        selectionCount > 0 -> TopAppBar(
+            title = {
+                Text(
                     text = "$selectionCount selected",
-                    style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.testTag("selection_count")
                 )
-                detailTitle != null -> Text(
-                    text = detailTitle,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                else -> Text(
-                    text = "Music",
-                    style = MaterialTheme.typography.headlineLargeEmphasized,
-                    maxLines = 1,
-                    modifier = Modifier.testTag("music_title")
-                )
-            }
-        },
-        navigationIcon = {
-            when {
-                selectionCount > 0 -> IconButton(
+            },
+            navigationIcon = {
+                TooltipIconButton(
+                    label = "Clear selection",
+                    icon = Symbols.Close,
                     onClick = onClearSelection,
-                    shapes = IconButtonDefaults.shapes(),
                     modifier = Modifier.testTag("selection_close_btn")
-                ) {
-                    Icon(Symbols.Close, contentDescription = "Cancel selection")
-                }
-                detailTitle != null -> IconButton(
-                    onClick = onBack,
-                    shapes = IconButtonDefaults.shapes(),
-                    modifier = Modifier.testTag("music_detail_back_btn")
-                ) {
-                    Icon(Symbols.ArrowBack, contentDescription = "Back")
-                }
-            }
-        },
-        actions = {
-            when {
-                selectionCount > 0 -> IconButton(
+                )
+            },
+            actions = {
+                TextButton(
                     onClick = onToggleSelectAll,
-                    shapes = IconButtonDefaults.shapes(),
+                    shapes = ButtonDefaults.shapes(),
                     modifier = Modifier.testTag("selection_all_btn")
-                ) {
-                    Icon(
-                        imageVector = if (allSelected) Symbols.Deselect else Symbols.SelectAll,
-                        contentDescription = if (allSelected) "Deselect all" else "Select all"
-                    )
-                }
-                detailTitle != null -> detailActions()
-                else -> {
-                    sortButton?.invoke()
-                    searchButton()
-                }
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = headerBg,
-            scrolledContainerColor = headerBg
-        ),
-        scrollBehavior = scrollBehavior
-    )
+                ) { Text(if (allSelected) "Deselect all" else "Select all") }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        )
+
+        detailTitle != null -> TopAppBar(
+            title = { Text(detailTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            navigationIcon = {
+                TooltipIconButton(
+                    label = "Back",
+                    icon = Symbols.ArrowBack,
+                    onClick = onBack,
+                    modifier = Modifier.testTag("music_detail_back_btn")
+                )
+            },
+            actions = { detailActions() },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = background)
+        )
+
+        else -> AppBarWithSearch(
+            state = searchState,
+            inputField = { LibrarySearchInputField(searchState, textFieldState, placeholder = "Search music") },
+            actions = { headerAction() },
+            colors = SearchBarDefaults.appBarWithSearchColors(
+                appBarContainerColor = background,
+                scrolledAppBarContainerColor = background
+            ),
+            scrollBehavior = searchScrollBehavior,
+            modifier = Modifier.testTag("music_search_app_bar")
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1143,12 +1077,15 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
 private fun LibraryActionRow(
     label: String,
     onShuffle: (() -> Unit)? = null,
-    leading: (@Composable () -> Unit)? = null
+    leading: (@Composable () -> Unit)? = null,
+    // Lists sit 8 dp from the edge (rows bring their own padding); this lines the row up at 16 dp.
+    horizontalPadding: Dp = 8.dp
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 40.dp)
+            .padding(horizontal = horizontalPadding)
             .padding(bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1180,7 +1117,7 @@ private fun DetailHero(
     onPlay: (() -> Unit)?,
     onShuffle: (() -> Unit)?
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1191,8 +1128,8 @@ private fun DetailHero(
         if (info.artUri != null) {
             AudioArt(
                 uri = info.artUri,
-                placeholderBackground = palette.surfaceContainerHighest,
-                placeholderTint = palette.primary,
+                placeholderBackground = scheme.surfaceContainerHighest,
+                placeholderTint = scheme.primary,
                 modifier = Modifier.size(200.dp),
                 shape = info.artShape,
                 iconSize = 64.dp
@@ -1246,14 +1183,12 @@ private fun Modifier.libraryScrollbar(state: androidx.compose.foundation.gesture
     return this.nonInteractiveScrollbar(state = indicator, orientation = Orientation.Vertical)
 }
 
-/**
- * Material 3 Expressive segmented list: rows sit in rounded containers separated by the official
- * gap, with position-aware corners (ListItemDefaults.segmentedShapes).
- */
+/** Song list: plain Material 3 Expressive list rows with the official gap between them. */
 @Composable
 private fun SongsList(
     songs: List<AudioTrackItem>,
     playingAudio: AudioTrackItem?,
+    isAudioPlaying: Boolean,
     selectionMode: Boolean,
     selectedIds: Set<String>,
     header: (@Composable () -> Unit)?,
@@ -1270,12 +1205,7 @@ private fun SongsList(
             .fillMaxSize()
             .libraryScrollbar(listState)
             .testTag("audio_library_view"),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 4.dp,
-            bottom = bottomPadding
-        ),
+        contentPadding = libraryListPadding(bottomPadding),
         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
     ) {
         if (header != null) {
@@ -1297,9 +1227,8 @@ private fun SongsList(
         itemsIndexed(songs, key = { _, t -> t.id }, contentType = { _, _ -> "song" }) { index, track ->
             SongRow(
                 track = track,
-                index = index,
-                count = songs.size,
                 playing = playingAudio?.id == track.id,
+                isAudioPlaying = isAudioPlaying,
                 selectionMode = selectionMode,
                 checked = track.id in selectedIds,
                 onClick = { onClick(songs, index) },
@@ -1311,16 +1240,41 @@ private fun SongsList(
     }
 }
 
+/** Lists sit 8 dp from the screen edge; each row adds its own 8 dp inside. */
+private fun libraryListPadding(bottom: Dp) = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = bottom)
+
+/** Row colours shared by the library lists: no container, tinted only when selected. */
+@Composable
+private fun libraryRowColors(): ListItemColors {
+    val scheme = MaterialTheme.colorScheme
+    return ListItemDefaults.colors(
+        containerColor = Color.Transparent,
+        contentColor = scheme.onSurface,
+        supportingContentColor = scheme.onSurfaceVariant,
+        selectedContainerColor = scheme.secondaryContainer,
+        selectedContentColor = scheme.onSecondaryContainer,
+        selectedSupportingContentColor = scheme.onSecondaryContainer
+    )
+}
+
+@Composable
+private fun libraryRowShapes() = ListItemDefaults.shapes(
+    shape = MaterialTheme.shapes.large,
+    selectedShape = MaterialTheme.shapes.large
+)
+
+private val LibraryRowPadding = PaddingValues(start = 8.dp, end = 0.dp, top = 8.dp, bottom = 8.dp)
+
 /**
- * Official segmented list item. Outside selection, the current song uses the selected state;
- * while selecting, the selected state marks the chosen songs and a check covers the art.
+ * One song: official Expressive list item, the same as a video row. The song that is loaded gets
+ * a small "playing" badge on its art and its title in the theme colour. Selection works like
+ * Videos: a check on the art, the row tinted, and the ⋮ slot kept so nothing moves.
  */
 @Composable
 private fun SongRow(
     track: AudioTrackItem,
-    index: Int,
-    count: Int,
     playing: Boolean,
+    isAudioPlaying: Boolean,
     selectionMode: Boolean,
     checked: Boolean,
     onClick: () -> Unit,
@@ -1328,71 +1282,151 @@ private fun SongRow(
     onMore: () -> Unit,
     menu: @Composable () -> Unit
 ) {
-    val palette = LocalM3Palette.current
-    SegmentedListItem(
-        selected = if (selectionMode) checked else playing,
+    val scheme = MaterialTheme.colorScheme
+    val showPlaying = playing && !selectionMode
+    ListItem(
+        selected = selectionMode && checked,
         onClick = onClick,
         onLongClick = onLongClick,
-        onLongClickLabel = "Select",
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+        onLongClickLabel = if (onLongClick != null) "Select" else null,
         leadingContent = {
-            Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.Center) {
-                AudioArt(
-                    uri = track.contentUri,
-                    placeholderBackground = palette.surfaceContainerHighest,
-                    placeholderTint = palette.primary,
-                    modifier = Modifier.size(52.dp),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                if (selectionMode && checked) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(52.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Symbols.Check, contentDescription = null)
-                        }
-                    }
+            SongArt(
+                track = track,
+                playing = showPlaying,
+                animatePlaying = isAudioPlaying,
+                selection = when {
+                    !selectionMode -> ThumbSelection.NONE
+                    checked -> ThumbSelection.SELECTED
+                    else -> ThumbSelection.SELECTABLE
                 }
-            }
-        },
-        supportingContent = {
-            Text(
-                text = track.artist,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
         },
         trailingContent = {
-            // While selecting, the ⋮ steps aside; the selection toolbar holds the actions.
-            if (!selectionMode) {
-                Box {
-                    IconButton(onClick = onMore, shapes = IconButtonDefaults.shapes()) {
-                        Icon(Symbols.MoreVert, contentDescription = "More options")
+            // Same 48 dp slot while selecting, so titles never reflow.
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                if (!selectionMode) {
+                    IconButton(
+                        onClick = onMore,
+                        shapes = IconButtonDefaults.shapes(),
+                        modifier = Modifier.testTag("song_menu_button_${track.mediaId}")
+                    ) {
+                        Icon(
+                            Symbols.MoreVert,
+                            contentDescription = "More options for ${track.title}",
+                            tint = scheme.onSurfaceVariant
+                        )
                     }
                     menu()
                 }
             }
         },
-        colors = segmentedListColors(),
-        modifier = Modifier.testTag("audio_track_row_${track.mediaId}")
+        supportingContent = {
+            Text(text = track.artist, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        shapes = libraryRowShapes(),
+        colors = libraryRowColors(),
+        contentPadding = LibraryRowPadding,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("audio_track_row_${track.mediaId}")
     ) {
         Text(
             text = track.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (showPlaying) scheme.primary else Color.Unspecified,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
 }
 
-/** Container colours used by the official segmented-list samples. */
+/**
+ * A song's art. The song that is loaded gets a round "playing" badge (it pulses gently while the
+ * music plays). While selecting, a check sits on top and a selected art shrinks a little.
+ */
 @Composable
-private fun segmentedListColors() = ListItemDefaults.colors(
-    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-)
+private fun SongArt(
+    track: AudioTrackItem,
+    playing: Boolean,
+    animatePlaying: Boolean,
+    selection: ThumbSelection
+) {
+    val scheme = MaterialTheme.colorScheme
+    val selected = selection == ThumbSelection.SELECTED
+    val inset by animateDpAsState(
+        targetValue = if (selected) 4.dp else 0.dp,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "songArtInset"
+    )
+    Box(Modifier.size(56.dp)) {
+        AudioArt(
+            uri = track.contentUri,
+            placeholderBackground = scheme.surfaceContainerHighest,
+            placeholderTint = scheme.primary,
+            // The spring can overshoot a hair below 0; padding must never be negative.
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(inset.coerceAtLeast(0.dp)),
+            shape = RoundedCornerShape(12.dp)
+        )
+        AnimatedVisibility(
+            visible = playing,
+            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                scaleIn(MaterialTheme.motionScheme.fastSpatialSpec(), initialScale = 0.6f),
+            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                scaleOut(MaterialTheme.motionScheme.fastSpatialSpec(), targetScale = 0.6f),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(3.dp)
+        ) {
+            PlayingBadge(animate = animatePlaying)
+        }
+        AnimatedVisibility(
+            visible = selection != ThumbSelection.NONE,
+            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                scaleIn(MaterialTheme.motionScheme.fastSpatialSpec(), initialScale = 0.6f),
+            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                scaleOut(MaterialTheme.motionScheme.fastSpatialSpec(), targetScale = 0.6f),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(2.dp)
+        ) {
+            SelectionCheck(selected = selected)
+        }
+    }
+}
+
+/** Small primary circle with an equaliser icon; it breathes while the song plays. */
+@Composable
+private fun PlayingBadge(animate: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    // Only runs while playing; paused, the bars stand still.
+    val pulse = if (animate) {
+        rememberInfiniteTransition(label = "playingPulse").animateFloat(
+            initialValue = 1f,
+            targetValue = 0.6f,
+            animationSpec = infiniteRepeatable(tween(durationMillis = 600), RepeatMode.Reverse),
+            label = "playingScale"
+        )
+    } else null
+    Box(
+        modifier = Modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(scheme.primary)
+            .semantics { contentDescription = "Now playing" },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Symbols.GraphicEq,
+            contentDescription = null,
+            tint = scheme.onPrimary,
+            modifier = Modifier
+                .size(14.dp)
+                .graphicsLayer { scaleY = pulse?.value ?: 1f }
+        )
+    }
+}
 
 // ---------------------------------------------------------------------------------------------
 // Albums / Artists
@@ -1404,7 +1438,7 @@ private fun AlbumsGrid(
     header: @Composable () -> Unit,
     onOpen: (AlbumGroup) -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     if (albums.isEmpty()) {
         LibraryEmptyState(
             icon = LibraryTab.ALBUMS.icon,
@@ -1440,8 +1474,8 @@ private fun AlbumsGrid(
             ) {
                 AudioArt(
                     uri = album.tracks.first().contentUri,
-                    placeholderBackground = palette.surfaceContainerHighest,
-                    placeholderTint = palette.primary,
+                    placeholderBackground = scheme.surfaceContainerHighest,
+                    placeholderTint = scheme.primary,
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f),
@@ -1474,7 +1508,7 @@ private fun ArtistsList(
     header: @Composable () -> Unit,
     onOpen: (ArtistGroup) -> Unit
 ) {
-    val palette = LocalM3Palette.current
+    val scheme = MaterialTheme.colorScheme
     if (artists.isEmpty()) {
         LibraryEmptyState(
             icon = LibraryTab.ARTISTS.icon,
@@ -1490,39 +1524,38 @@ private fun ArtistsList(
             .fillMaxSize()
             .libraryScrollbar(listState)
             .testTag("library_artists_list"),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 4.dp,
-            bottom = LocalLibraryBottomPadding.current
-        ),
+        contentPadding = libraryListPadding(LocalLibraryBottomPadding.current),
         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
     ) {
         item(key = "header", contentType = "header") { header() }
-        itemsIndexed(artists, key = { _, a -> a.key }) { index, artist ->
-            SegmentedListItem(
+        items(artists, key = { it.key }) { artist ->
+            ListItem(
                 onClick = { onOpen(artist) },
-                shapes = ListItemDefaults.segmentedShapes(index = index, count = artists.size),
                 leadingContent = {
                     AudioArt(
                         uri = artist.tracks.first().contentUri,
-                        placeholderBackground = palette.surfaceContainerHighest,
-                        placeholderTint = palette.primary,
-                        modifier = Modifier.size(52.dp),
+                        placeholderBackground = scheme.surfaceContainerHighest,
+                        placeholderTint = scheme.primary,
+                        modifier = Modifier.size(56.dp),
                         shape = CircleShape
                     )
                 },
                 supportingContent = { Text(songCountLabel(artist.tracks.size)) },
                 trailingContent = {
-                    Icon(
-                        imageVector = Symbols.KeyboardArrowRight,
-                        contentDescription = null
-                    )
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        Icon(Symbols.KeyboardArrowRight, contentDescription = null, tint = scheme.onSurfaceVariant)
+                    }
                 },
-                colors = segmentedListColors()
+                shapes = libraryRowShapes(),
+                colors = libraryRowColors(),
+                contentPadding = LibraryRowPadding,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("artist_row_${artist.key}")
             ) {
                 Text(
                     text = artist.name,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1542,13 +1575,11 @@ private fun PlaylistsList(
     header: @Composable () -> Unit,
     firstTrackOf: (AudioPlaylist) -> AudioTrackItem?,
     countOf: (AudioPlaylist) -> Int,
-    openMenuId: String?,
     onOpen: (AudioPlaylist) -> Unit,
     onMore: (AudioPlaylist) -> Unit,
     menu: @Composable (AudioPlaylist) -> Unit
 ) {
-    val palette = LocalM3Palette.current
-    val rows = playlists.size
+    val scheme = MaterialTheme.colorScheme
     val listState = rememberLazyListState()
     LazyColumn(
         state = listState,
@@ -1556,61 +1587,71 @@ private fun PlaylistsList(
             .fillMaxSize()
             .libraryScrollbar(listState)
             .testTag("library_playlists_list"),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 4.dp,
-            bottom = LocalLibraryBottomPadding.current
-        ),
+        contentPadding = libraryListPadding(LocalLibraryBottomPadding.current),
         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
     ) {
         item(key = "header", contentType = "header") { header() }
-        itemsIndexed(playlists, key = { _, p -> p.id }) { index, playlist ->
+        items(playlists, key = { it.id }) { playlist ->
             val first = firstTrackOf(playlist)
-            SegmentedListItem(
+            ListItem(
                 onClick = { onOpen(playlist) },
-                shapes = ListItemDefaults.segmentedShapes(index = index, count = rows),
                 leadingContent = {
                     if (first != null) {
                         AudioArt(
                             uri = first.contentUri,
-                            placeholderBackground = palette.surfaceContainerHighest,
-                            placeholderTint = palette.primary,
-                            modifier = Modifier.size(52.dp),
+                            placeholderBackground = scheme.surfaceContainerHighest,
+                            placeholderTint = scheme.primary,
+                            modifier = Modifier.size(56.dp),
                             shape = RoundedCornerShape(12.dp)
                         )
                     } else {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(52.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(scheme.secondaryContainer),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Symbols.PlaylistPlay, contentDescription = null)
-                            }
+                            Icon(Symbols.PlaylistPlay, contentDescription = null, tint = scheme.onSecondaryContainer)
                         }
                     }
                 },
                 supportingContent = { Text(songCountLabel(countOf(playlist))) },
                 trailingContent = {
-                    Box {
-                        IconButton(onClick = { onMore(playlist) }, shapes = IconButtonDefaults.shapes()) {
-                            Icon(Symbols.MoreVert, contentDescription = "Playlist options")
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        IconButton(
+                            onClick = { onMore(playlist) },
+                            shapes = IconButtonDefaults.shapes(),
+                            modifier = Modifier.testTag("playlist_menu_button_${playlist.id}")
+                        ) {
+                            Icon(
+                                Symbols.MoreVert,
+                                contentDescription = "Options for ${playlist.name}",
+                                tint = scheme.onSurfaceVariant
+                            )
                         }
                         menu(playlist)
                     }
                 },
-                colors = segmentedListColors(),
-                modifier = Modifier.testTag("playlist_row_${playlist.id}")
+                shapes = libraryRowShapes(),
+                colors = libraryRowColors(),
+                contentPadding = LibraryRowPadding,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("playlist_row_${playlist.id}")
             ) {
-                Text(text = playlist.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = playlist.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
         if (playlists.isEmpty()) {
             item(key = "hint") {
                 Text(
-                    text = "Make a playlist with New playlist, or long-press songs to add several at once.",
+                    text = "Tap + above to make a playlist, or long-press songs to add several at once.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

@@ -37,12 +37,16 @@ import com.example.model.VideoItem
 import kotlinx.coroutines.launch
 
 /**
- * The Videos search bar's input field, shared by the collapsed bar in the header
+ * A library search bar's input field (Videos and Music), shared by the collapsed bar in the header
  * ([androidx.compose.material3.AppBarWithSearch]) and the full-screen search, as in the official
  * Material 3 sample. Collapsed it shows a search icon; expanded, a back arrow and a clear button.
  */
 @Composable
-fun VideoSearchInputField(state: SearchBarState, textFieldState: TextFieldState) {
+fun LibrarySearchInputField(
+    state: SearchBarState,
+    textFieldState: TextFieldState,
+    placeholder: String = "Search videos"
+) {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val expanded = state.currentValue == SearchBarValue.Expanded
@@ -50,7 +54,7 @@ fun VideoSearchInputField(state: SearchBarState, textFieldState: TextFieldState)
         textFieldState = textFieldState,
         searchBarState = state,
         onSearch = { keyboard?.hide() },
-        placeholder = { Text("Search videos", modifier = Modifier.clearAndSetSemantics {}) },
+        placeholder = { Text(placeholder, modifier = Modifier.clearAndSetSemantics {}) },
         leadingIcon = {
             if (expanded) {
                 IconButton(
@@ -86,7 +90,7 @@ fun VideoSearchView(
     }
     ExpandedFullScreenContainedSearchBar(
         state = state,
-        inputField = { VideoSearchInputField(state, textFieldState) },
+        inputField = { LibrarySearchInputField(state, textFieldState) },
         colors = SearchBarDefaults.containedColors(state = state)
     ) {
         val q = query.trim().lowercase()

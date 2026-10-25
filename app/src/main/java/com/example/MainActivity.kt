@@ -18,21 +18,16 @@ import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Snackbar
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.items
-import com.example.ui.components.VideoSearchInputField
+import com.example.ui.components.LibrarySearchInputField
+import com.example.ui.components.TooltipIconButton
 import android.Manifest
 import android.app.Activity
 import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.database.ContentObserver
@@ -49,25 +44,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,11 +64,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -92,11 +74,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -104,72 +81,44 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialShapes
-import androidx.compose.material3.Tab
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.TopAppBarScrollBehavior
-import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.rememberContainedSearchBarState
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import com.example.ui.components.VideoSearchView
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.Lifecycle
@@ -701,8 +650,6 @@ fun Material3VideoPlayerScreen(
                                     tracks = uiState.audioTracks,
                                     playingAudio = uiState.playingAudio,
                                     isAudioPlaying = uiState.isAudioPlaying,
-                                    audioProgress = uiState.audioProgress,
-                                    amoledBlack = effectiveAmoled,
                                     headerBackground = outerChromeBg,
                                     extraBottomPadding = if (uiState.playingAudio != null) 88.dp else 0.dp,
                                     onPlayQueue = { queue, startIndex, shuffle ->
@@ -711,9 +658,6 @@ fun Material3VideoPlayerScreen(
                                         }
                                     },
                                     onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
-                                    onSeekAudio = { viewModel.seekAudio(it) },
-                                    onSkipPrevious = { viewModel.skipAudioPrevious() },
-                                    onSkipNext = { viewModel.skipAudioNext() },
                                     onPlayNext = { list -> audioManager.playNext(list) },
                                     onAddToQueue = { list -> audioManager.addToQueue(list) },
                                     onLibraryChanged = { viewModel.refreshPermissionsAndScan(context) },
@@ -1142,7 +1086,7 @@ private fun MainHeader(
     when {
         videosSearchHeader -> AppBarWithSearch(
             state = searchState,
-            inputField = { VideoSearchInputField(searchState, searchText) },
+            inputField = { LibrarySearchInputField(searchState, searchText) },
             actions = { sortButton() },
             colors = SearchBarDefaults.appBarWithSearchColors(
                 appBarContainerColor = containerColor,
@@ -1217,26 +1161,6 @@ private fun MainHeader(
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = containerColor)
         )
-    }
-}
-
-/** An official icon button with its name in a tooltip (long-press). */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun TooltipIconButton(
-    label: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    TooltipBox(
-        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
-        tooltip = { PlainTooltip { Text(label) } },
-        state = rememberTooltipState()
-    ) {
-        IconButton(onClick = onClick, shapes = IconButtonDefaults.shapes(), modifier = modifier) {
-            Icon(icon, contentDescription = label)
-        }
     }
 }
 
@@ -1434,9 +1358,9 @@ private fun SelectionToolbar(
         colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
         modifier = Modifier.testTag("multi_select_pill_toolbar")
     ) {
-        TooltipIconButton("Share", Symbols.Share, onShare, Modifier.testTag("pill_share_btn"))
-        TooltipIconButton("Add to playlist", Symbols.PlaylistAdd, onAddToPlaylist, Modifier.testTag("pill_add_to_btn"))
-        TooltipIconButton("Delete", Symbols.DeleteOutline, onDelete, Modifier.testTag("pill_delete_btn"))
+        TooltipIconButton("Share", Symbols.Share, onShare, Modifier.testTag("pill_share_btn"), tooltipAbove = true)
+        TooltipIconButton("Add to playlist", Symbols.PlaylistAdd, onAddToPlaylist, Modifier.testTag("pill_add_to_btn"), tooltipAbove = true)
+        TooltipIconButton("Delete", Symbols.DeleteOutline, onDelete, Modifier.testTag("pill_delete_btn"), tooltipAbove = true)
     }
 }
 

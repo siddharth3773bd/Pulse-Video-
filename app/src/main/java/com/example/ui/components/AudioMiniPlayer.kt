@@ -23,6 +23,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,13 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.model.AudioTrackItem
-import com.example.ui.theme.LocalM3Palette
-import com.example.ui.theme.PlusJakartaSansFontFamily
 
 /**
  * Pill-shaped mini player shown above the bottom navigation while a song is loaded.
@@ -56,14 +53,15 @@ fun AudioMiniPlayer(
     onSkipNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalM3Palette.current
+    // Inside AlbumArtTheme, so these are the album-art colours when that option is on.
+    val scheme = MaterialTheme.colorScheme
     val openLatest by rememberUpdatedState(onOpen)
     val thresholdPx = with(LocalDensity.current) { 36.dp.toPx() }
 
     Surface(
         onClick = onOpen,
         shape = RoundedCornerShape(50),
-        color = palette.primaryContainer,
+        color = scheme.primaryContainer,
         modifier = modifier
             .fillMaxWidth()
             .height(72.dp)
@@ -88,8 +86,8 @@ fun AudioMiniPlayer(
         ) {
             AudioArt(
                 uri = track.contentUri,
-                placeholderBackground = palette.surfaceContainerHighest,
-                placeholderTint = palette.primary,
+                placeholderBackground = scheme.surfaceContainerHighest,
+                placeholderTint = scheme.primary,
                 modifier = Modifier.size(52.dp),
                 shape = CircleShape
             )
@@ -97,18 +95,15 @@ fun AudioMiniPlayer(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = track.title,
-                    color = palette.onPrimaryContainer,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    color = scheme.onPrimaryContainer,
+                    style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = track.artist,
-                    color = palette.onPrimaryContainer.copy(alpha = 0.75f),
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 12.5.sp,
+                    color = scheme.onPrimaryContainer.copy(alpha = 0.75f),
+                    style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -130,8 +125,8 @@ fun AudioMiniPlayer(
                             onClick = onSkipPrevious,
                             shapes = IconButtonDefaults.shapes(),
                             colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
-                                contentColor = palette.onPrimaryContainer
+                                containerColor = scheme.onPrimaryContainer.copy(alpha = 0.12f),
+                                contentColor = scheme.onPrimaryContainer
                             ),
                             interactionSource = previousInteraction,
                             modifier = Modifier
@@ -158,8 +153,8 @@ fun AudioMiniPlayer(
                             onClick = onTogglePlayPause,
                             shapes = IconButtonDefaults.shapes(),
                             colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = palette.primary,
-                                contentColor = palette.onPrimary
+                                containerColor = scheme.primary,
+                                contentColor = scheme.onPrimary
                             ),
                             interactionSource = playPauseInteraction,
                             modifier = Modifier
@@ -194,8 +189,8 @@ fun AudioMiniPlayer(
                             onClick = onSkipNext,
                             shapes = IconButtonDefaults.shapes(),
                             colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = palette.onPrimaryContainer.copy(alpha = 0.12f),
-                                contentColor = palette.onPrimaryContainer
+                                containerColor = scheme.onPrimaryContainer.copy(alpha = 0.12f),
+                                contentColor = scheme.onPrimaryContainer
                             ),
                             interactionSource = nextInteraction,
                             modifier = Modifier
