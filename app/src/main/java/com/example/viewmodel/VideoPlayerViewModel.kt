@@ -81,7 +81,10 @@ data class VideoUiState(
     val searchOpen: Boolean = false,
     val searchQuery: String = "",
     val selectedIds: List<String> = emptyList(),
+    /** Full path of the folder being shown (see VideoItem.folderPath). */
     val selectedFolderFilter: String? = null,
+    /** False until the first scan finishes, so "No videos" never flashes at start-up. */
+    val videosLoaded: Boolean = false,
     val selectedPlaylistFilter: String? = null,
     val expandedTreeNodes: Set<String> = emptySet(),
     val activeMenuVideo: VideoItem? = null,
@@ -100,11 +103,12 @@ data class VideoUiState(
     val isSelectionMode: Boolean
         get() = selectedIds.isNotEmpty()
 
-    val filteredAndSortedVideos: List<VideoItem>
-        get() {
+    // Worked out once per state (not on every read), so scrolling and recomposition stay light.
+    val filteredAndSortedVideos: List<VideoItem> by lazy {
+        VideoListMemo.filtered(this) {
             var list = videos
             if (selectedFolderFilter != null) {
-                list = list.filter { it.folder == selectedFolderFilter }
+                list = list.filter { it.folderPath == selectedFolderFilter }
             }
             if (selectedPlaylistFilter != null) {
                 val pl = playlists.find { it.id == selectedPlaylistFilter }
@@ -131,15 +135,15 @@ data class VideoUiState(
                     SortBy.SIZE -> a.sizeBytes.compareTo(b.sizeBytes)
                 }
             }
-            return if (sortDir == SortDir.ASC) {
+            if (sortDir == SortDir.ASC) {
                 list.sortedWith(comparator)
             } else {
                 list.sortedWith(comparator.reversed())
             }
         }
+    }
 
-    val smartSeriesData: SmartSeriesData
-        get() {
+    val smartSeriesData: SmartSeriesData by lazy {
             val groups = linkedMapOf<String, MutableList<VideoItem>>()
             val standalone = mutableListOf<VideoItem>()
             for (v in filteredAndSortedVideos) {
@@ -152,8 +156,31 @@ data class VideoUiState(
             val sortedGroups = groups.mapValues { (_, eps) ->
                 eps.sortedBy { it.episode ?: 0 }
             }
-            return SmartSeriesData(sortedGroups, standalone)
+            SmartSeriesData(sortedGroups, standalone)
         }
+}
+
+/**
+ * Remembers the last filtered/sorted list. Unrelated state changes (audio progress ticks, menus)
+ * create new state objects; with this they reuse the same list instead of sorting again.
+ */
+private object VideoListMemo {
+    private var key: List<Any?>? = null
+    private var videosRef: List<VideoItem>? = null
+    private var value: List<VideoItem> = emptyList()
+
+    @Synchronized
+    fun filtered(state: VideoUiState, compute: () -> List<VideoItem>): List<VideoItem> {
+        val k = listOf(
+            state.selectedFolderFilter, state.selectedPlaylistFilter, state.playlists,
+            state.searchQuery, state.sortBy, state.sortDir
+        )
+        if (videosRef === state.videos && key == k) return value
+        value = compute()
+        videosRef = state.videos
+        key = k
+        return value
+    }
 }
 
 class VideoPlayerViewModel : ViewModel() {
@@ -249,6 +276,8 @@ class VideoPlayerViewModel : ViewModel() {
         }
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
+            // Many MediaStore change events arrive in bursts; wait a moment so they become one scan.
+            if (!showSpinner && _uiState.value.videosLoaded) delay(400L)
             val history = _uiState.value.progressHistory
             val scannedVideos = if (hasVideo) {
                 MediaStoreScanner.scanVideos(context, history)
@@ -263,19 +292,16 @@ class VideoPlayerViewModel : ViewModel() {
             if (scannedAudio.isNotEmpty()) {
                 getOrCreateAudioPlaybackManager(context).registerTracksCatalog(scannedAudio)
             }
-            val allFolders = scannedVideos
-                .map { it.path.substringBeforeLast("/", it.folder) }
-                .distinct()
-                .take(4)
-                .toSet()
-
             _uiState.update { state ->
-                val validIds = scannedVideos.map { it.id }.toSet()
+                // Unchanged results keep the same lists, so nothing on screen has to redraw.
+                val videos = if (scannedVideos == state.videos) state.videos else scannedVideos
+                val audio = if (scannedAudio == state.audioTracks) state.audioTracks else scannedAudio
+                val validIds = videos.mapTo(HashSet()) { it.id }
                 state.copy(
-                    videos = scannedVideos,
-                    audioTracks = scannedAudio,
+                    videos = videos,
+                    audioTracks = audio,
                     selectedIds = state.selectedIds.filter { it in validIds },
-                    expandedTreeNodes = if (state.expandedTreeNodes.isEmpty()) allFolders else state.expandedTreeNodes,
+                    videosLoaded = true,
                     isRefreshing = false
                 )
             }
@@ -344,6 +370,25 @@ class VideoPlayerViewModel : ViewModel() {
         if (context != null) {
             val appCtx = context.applicationContext
             viewModelScope.launch { AppPreferencesRepository.updateLayoutMode(appCtx, mode) }
+        }
+    }
+
+    /** Picks a sort field; it starts in its natural order (names A to Z, the rest newest/largest first). */
+    fun setSortField(field: SortBy, context: Context? = null) {
+        val dir = field.naturalDir
+        _uiState.update { it.copy(sortBy = field, sortDir = dir) }
+        if (context != null) {
+            val appCtx = context.applicationContext
+            viewModelScope.launch { AppPreferencesRepository.updateSort(appCtx, field, dir) }
+        }
+    }
+
+    fun setSortDir(dir: SortDir, context: Context? = null) {
+        val field = _uiState.value.sortBy
+        _uiState.update { it.copy(sortDir = dir) }
+        if (context != null) {
+            val appCtx = context.applicationContext
+            viewModelScope.launch { AppPreferencesRepository.updateSort(appCtx, field, dir) }
         }
     }
 
@@ -994,16 +1039,10 @@ class VideoPlayerViewModel : ViewModel() {
                 .take(MAX_HISTORY_ITEMS)
 
             nextEntries = entries
+            // Only the history changes here: rewriting the whole video list on every save
+            // (several times a second during playback) made the library heavy.
             val updatedProgressMap = entries.associate { it.mediaUri to it.progress }
-            val updatedVideos = state.videos.map { v ->
-                v.copy(progress = updatedProgressMap[v.id] ?: 0f)
-            }
-            val updatedPlaying = state.playingVideo?.let { pv ->
-                pv.copy(progress = updatedProgressMap[pv.id] ?: 0f)
-            }
             state.copy(
-                videos = updatedVideos,
-                playingVideo = updatedPlaying,
                 historyEntries = entries,
                 progressHistory = updatedProgressMap
             )
@@ -1022,8 +1061,7 @@ class VideoPlayerViewModel : ViewModel() {
         _uiState.update { state ->
             state.copy(
                 historyEntries = emptyList(),
-                progressHistory = emptyMap(),
-                videos = state.videos.map { it.copy(progress = 0f) }
+                progressHistory = emptyMap()
             )
         }
         if (context != null) {
@@ -1076,6 +1114,24 @@ class VideoPlayerViewModel : ViewModel() {
         if (idx == -1) return
         val nextIdx = (idx + offset).mod(list.size)
         startVideoPlaybackAt(list[nextIdx], startPositionMs = 0L, context = context)
+    }
+
+    /**
+     * Autoplay: plays the next video from the same folder, in the order the list shows.
+     * Returns false at the end of the folder.
+     */
+    fun playNextInFolder(context: Context): Boolean {
+        val state = _uiState.value
+        val current = state.playingVideo ?: return false
+        val inFolder = state.filteredAndSortedVideos.filter { it.folderPath == current.folderPath }
+            .ifEmpty {
+                // The list may be filtered (search, playlist): fall back to the whole folder by name.
+                state.videos.filter { it.folderPath == current.folderPath }.sortedBy { it.title.lowercase() }
+            }
+        val idx = inFolder.indexOfFirst { it.id == current.id }
+        val next = inFolder.getOrNull(idx + 1) ?: return false
+        startVideoPlaybackAt(next, startPositionMs = 0L, context = context)
+        return true
     }
 
     fun playAudioTrack(context: Context, track: AudioTrackItem) {

@@ -122,7 +122,7 @@ private fun gradientColors(bitmap: Bitmap, seed: Int): List<Color> {
     }
 }
 
-private fun DynamicScheme.toComposeColorScheme(isDark: Boolean): ColorScheme {
+internal fun DynamicScheme.toComposeColorScheme(isDark: Boolean): ColorScheme {
     val m = MaterialDynamicColors()
     fun c(color: DynamicColor) = Color(color.getArgb(this))
     return if (isDark) {
@@ -195,7 +195,7 @@ private fun animateColorScheme(target: ColorScheme): ColorScheme {
 }
 
 /** The app's own palette with the roles it uses taken from [scheme]. */
-private fun ColorScheme.toM3Palette(base: M3Palette): M3Palette = base.copy(
+internal fun ColorScheme.toM3Palette(base: M3Palette): M3Palette = base.copy(
     primary = primary,
     onPrimary = onPrimary,
     primaryContainer = primaryContainer,

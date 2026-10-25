@@ -1,82 +1,66 @@
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+
 package com.example.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Title
-import androidx.compose.material.icons.filled.ViewList
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuGroup
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.SelectableDropdownMenuItem
-import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
-import androidx.compose.material3.FilledTonalToggleButton
-import androidx.compose.material3.FilledTonalToggleButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,14 +68,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.model.LayoutMode
 import com.example.model.PlaylistItem
 import com.example.model.ResumePromptTarget
@@ -101,12 +86,58 @@ import com.example.model.VideoItem
 import com.example.model.ViewMode
 import com.example.model.formatDurationMs
 import com.example.model.formatSizeLabel
+import com.example.model.naturalDir
 import com.example.model.resolutionLabel
-import com.example.ui.theme.AllM3Palettes
-import com.example.ui.theme.LocalM3Palette
-import com.example.ui.theme.PlusJakartaSansFontFamily
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+// ---------------------------------------------------------------------------------------------
+// Video ⋮ menu (anchored to the button that opened it)
+// ---------------------------------------------------------------------------------------------
+
+/** The video ⋮ menu: Expressive grouped menu, with Delete on its own at the end. */
+@Composable
+fun VideoActionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onRename: () -> Unit,
+    onShare: () -> Unit,
+    onDetails: () -> Unit,
+    onDelete: () -> Unit
+) {
+    AudioGroupedMenu(
+        expanded = expanded,
+        onDismiss = onDismiss,
+        groups = listOf(
+            listOf(
+                AudioMenuEntry("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd, "menu_action_add_to_playlist", onClick = onAddToPlaylist),
+                AudioMenuEntry("Rename", Icons.Default.Edit, "menu_action_rename", onClick = onRename),
+                AudioMenuEntry("Share", Icons.Default.Share, "menu_action_share", onClick = onShare),
+                AudioMenuEntry("Details", Icons.Default.Info, "menu_action_details", onClick = onDetails)
+            ),
+            listOf(
+                AudioMenuEntry("Delete", Icons.Default.DeleteOutline, "menu_action_delete", destructive = true, onClick = onDelete)
+            )
+        )
+    )
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sort & view
+// ---------------------------------------------------------------------------------------------
+
+private val SortBy.icon: ImageVector
+    get() = when (this) {
+        SortBy.NAME -> Icons.Default.SortByAlpha
+        SortBy.DATE -> Icons.Default.CalendarToday
+        SortBy.DURATION -> Icons.Default.Schedule
+        SortBy.SIZE -> Icons.Default.Storage
+    }
+
+/**
+ * Show (Videos / Folders / Tree), Layout (List / Grid), Sort by (chips) and Order (plain words,
+ * usual choice first), plus Smart groups. Same style as the Music sort panel.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SortAndViewBottomSheet(
     smartGroups: Boolean,
@@ -114,941 +145,365 @@ fun SortAndViewBottomSheet(
     layoutMode: LayoutMode,
     sortBy: SortBy,
     sortDir: SortDir,
-    showResolutionTier: Boolean,
     onToggleSmartGroups: () -> Unit,
     onSelectViewMode: (ViewMode) -> Unit,
     onSelectLayoutMode: (LayoutMode) -> Unit,
-    onToggleShowResolutionTier: () -> Unit,
-    onSelectSort: (SortBy) -> Unit,
-    onDismiss: () -> Unit,
-    isAudioTab: Boolean = false
+    onSelectSortField: (SortBy) -> Unit,
+    onSelectSortDir: (SortDir) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
+    val scheme = MaterialTheme.colorScheme
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = palette.surfaceContainerLow,
-        contentColor = palette.onSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = palette.DragHandleColor) },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("sort_and_view_sheet")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
         ) {
-            if (!isAudioTab) {
-                // Smart Groups SegmentedListItem with official Switch
-                SegmentedListItem(
-                    checked = smartGroups,
-                    onCheckedChange = { onToggleSmartGroups() },
-                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
-                    colors = ListItemDefaults.segmentedColors(
-                        containerColor = palette.surfaceContainer,
-                        contentColor = palette.onSurface,
-                        supportingContentColor = palette.onSurfaceVariant,
-                        selectedContainerColor = palette.surfaceContainer,
-                        selectedContentColor = palette.onSurface,
-                        selectedSupportingContentColor = palette.onSurfaceVariant
-                    ),
-                    leadingContent = {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(MaterialShapes.Sunny.toShape())
-                                .background(if (smartGroups) palette.primary else palette.surfaceContainerHighest),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = if (smartGroups) palette.onPrimary else palette.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    },
-                    supportingContent = {
-                        Text(
-                            text = "Auto-bundle series & sort episodes",
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 12.5.sp
-                        )
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = smartGroups,
-                            onCheckedChange = null,
-                            thumbContent = if (smartGroups) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(SwitchDefaults.IconSize)
-                                    )
-                                }
-                            } else null
-                        )
-                    },
-                    content = {
-                        Text(
-                            text = "Smart Groups",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("smart_groups_toggle_card")
-                )
+            Text("View & sort", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
 
-                Spacer(modifier = Modifier.height(22.dp))
-            }
-
-            // View Mode Connected Button Group
-            Text(
-                text = "View mode",
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
-            ) {
-                val viewItems = listOf(
-                    if (isAudioTab) {
-                        Triple(ViewMode.VIDEOS, "Music", Icons.Default.MusicNote)
-                    } else {
-                        Triple(ViewMode.VIDEOS, "Videos", Icons.Default.Movie)
-                    },
+            SectionLabel("Show")
+            ConnectedChoice(
+                options = listOf(
+                    Triple(ViewMode.VIDEOS, "Videos", Icons.Default.Movie),
                     Triple(ViewMode.FOLDERS, "Folders", Icons.Default.Folder),
                     Triple(ViewMode.TREE, "Tree", Icons.Default.AccountTree)
-                )
-                viewItems.forEachIndexed { idx, (mode, label, icon) ->
-                    val active = viewMode == mode
-                    val shapes = when (idx) {
-                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        viewItems.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                    }
-                    ToggleButton(
-                        checked = active,
-                        onCheckedChange = { onSelectViewMode(mode) },
-                        shapes = shapes,
-                        colors = ToggleButtonDefaults.colors(
-                            containerColor = palette.surfaceContainerHigh,
-                            contentColor = palette.onSurfaceVariant,
-                            checkedContainerColor = palette.secondaryContainer,
-                            checkedContentColor = palette.onSecondaryContainer
-                        ),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .testTag("view_mode_btn_${mode.id}")
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = label,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = label,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
+                ),
+                selected = viewMode,
+                onSelect = onSelectViewMode,
+                tag = { "view_mode_btn_${it.id}" }
+            )
+            Spacer(Modifier.height(20.dp))
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Layout Mode & Resolution Tier Toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Layout",
-                    color = palette.onSurfaceVariant,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                if (!isAudioTab) {
-                    FilledTonalToggleButton(
-                        checked = showResolutionTier,
-                        onCheckedChange = { onToggleShowResolutionTier() },
-                        shapes = FilledTonalToggleButtonDefaults.shapesFor(buttonHeight = 32.dp),
-                        colors = FilledTonalToggleButtonDefaults.colors(
-                            containerColor = palette.surfaceContainerHigh,
-                            contentColor = palette.onSurfaceVariant,
-                            checkedContainerColor = palette.secondaryContainer,
-                            checkedContentColor = palette.primary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier
-                            .height(32.dp)
-                            .testTag("toggle_resolution_tier_btn")
-                    ) {
-                        Icon(
-                            imageVector = if (showResolutionTier) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Resolution badges: ${if (showResolutionTier) "Shown" else "Hidden"}",
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
-            ) {
-                val layoutItems = listOf(
-                    Triple(LayoutMode.LIST, "List", Icons.Default.ViewList),
+            SectionLabel("Layout")
+            ConnectedChoice(
+                options = listOf(
+                    Triple(LayoutMode.LIST, "List", Icons.AutoMirrored.Filled.ViewList),
                     Triple(LayoutMode.GRID, "Grid", Icons.Default.GridView)
-                )
-                layoutItems.forEachIndexed { idx, (mode, label, icon) ->
-                    val active = layoutMode == mode
-                    val shapes = when (idx) {
-                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                    }
-                    ToggleButton(
-                        checked = active,
-                        onCheckedChange = { onSelectLayoutMode(mode) },
-                        shapes = shapes,
-                        colors = ToggleButtonDefaults.colors(
-                            containerColor = palette.surfaceContainerHigh,
-                            contentColor = palette.onSurfaceVariant,
-                            checkedContainerColor = palette.secondaryContainer,
-                            checkedContentColor = palette.onSecondaryContainer
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .testTag("layout_mode_btn_${mode.id}")
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = label,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = label,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // 2x2 Sort Grid using Expressive ToggleButtons
-            Text(
-                text = "Sort",
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 4.dp)
+                ),
+                selected = layoutMode,
+                onSelect = onSelectLayoutMode,
+                tag = { "layout_mode_btn_${it.id}" }
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(Modifier.height(20.dp))
 
-            val sortPairs = listOf(
-                listOf(SortBy.NAME to Icons.Default.Title, SortBy.DATE to Icons.Default.CalendarToday),
-                listOf(SortBy.DURATION to Icons.Default.Schedule, SortBy.SIZE to Icons.Default.Storage)
-            )
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                sortPairs.forEach { rowItems ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowItems.forEach { (option, icon) ->
-                            val active = sortBy == option
-                            val dirBadge = if (sortDir == SortDir.ASC) option.ascShort else option.descShort
-
-                            ToggleButton(
-                                checked = active,
-                                onCheckedChange = { onSelectSort(option) },
-                                shapes = ToggleButtonDefaults.shapesFor(buttonHeight = 48.dp),
-                                colors = ToggleButtonDefaults.colors(
-                                    containerColor = palette.surfaceContainerHigh,
-                                    contentColor = palette.onSurfaceVariant,
-                                    checkedContainerColor = palette.secondaryContainer,
-                                    checkedContentColor = palette.onSecondaryContainer
-                                ),
-                                contentPadding = PaddingValues(
-                                    start = if (active) 14.dp else 16.dp,
-                                    end = if (active) 8.dp else 16.dp
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .testTag("sort_option_btn_${option.id}")
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.weight(1f, fill = false)
-                                    ) {
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Text(
-                                            text = option.label,
-                                            fontFamily = PlusJakartaSansFontFamily,
-                                            fontSize = 14.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-
-                                    if (active) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = palette.surfaceContainerLowest
-                                        ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .height(28.dp)
-                                                    .padding(horizontal = 8.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                            ) {
-                                                Text(
-                                                    text = dirBadge,
-                                                    color = palette.primary,
-                                                    fontFamily = PlusJakartaSansFontFamily,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Icon(
-                                                    imageVector = if (sortDir == SortDir.ASC) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                                                    contentDescription = dirBadge,
-                                                    tint = palette.primary,
-                                                    modifier = Modifier.size(13.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun ThemeAndDisplayBottomSheet(
-    currentThemeId: String,
-    amoledBlack: Boolean,
-    showResolutionTier: Boolean,
-    onSelectTheme: (String) -> Unit,
-    onToggleAmoledBlack: () -> Unit,
-    onToggleShowResolution: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val palette = LocalM3Palette.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = palette.surfaceContainerLow,
-        contentColor = palette.onSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = palette.DragHandleColor) },
-        modifier = Modifier.testTag("theme_and_display_sheet")
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
-        ) {
-            Text(
-                text = "Dynamic Color Seed",
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(vertical = 2.dp)
+            SectionLabel("Sort by")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(AllM3Palettes, key = { it.id }) { p ->
-                    val active = currentThemeId == p.id
-                    Card(
-                        onClick = { onSelectTheme(p.id) },
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (active) p.secondaryContainer else palette.surfaceContainer
+                SortBy.entries.forEach { option ->
+                    val selected = option == sortBy
+                    FilterChip(
+                        selected = selected,
+                        onClick = { if (!selected) onSelectSortField(option) },
+                        label = { Text(option.label) },
+                        leadingIcon = {
+                            Icon(
+                                if (selected) Icons.Default.Check else option.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = scheme.primary,
+                            selectedLabelColor = scheme.onPrimary,
+                            selectedLeadingIconColor = scheme.onPrimary
                         ),
-                        modifier = Modifier
-                            .width(72.dp)
-                            .border(
-                                width = 2.dp,
-                                color = if (active) p.primary else Color.Transparent,
-                                shape = MaterialTheme.shapes.large
-                            )
-                            .testTag("theme_seed_${p.id}")
+                        modifier = Modifier.testTag("sort_option_btn_${option.id}")
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+
+            SectionLabel("Order")
+            val natural = sortBy.naturalDir
+            val dirs = listOf(natural, if (natural == SortDir.ASC) SortDir.DESC else SortDir.ASC)
+            Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                dirs.forEachIndexed { i, dir ->
+                    ToggleButton(
+                        checked = sortDir == dir,
+                        onCheckedChange = { if (sortDir != dir) onSelectSortDir(dir) },
+                        shapes = if (i == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        else ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                        colors = ToggleButtonDefaults.colors(
+                            containerColor = scheme.surfaceContainerHighest,
+                            contentColor = scheme.onSurface,
+                            checkedContainerColor = scheme.primary,
+                            checkedContentColor = scheme.onPrimary
+                        ),
+                        modifier = Modifier.weight(1f).testTag("sort_dir_${dir.name.lowercase()}")
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(MaterialShapes.Sunny.toShape())
-                                    .background(p.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (active) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Active theme",
-                                        tint = p.onPrimary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = p.name.substringBefore(" "),
-                                color = palette.onSurface,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                        Text(if (dir == SortDir.ASC) sortBy.ascFull else sortBy.descFull, maxLines = 1)
                     }
                 }
             }
+            Spacer(Modifier.height(20.dp))
 
-            Spacer(modifier = Modifier.height(22.dp))
-
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                SegmentedListItem(
-                    checked = amoledBlack,
-                    onCheckedChange = { onToggleAmoledBlack() },
-                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 2),
-                    colors = ListItemDefaults.segmentedColors(
-                        containerColor = palette.surfaceContainer,
-                        contentColor = palette.onSurface,
-                        supportingContentColor = palette.onSurfaceVariant,
-                        selectedContainerColor = palette.surfaceContainer,
-                        selectedContentColor = palette.onSurface,
-                        selectedSupportingContentColor = palette.onSurfaceVariant
-                    ),
-                    supportingContent = {
-                        Text(
-                            text = "Remove gray card containers",
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 12.sp
-                        )
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = amoledBlack,
-                            onCheckedChange = null
-                        )
-                    },
-                    content = {
-                        Text(
-                            text = "AMOLED Pure Black",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("amoled_black_toggle_row")
-                )
-
-                SegmentedListItem(
-                    checked = showResolutionTier,
-                    onCheckedChange = { onToggleShowResolution() },
-                    shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2),
-                    colors = ListItemDefaults.segmentedColors(
-                        containerColor = palette.surfaceContainer,
-                        contentColor = palette.onSurface,
-                        supportingContentColor = palette.onSurfaceVariant,
-                        selectedContainerColor = palette.surfaceContainer,
-                        selectedContentColor = palette.onSurface,
-                        selectedSupportingContentColor = palette.onSurfaceVariant
-                    ),
-                    supportingContent = {
-                        Text(
-                            text = "Show 8K, 4K, 1440p, 1080p, 720p, SD badge",
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 12.sp
-                        )
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = showResolutionTier,
-                            onCheckedChange = null
-                        )
-                    },
-                    content = {
-                        Text(
-                            text = "Show resolution badges",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("show_resolution_toggle_row")
-                )
-            }
+            SegmentedListItem(
+                checked = smartGroups,
+                onCheckedChange = { onToggleSmartGroups() },
+                shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
+                leadingContent = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
+                supportingContent = { Text("Put episodes of the same series together") },
+                trailingContent = { Switch(checked = smartGroups, onCheckedChange = null) },
+                colors = ListItemDefaults.colors(
+                    containerColor = scheme.surfaceContainerHigh,
+                    selectedContainerColor = scheme.surfaceContainerHigh
+                ),
+                modifier = Modifier.testTag("smart_groups_toggle_card")
+            ) { Text("Smart groups") }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ColorOsFloatingMenuOverlay(
-    video: VideoItem,
-    onAddToPlaylist: () -> Unit,
-    onRename: () -> Unit,
-    onShare: () -> Unit,
-    onDelete: () -> Unit,
-    onSelect: () -> Unit,
-    onDetails: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val palette = LocalM3Palette.current
-    val menuItems: List<Triple<String, ImageVector, () -> Unit>> = listOf(
-        Triple("Add to playlist", Icons.Default.CreateNewFolder, onAddToPlaylist),
-        Triple("Rename", Icons.Default.Edit, onRename),
-        Triple("Share", Icons.Default.Share, onShare),
-        Triple("Delete", Icons.Default.DeleteOutline, onDelete),
-        Triple("Select", Icons.Default.Check, onSelect),
-        Triple("Details", Icons.Default.Info, onDetails)
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp)
     )
+}
 
-    DropdownMenuPopup(
-        expanded = true,
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag("floating_video_menu_overlay")
-    ) {
-        DropdownMenuGroup(
-            shapes = MenuDefaults.groupShape(index = 0, count = 1),
-            containerColor = palette.surfaceContainerHigh
-        ) {
-            menuItems.forEachIndexed { index, (label, icon, action) ->
-                val isError = label == "Delete"
-                val textColor = if (isError) palette.error else palette.onSurface
-                val iconColor = if (isError) palette.error else palette.onSurfaceVariant
-
-                SelectableDropdownMenuItem(
-                    selected = false,
-                    onClick = action,
-                    shapes = MenuDefaults.itemShape(index = index, count = menuItems.size),
-                    text = {
-                        Text(
-                            text = label,
-                            color = textColor,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    },
-                    trailingContent = {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = label,
-                            tint = iconColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    modifier = Modifier.testTag("menu_action_${label.lowercase().replace(" ", "_")}")
-                )
+/** An Expressive connected button group for picking one of a few options. */
+@Composable
+private fun <T> ConnectedChoice(
+    options: List<Triple<T, String, ImageVector>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    tag: (T) -> String
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+        options.forEachIndexed { i, (value, label, icon) ->
+            ToggleButton(
+                checked = value == selected,
+                onCheckedChange = { if (value != selected) onSelect(value) },
+                shapes = when (i) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                },
+                colors = ToggleButtonDefaults.colors(
+                    containerColor = scheme.surfaceContainerHighest,
+                    contentColor = scheme.onSurface,
+                    checkedContainerColor = scheme.primary,
+                    checkedContentColor = scheme.onPrimary
+                ),
+                modifier = Modifier.weight(1f).testTag(tag(value))
+            ) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text(label, maxLines = 1)
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+// ---------------------------------------------------------------------------------------------
+// Details
+// ---------------------------------------------------------------------------------------------
+
+/** Video details: a thumbnail header, the specs, then the file. Long-press a line to copy it. */
 @Composable
-fun ColorOsDetailsSheet(
+fun VideoDetailsSheet(
     video: VideoItem,
-    onCopyPath: (String) -> Unit,
+    onCopy: (label: String, value: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    val badge = resolutionLabel(video.width, video.height)
-    val detailRows = buildList {
-        add(Triple("Name", video.displayName, false))
-        add(Triple("Format", video.ext, false))
-        add(Triple("Size", formatSizeLabel(video.sizeMB), false))
-        if (badge != null) {
-            add(Triple("Resolution", badge, false))
-        }
-        add(Triple("Length", video.durationLabel, false))
-        add(Triple("Path", video.path, true))
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = palette.surfaceContainerLow,
-        contentColor = palette.onSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = palette.DragHandleColor) },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("video_details_sheet")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp)
-            ) {
-                TextButton(
-                    onClick = onDismiss,
-                    shapes = ButtonDefaults.shapes(),
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                VideoThumbnailBox(
+                    video = video,
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .testTag("details_close_btn")
-                ) {
-                    Text(
-                        text = "Close",
-                        color = palette.primary,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                        .width(128.dp)
+                        .aspectRatio(16f / 9f)
+                        .clip(MaterialTheme.shapes.medium)
+                )
+                Spacer(Modifier.width(16.dp))
                 Text(
-                    text = "Details",
-                    color = palette.onSurface,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.align(Alignment.Center)
+                    video.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
-
+            Spacer(Modifier.height(16.dp))
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
             ) {
-                detailRows.forEachIndexed { idx, (label, value, copyable) ->
+                val rows = buildList {
+                    add("Format" to video.ext.uppercase())
+                    resolutionLabel(video.width, video.height)?.let {
+                        add("Resolution" to "$it · ${video.width}×${video.height}")
+                    }
+                    add("Length" to video.durationLabel)
+                    add("Size" to formatSizeLabel(video.sizeMB))
+                    add("Added" to video.dateStr)
+                    add("Folder" to friendlyFolderPath(video.folderPath))
+                    add("File" to video.displayName)
+                }
+                rows.forEachIndexed { i, (label, value) ->
                     SegmentedListItem(
-                        onClick = { if (copyable) onCopyPath(value) },
-                        shapes = ListItemDefaults.segmentedShapes(
-                            index = idx,
-                            count = detailRows.size.coerceAtLeast(1)
-                        ),
-                        colors = ListItemDefaults.segmentedColors(
-                            containerColor = palette.surfaceContainer,
-                            contentColor = palette.onSurface,
-                            overlineContentColor = palette.onSurfaceVariant
-                        ),
-                        overlineContent = {
-                            Text(
-                                text = label,
-                                color = palette.onSurfaceVariant,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 12.5.sp
-                            )
-                        },
-                        trailingContent = if (copyable) {
-                            {
-                                FilledTonalButton(
-                                    onClick = { onCopyPath(value) },
-                                    shapes = ButtonDefaults.shapes(),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                                    modifier = Modifier.testTag("copy_path_btn")
-                                ) {
-                                    Text(
-                                        text = "Copy",
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-                        } else null,
-                        content = {
-                            Text(
-                                text = value,
-                                color = palette.onSurface,
-                                fontFamily = PlusJakartaSansFontFamily,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                lineHeight = 20.sp
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                        onClick = {},
+                        onLongClick = { onCopy(label, value) },
+                        shapes = ListItemDefaults.segmentedShapes(index = i, count = rows.size),
+                        overlineContent = { Text(label) },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                    ) { Text(value, style = MaterialTheme.typography.bodyLarge) }
                 }
             }
+            Text(
+                "Long-press a line to copy it",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 10.dp)
+            )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+// ---------------------------------------------------------------------------------------------
+// Rename
+// ---------------------------------------------------------------------------------------------
+
 @Composable
-fun ColorOsRenameDialog(
+fun RenameVideoDialog(
     video: VideoItem,
     renameValue: String,
     onValueChange: (String) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
-
+    val focus = remember { FocusRequester() }
+    var field by remember { mutableStateOf(TextFieldValue(renameValue, TextRange(0, renameValue.length))) }
+    LaunchedEffect(Unit) { focus.requestFocus() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = palette.surfaceContainerHigh,
-        titleContentColor = palette.onSurface,
-        textContentColor = palette.onSurfaceVariant,
-        title = {
-            Text(
-                text = "Rename video",
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        },
+        icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+        title = { Text("Rename video") },
         text = {
             OutlinedTextField(
-                value = renameValue,
-                onValueChange = onValueChange,
-                singleLine = true,
-                label = {
-                    Text(
-                        text = "File name (.${video.ext})",
-                        fontFamily = PlusJakartaSansFontFamily
-                    )
+                value = field,
+                onValueChange = {
+                    field = it
+                    onValueChange(it.text)
                 },
-                shape = MaterialTheme.shapes.medium,
+                singleLine = true,
+                label = { Text("Name") },
+                suffix = { Text(".${video.ext}") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (field.text.isNotBlank()) onConfirm() }),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .focusRequester(focus)
                     .testTag("rename_input_field")
             )
         },
         confirmButton = {
             Button(
                 onClick = onConfirm,
+                enabled = field.text.isNotBlank(),
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.testTag("rename_save_btn")
-            ) {
-                Text(
-                    text = "Save",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            ) { Text("Rename") }
         },
         dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                shapes = ButtonDefaults.shapes()
-            ) {
-                Text(
-                    text = "Cancel",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            TextButton(onClick = onDismiss, shapes = ButtonDefaults.shapes()) { Text("Cancel") }
         },
         modifier = Modifier.testTag("rename_video_dialog")
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+// ---------------------------------------------------------------------------------------------
+// Add to playlist
+// ---------------------------------------------------------------------------------------------
+
+/** Pick a video playlist, or make a new one (bottom sheet, like Music). */
 @Composable
-fun AddToPlaylistDialog(
+fun AddVideosToPlaylistSheet(
     playlists: List<PlaylistItem>,
     onSelectPlaylistName: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
-    var customPlaylistName by remember { mutableStateOf("") }
-
-    AlertDialog(
+    var newName by remember { mutableStateOf("") }
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = palette.surfaceContainerHigh,
-        titleContentColor = palette.onSurface,
-        textContentColor = palette.onSurfaceVariant,
-        title = {
-            Text(
-                text = "Add to playlist",
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                if (playlists.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        playlists.forEachIndexed { idx, pl ->
-                            SegmentedListItem(
-                                onClick = { onSelectPlaylistName(pl.name) },
-                                shapes = ListItemDefaults.segmentedShapes(
-                                    index = idx,
-                                    count = playlists.size.coerceAtLeast(1)
-                                ),
-                                colors = ListItemDefaults.segmentedColors(
-                                    containerColor = palette.surfaceContainer,
-                                    contentColor = palette.onSurface
-                                ),
-                                trailingContent = {
-                                    Icon(
-                                        imageVector = Icons.Default.CreateNewFolder,
-                                        contentDescription = null,
-                                        tint = palette.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                },
-                                content = {
-                                    Text(
-                                        text = pl.name,
-                                        color = palette.onSurface,
-                                        fontFamily = PlusJakartaSansFontFamily,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("playlist_option_${pl.name}")
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                OutlinedTextField(
-                    value = customPlaylistName,
-                    onValueChange = { customPlaylistName = it },
-                    singleLine = true,
-                    placeholder = {
-                        Text(
-                            text = "New playlist name...",
-                            fontFamily = PlusJakartaSansFontFamily
-                        )
-                    },
-                    trailingIcon = if (customPlaylistName.isNotBlank()) {
-                        {
-                            TextButton(
-                                onClick = { onSelectPlaylistName(customPlaylistName.trim()) },
-                                shapes = ButtonDefaults.shapes()
-                            ) {
-                                Text(
-                                    text = "Create",
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    } else null,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            if (customPlaylistName.isNotBlank()) {
-                Button(
-                    onClick = { onSelectPlaylistName(customPlaylistName.trim()) },
-                    shapes = ButtonDefaults.shapes()
-                ) {
-                    Text(
-                        text = "Create",
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                shapes = ButtonDefaults.shapes()
-            ) {
-                Text(
-                    text = "Cancel",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("add_to_playlist_dialog")
-    )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            Text("Add to playlist", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp))
+            if (playlists.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                    playlists.forEachIndexed { i, pl ->
+                        SegmentedListItem(
+                            onClick = { onSelectPlaylistName(pl.name) },
+                            shapes = ListItemDefaults.segmentedShapes(index = i, count = playlists.size),
+                            leadingContent = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
+                            supportingContent = {
+                                Text(if (pl.mediaUris.size == 1) "1 video" else "${pl.mediaUris.size} videos")
+                            },
+                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                            modifier = Modifier.testTag("playlist_option_${pl.name}")
+                        ) { Text(pl.name) }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+            OutlinedTextField(
+                value = newName,
+                onValueChange = { newName = it },
+                singleLine = true,
+                label = { Text("New playlist") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (newName.isNotBlank()) onSelectPlaylistName(newName.trim()) }),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(10.dp))
+            FilledTonalButton(
+                onClick = { onSelectPlaylistName(newName.trim()) },
+                enabled = newName.isNotBlank(),
+                shapes = ButtonDefaults.shapes(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Create and add")
+            }
+        }
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+// ---------------------------------------------------------------------------------------------
+// Resume
+// ---------------------------------------------------------------------------------------------
+
 @Composable
 fun ResumePlaybackBottomSheet(
     target: ResumePromptTarget,
@@ -1056,98 +511,45 @@ fun ResumePlaybackBottomSheet(
     onStartFromBeginning: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
-    val resumeTimeLabel = formatDurationMs(target.resumePositionMs)
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = palette.surfaceContainerLow,
-        contentColor = palette.onSurface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = palette.DragHandleColor) },
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("resume_playback_bottom_sheet")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 24.dp)
                 .padding(bottom = 28.dp)
         ) {
+            Text(target.video.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(4.dp))
             Text(
-                text = target.video.title,
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                "Continue where you left off, or start again.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "Continue where you left off or play from the start",
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Normal
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
+            Spacer(Modifier.height(20.dp))
             Button(
                 onClick = onResumeFromSaved,
                 shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = palette.primary,
-                    contentColor = palette.onPrimary
-                ),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("resume_from_saved_btn")
+                contentPadding = ButtonDefaults.MediumContentPadding,
+                modifier = Modifier.fillMaxWidth().height(56.dp).testTag("resume_from_saved_btn")
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Resume from $resumeTimeLabel",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Resume from ${formatDurationMs(target.resumePositionMs)}")
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
+            Spacer(Modifier.height(8.dp))
             FilledTonalButton(
                 onClick = onStartFromBeginning,
                 shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = palette.surfaceContainerHigh,
-                    contentColor = palette.onSurface
-                ),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("start_from_beginning_btn")
+                contentPadding = ButtonDefaults.MediumContentPadding,
+                modifier = Modifier.fillMaxWidth().height(56.dp).testTag("start_from_beginning_btn")
             ) {
-                Icon(
-                    imageVector = Icons.Default.Replay,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Start from beginning",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Icon(Icons.Default.Replay, contentDescription = null)
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Start from the beginning")
             }
         }
     }

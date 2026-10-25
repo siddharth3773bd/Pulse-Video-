@@ -25,9 +25,17 @@ import kotlinx.coroutines.withContext
 
 object MediaStoreScanner {
 
-    private val thumbnailCache = object : LruCache<String, Bitmap>(60) {
-        override fun sizeOf(key: String, value: Bitmap): Int = 1
+    // Sized by memory (about 1/6 of the app's heap) instead of a fixed 60 items, so scrolling back
+    // doesn't throw thumbnails away and decode them again.
+    private val thumbnailCache = object : LruCache<String, Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 1024L / 6L).toInt().coerceAtLeast(16 * 1024)
+    ) {
+        override fun sizeOf(key: String, value: Bitmap): Int = (value.byteCount / 1024).coerceAtLeast(1)
     }
+
+    /** At most 4 thumbnails decode at once, so a fast scroll doesn't flood the disk and CPU. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val thumbnailDispatcher = Dispatchers.IO.limitedParallelism(4)
 
     fun getVideoPermissionName(): String {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -314,38 +322,30 @@ object MediaStoreScanner {
 
     fun getCachedThumbnail(uriKey: String): Bitmap? = thumbnailCache.get(uriKey)
 
+    /**
+     * A sharp thumbnail for [videoUri]: MediaStore's own thumbnail at 640x360 (enough for a list row
+     * or a grid card on a high-density screen), falling back to a frame from the video itself.
+     */
     suspend fun loadVideoThumbnail(
         context: Context,
         videoUri: Uri,
-        videoId: Long
-    ): Bitmap? = withContext(Dispatchers.IO) {
+        @Suppress("UNUSED_PARAMETER") videoId: Long
+    ): Bitmap? = withContext(thumbnailDispatcher) {
         val cacheKey = videoUri.toString()
         thumbnailCache.get(cacheKey)?.let { return@withContext it }
 
-        var bmp: Bitmap? = null
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                bmp = context.contentResolver.loadThumbnail(videoUri, Size(320, 180), null)
-            } catch (_: Exception) {
-            }
-        }
-        if (bmp == null) {
-            try {
-                @Suppress("DEPRECATION")
-                bmp = MediaStore.Video.Thumbnails.getThumbnail(
-                    context.contentResolver,
-                    videoId,
-                    MediaStore.Video.Thumbnails.MINI_KIND,
-                    null
-                )
-            } catch (_: Exception) {
-            }
+        var bmp: Bitmap? = try {
+            context.contentResolver.loadThumbnail(videoUri, Size(640, 360), null)
+        } catch (_: Exception) {
+            null
         }
         if (bmp == null) {
             val retriever = MediaMetadataRetriever()
             try {
                 retriever.setDataSource(context, videoUri)
-                bmp = retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                bmp = retriever.getScaledFrameAtTime(
+                    1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 640, 360
+                )
             } catch (_: Exception) {
             } finally {
                 try {

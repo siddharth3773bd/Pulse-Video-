@@ -14,6 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.toArgb
+import com.google.android.material.color.utilities.Hct
+import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.example.model.ThemeMode
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -34,118 +37,31 @@ fun DopplerTheme(
     }
     val applyAmoled = isDark && amoledBlack
 
-    val baseScheme: ColorScheme
-    val basePalette: M3Palette
-
-    if (dynamicColor) {
-        val dynScheme = if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        baseScheme = if (applyAmoled) {
-            dynScheme.copy(
-                background = Color.Black,
-                surface = Color.Black,
-                surfaceDim = Color.Black,
-                surfaceContainerLowest = Color.Black
-            )
-        } else {
-            dynScheme
-        }
-        basePalette = M3Palette(
-            id = "dynamic",
-            name = "Dynamic",
-            primary = baseScheme.primary,
-            onPrimary = baseScheme.onPrimary,
-            primaryContainer = baseScheme.primaryContainer,
-            onPrimaryContainer = baseScheme.onPrimaryContainer,
-            secondaryContainer = baseScheme.secondaryContainer,
-            onSecondaryContainer = baseScheme.onSecondaryContainer,
-            surfaceDim = if (applyAmoled) Color.Black else baseScheme.surfaceDim,
-            surface = if (applyAmoled) Color.Black else baseScheme.surface,
-            surfaceContainerLowest = if (applyAmoled) Color.Black else baseScheme.surfaceContainerLowest,
-            surfaceContainerLow = if (applyAmoled) Color.Black else baseScheme.surfaceContainerLow,
-            surfaceContainer = baseScheme.surfaceContainer,
-            surfaceContainerHigh = baseScheme.surfaceContainerHigh,
-            surfaceContainerHighest = baseScheme.surfaceContainerHighest,
-            onSurface = baseScheme.onSurface,
-            onSurfaceVariant = baseScheme.onSurfaceVariant,
-            outline = baseScheme.outline,
-            outlineVariant = baseScheme.outlineVariant,
-            error = baseScheme.error,
-            errorContainer = baseScheme.errorContainer,
-            onErrorContainer = baseScheme.onErrorContainer
-        )
+    // One colour system: everything comes from a Material 3 ColorScheme. With "Dynamic colour" it
+    // is the wallpaper scheme; otherwise the chosen preset (or custom colour) is the seed for
+    // Google's own Material You algorithm (SchemeTonalSpot), so every role, tertiary included,
+    // is a real Material colour. LocalM3Palette is just a view of that same scheme.
+    val rawScheme: ColorScheme = if (dynamicColor) {
+        if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
-        val rawPalette = when {
-            paletteId == "custom" -> generateM3PaletteFromSeed(Color(customColorArgb), isDark = isDark)
-            isDark -> M3PalettesById[paletteId] ?: IndigoDarkPalette
-            else -> M3LightPalettesById[paletteId] ?: IndigoLightPalette
+        val seed = when (paletteId) {
+            "custom" -> customColorArgb
+            else -> (M3PalettesById[paletteId] ?: IndigoDarkPalette).primary.toArgb()
         }
-        basePalette = if (applyAmoled) {
-            rawPalette.copy(
-                surfaceDim = Color.Black,
-                surface = Color.Black,
-                surfaceContainerLowest = Color.Black,
-                surfaceContainerLow = Color.Black
-            )
-        } else {
-            rawPalette
-        }
-        baseScheme = if (isDark) {
-            darkColorScheme(
-                primary = basePalette.primary,
-                onPrimary = basePalette.onPrimary,
-                primaryContainer = basePalette.primaryContainer,
-                onPrimaryContainer = basePalette.onPrimaryContainer,
-                secondary = basePalette.primary,
-                onSecondary = basePalette.onPrimary,
-                secondaryContainer = basePalette.secondaryContainer,
-                onSecondaryContainer = basePalette.onSecondaryContainer,
-                background = if (applyAmoled) Color.Black else basePalette.surfaceDim,
-                onBackground = basePalette.onSurface,
-                surface = if (applyAmoled) Color.Black else basePalette.surface,
-                onSurface = basePalette.onSurface,
-                surfaceVariant = basePalette.surfaceContainerLow,
-                onSurfaceVariant = basePalette.onSurfaceVariant,
-                surfaceDim = basePalette.surfaceDim,
-                surfaceContainerLowest = basePalette.surfaceContainerLowest,
-                surfaceContainerLow = basePalette.surfaceContainerLow,
-                surfaceContainer = basePalette.surfaceContainer,
-                surfaceContainerHigh = basePalette.surfaceContainerHigh,
-                surfaceContainerHighest = basePalette.surfaceContainerHighest,
-                outline = basePalette.outline,
-                outlineVariant = basePalette.outlineVariant,
-                error = basePalette.error,
-                errorContainer = basePalette.errorContainer,
-                onErrorContainer = basePalette.onErrorContainer
-            )
-        } else {
-            lightColorScheme(
-                primary = basePalette.primary,
-                onPrimary = basePalette.onPrimary,
-                primaryContainer = basePalette.primaryContainer,
-                onPrimaryContainer = basePalette.onPrimaryContainer,
-                secondary = basePalette.primary,
-                onSecondary = basePalette.onPrimary,
-                secondaryContainer = basePalette.secondaryContainer,
-                onSecondaryContainer = basePalette.onSecondaryContainer,
-                background = basePalette.surface,
-                onBackground = basePalette.onSurface,
-                surface = basePalette.surface,
-                onSurface = basePalette.onSurface,
-                surfaceVariant = basePalette.surfaceContainerLow,
-                onSurfaceVariant = basePalette.onSurfaceVariant,
-                surfaceDim = basePalette.surfaceDim,
-                surfaceContainerLowest = basePalette.surfaceContainerLowest,
-                surfaceContainerLow = basePalette.surfaceContainerLow,
-                surfaceContainer = basePalette.surfaceContainer,
-                surfaceContainerHigh = basePalette.surfaceContainerHigh,
-                surfaceContainerHighest = basePalette.surfaceContainerHighest,
-                outline = basePalette.outline,
-                outlineVariant = basePalette.outlineVariant,
-                error = basePalette.error,
-                errorContainer = basePalette.errorContainer,
-                onErrorContainer = basePalette.onErrorContainer
-            )
-        }
+        SchemeTonalSpot(Hct.fromInt(seed), isDark, 0.0).toComposeColorScheme(isDark)
+    }
+    val baseScheme = if (applyAmoled) {
+        rawScheme.copy(
+            background = Color.Black,
+            surface = Color.Black,
+            surfaceDim = Color.Black,
+            surfaceContainerLowest = Color.Black
+        )
+    } else rawScheme
+    val template = if (dynamicColor) IndigoDarkPalette.copy(id = "dynamic", name = "Dynamic")
+    else (M3PalettesById[paletteId] ?: IndigoDarkPalette)
+    val basePalette = baseScheme.toM3Palette(template).let {
+        if (applyAmoled) it.copy(surfaceContainerLow = Color.Black) else it
     }
 
     CompositionLocalProvider(LocalM3Palette provides basePalette) {

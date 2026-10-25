@@ -32,7 +32,11 @@ data class VideoItem(
     val progress: Float,
     val folder: String,
     val path: String
-)
+) {
+    /** The folder the file is in, as a full path. Two folders with the same name stay apart. */
+    val folderPath: String
+        get() = path.substringBeforeLast('/', folder).trimEnd('/')
+}
 
 @Immutable
 data class AudioTrackItem(
@@ -127,6 +131,24 @@ enum class SortDir {
     ASC, DESC
 }
 
+/** The order most people want for each sort field: names A to Z; everything else biggest/newest first. */
+val SortBy.naturalDir: SortDir
+    get() = if (this == SortBy.NAME) SortDir.ASC else SortDir.DESC
+
+/** How the video fills the screen. */
+enum class VideoAspectMode(val label: String) {
+    FIT("Fit"),
+    CROP("Crop"),
+    STRETCH("Stretch")
+}
+
+/** Subtitle text size, as a fraction of the video height (Media3 SubtitleView). */
+enum class SubtitleSize(val id: String, val label: String, val fraction: Float) {
+    SMALL("small", "Small", 0.045f),
+    MEDIUM("medium", "Medium", 0.0533f),
+    LARGE("large", "Large", 0.066f)
+}
+
 enum class BottomTab(val id: String, val label: String) {
     AUDIO("audio", "Music"),
     VIDEOS("videos", "Videos"),
@@ -172,7 +194,14 @@ data class PlaybackSettings(
     val leftSwipeForBrightness: Boolean = true,
     val forceOrientation: ScreenOrientationMode = ScreenOrientationMode.SYSTEM,
     val defaultDecoder: DecoderMode = DecoderMode.AUTO,
-    val showRemainingTime: Boolean = false
+    val showRemainingTime: Boolean = false,
+    /** When a video ends, play the next one from the same folder. */
+    val autoplayNext: Boolean = true,
+    /** Keep playing in a small window when leaving the app during a video. */
+    val pictureInPicture: Boolean = true,
+    val subtitleSize: SubtitleSize = SubtitleSize.MEDIUM,
+    /** Dark box behind subtitles (off = outlined text only). */
+    val subtitleBackground: Boolean = true
 )
 
 /**

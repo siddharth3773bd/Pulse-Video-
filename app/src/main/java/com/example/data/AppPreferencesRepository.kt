@@ -84,6 +84,10 @@ object AppPreferencesRepository {
     private val KEY_FORCE_ORIENTATION = stringPreferencesKey("pb_force_orientation")
     private val KEY_DEFAULT_DECODER = stringPreferencesKey("pb_default_decoder")
     private val KEY_SHOW_REMAINING_TIME = booleanPreferencesKey("pb_show_remaining_time")
+    private val KEY_AUTOPLAY_NEXT = booleanPreferencesKey("pb_autoplay_next")
+    private val KEY_PIP = booleanPreferencesKey("pb_picture_in_picture")
+    private val KEY_SUB_SIZE = stringPreferencesKey("pb_subtitle_size")
+    private val KEY_SUB_BG = booleanPreferencesKey("pb_subtitle_background")
 
     // Audio Library screen
     private val KEY_LIB_TAB_ORDER = stringPreferencesKey("lib_tab_order")
@@ -146,7 +150,12 @@ object AppPreferencesRepository {
                 leftSwipeForBrightness = prefs[KEY_LEFT_SWIPE_BRIGHT] ?: true,
                 forceOrientation = ScreenOrientationMode.entries.find { it.id == prefs[KEY_FORCE_ORIENTATION] } ?: ScreenOrientationMode.SYSTEM,
                 defaultDecoder = DecoderMode.entries.find { it.id == prefs[KEY_DEFAULT_DECODER] } ?: DecoderMode.AUTO,
-                showRemainingTime = prefs[KEY_SHOW_REMAINING_TIME] ?: false
+                showRemainingTime = prefs[KEY_SHOW_REMAINING_TIME] ?: false,
+                autoplayNext = prefs[KEY_AUTOPLAY_NEXT] ?: true,
+                pictureInPicture = prefs[KEY_PIP] ?: true,
+                subtitleSize = com.example.model.SubtitleSize.entries.find { it.id == prefs[KEY_SUB_SIZE] }
+                    ?: com.example.model.SubtitleSize.MEDIUM,
+                subtitleBackground = prefs[KEY_SUB_BG] ?: true
             )
 
             StoredAppPreferences(
@@ -515,6 +524,10 @@ object AppPreferencesRepository {
             it[KEY_FORCE_ORIENTATION] = settings.forceOrientation.id
             it[KEY_DEFAULT_DECODER] = settings.defaultDecoder.id
             it[KEY_SHOW_REMAINING_TIME] = settings.showRemainingTime
+            it[KEY_AUTOPLAY_NEXT] = settings.autoplayNext
+            it[KEY_PIP] = settings.pictureInPicture
+            it[KEY_SUB_SIZE] = settings.subtitleSize.id
+            it[KEY_SUB_BG] = settings.subtitleBackground
         }
     }
 

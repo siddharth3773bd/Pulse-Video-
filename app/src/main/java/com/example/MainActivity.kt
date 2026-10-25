@@ -94,6 +94,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.rememberContainedSearchBarState
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import com.example.ui.components.VideoSearchView
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -170,11 +182,11 @@ import com.example.model.MeSubPage
 import com.example.model.ThemeMode
 import com.example.model.VideoItem
 import com.example.model.ViewMode
-import com.example.ui.components.AddToPlaylistDialog
+import com.example.ui.components.AddVideosToPlaylistSheet
 import com.example.ui.components.AudioLibraryScreen
-import com.example.ui.components.ColorOsDetailsSheet
-import com.example.ui.components.ColorOsFloatingMenuOverlay
-import com.example.ui.components.ColorOsRenameDialog
+import com.example.ui.components.VideoDetailsSheet
+import com.example.ui.components.VideoActionsMenu
+import com.example.ui.components.RenameVideoDialog
 import com.example.ui.components.FoldersLibraryView
 import com.example.ui.components.MeTabScreen
 import com.example.ui.components.MediaPermissionPromptCard
@@ -464,6 +476,18 @@ fun Material3VideoPlayerScreen(
     val contentGraphicsLayer = rememberGraphicsLayer()
     val pullToRefreshState = rememberPullToRefreshState()
 
+    // Videos header: official top app bar that scrolls away, and the official full-screen search.
+    val videosTopBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    LaunchedEffect(uiState.bottomTab, uiState.selectedFolderFilter, uiState.viewMode, uiState.isSelectionMode) {
+        videosTopBarScroll.state.heightOffset = 0f
+    }
+    val videoSearchState = rememberContainedSearchBarState(
+        animationSpecForExpand = MaterialTheme.motionScheme.slowSpatialSpec(),
+        animationSpecForCollapse = MaterialTheme.motionScheme.defaultSpatialSpec()
+    )
+    val videoSearchText = rememberTextFieldState()
+    val headerScope = rememberCoroutineScope()
+
     // ---- Audio: mini player pill + Now Playing screen ----
     val audioManager = remember(context) { AudioPlaybackManager.getInstance(context) }
     val audioState by audioManager.state.collectAsStateWithLifecycle()
@@ -499,6 +523,31 @@ fun Material3VideoPlayerScreen(
         }
     }
 
+    /** The ⋮ menu of a video, anchored to its own button. */
+    val videoMenu: @Composable (VideoItem) -> Unit = { menuVideo ->
+        VideoActionsMenu(
+            expanded = uiState.activeMenuVideo?.id == menuVideo.id,
+            onDismiss = { viewModel.clearAllOverlays() },
+            onAddToPlaylist = { viewModel.openPlaylistSheetForIds(listOf(menuVideo.id)) },
+            onRename = { viewModel.openRenameDialog(menuVideo) },
+            onShare = {
+                viewModel.clearAllOverlays()
+                shareVideosContentUri(context, listOf(menuVideo))
+            },
+            onDetails = { viewModel.openDetailsSheet(menuVideo) },
+            onDelete = {
+                viewModel.requestDeleteVideos(
+                    context = context,
+                    targetVideos = listOf(menuVideo),
+                    onLaunchIntentSender = launchIntentSender,
+                    onRequestLegacyWritePermission = {
+                        legacyWritePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    }
+                )
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -521,19 +570,37 @@ fun Material3VideoPlayerScreen(
             val hideMainHeader = (uiState.bottomTab == BottomTab.ME && uiState.meSubPage != MeSubPage.NONE) ||
                 (uiState.bottomTab == BottomTab.AUDIO && uiState.hasAudioPermission)
             if (!hideMainHeader) {
+                val onVideos = uiState.bottomTab == BottomTab.VIDEOS && uiState.hasVideoPermission
                 M3ExpressiveHeader(
                     uiState = uiState,
                     effectiveAmoled = effectiveAmoled,
                     onClearSelection = { viewModel.clearSelection() },
                     onToggleSelectAll = { viewModel.toggleSelectAll() },
-                    onOpenSearch = { viewModel.setSearchOpen(true) },
-                    onCloseSearch = { viewModel.setSearchOpen(false) },
-                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
                     onOpenSortSheet = { viewModel.openSortSheet() },
                     onClearSubFilter = {
                         viewModel.selectFolderFilter(null)
                         viewModel.selectPlaylistFilter(null)
-                    }
+                    },
+                    searchButton = if (onVideos) {
+                        {
+                            SearchBar(
+                                state = videoSearchState,
+                                inputField = {
+                                    IconButton(
+                                        onClick = { headerScope.launch { videoSearchState.animateToExpanded() } },
+                                        shapes = IconButtonDefaults.shapes(),
+                                        modifier = Modifier.testTag("header_search_btn")
+                                    ) { Icon(Icons.Default.Search, contentDescription = "Search videos") }
+                                },
+                                modifier = Modifier.requiredSize(56.dp),
+                                shape = CircleShape,
+                                colors = SearchBarDefaults.colors(containerColor = Color.Transparent),
+                                tonalElevation = 0.dp,
+                                shadowElevation = 0.dp
+                            )
+                        }
+                    } else null,
+                    scrollBehavior = if (onVideos) videosTopBarScroll else null
                 )
             }
 
@@ -588,6 +655,11 @@ fun Material3VideoPlayerScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .then(
+                            if (uiState.bottomTab == BottomTab.VIDEOS) {
+                                Modifier.nestedScroll(videosTopBarScroll.nestedScrollConnection)
+                            } else Modifier
+                        )
                 ) {
                     when (uiState.bottomTab) {
                         BottomTab.AUDIO -> {
@@ -655,10 +727,8 @@ fun Material3VideoPlayerScreen(
                                         uiState.selectedPlaylistFilter == null -> {
                                         FoldersLibraryView(
                                             videos = uiState.videos,
-                                            playlists = uiState.playlists,
                                             amoledBlack = effectiveAmoled,
-                                            onSelectFolder = { folder -> viewModel.selectFolderFilter(folder) },
-                                            onSelectPlaylist = { plId -> viewModel.selectPlaylistFilter(plId) }
+                                            onSelectFolder = { folder -> viewModel.selectFolderFilter(folder) }
                                         )
                                     }
 
@@ -671,7 +741,8 @@ fun Material3VideoPlayerScreen(
                                             showResolutionTier = uiState.showResolutionTier,
                                             onToggleNode = { viewModel.toggleTreeNode(it) },
                                             onPlayVideo = { viewModel.playVideo(it, context) },
-                                            onOpenMenu = { viewModel.openVideoMenu(it) }
+                                            onOpenMenu = { viewModel.openVideoMenu(it) },
+                                            menu = videoMenu
                                         )
                                     }
 
@@ -693,6 +764,7 @@ fun Material3VideoPlayerScreen(
                                             onVideoMenuClick = { video ->
                                                 viewModel.openVideoMenu(video)
                                             },
+                                            menu = videoMenu,
                                             onRescan = { viewModel.refreshPermissionsAndScan(context, showSpinner = true) }
                                         )
                                     }
@@ -915,32 +987,6 @@ fun Material3VideoPlayerScreen(
             )
         }
 
-        if (uiState.activeMenuVideo != null) {
-            val menuVideo = uiState.activeMenuVideo
-            ColorOsFloatingMenuOverlay(
-                video = menuVideo,
-                onAddToPlaylist = { viewModel.openPlaylistSheetForIds(listOf(menuVideo.id)) },
-                onRename = { viewModel.openRenameDialog(menuVideo) },
-                onShare = {
-                    viewModel.clearAllOverlays()
-                    shareVideosContentUri(context, listOf(menuVideo))
-                },
-                onDelete = {
-                    viewModel.requestDeleteVideos(
-                        context = context,
-                        targetVideos = listOf(menuVideo),
-                        onLaunchIntentSender = launchIntentSender,
-                        onRequestLegacyWritePermission = {
-                            legacyWritePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                        }
-                    )
-                },
-                onSelect = { viewModel.selectSingleFromMenu(menuVideo) },
-                onDetails = { viewModel.openDetailsSheet(menuVideo) },
-                onDismiss = { viewModel.clearAllOverlays() }
-            )
-        }
-
         if (uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS) {
             SortAndViewBottomSheet(
                 smartGroups = uiState.smartGroups,
@@ -948,31 +994,29 @@ fun Material3VideoPlayerScreen(
                 layoutMode = uiState.layoutMode,
                 sortBy = uiState.sortBy,
                 sortDir = uiState.sortDir,
-                showResolutionTier = uiState.showResolutionTier,
                 onToggleSmartGroups = { viewModel.toggleSmartGroups(context) },
                 onSelectViewMode = { viewModel.setViewMode(it, context) },
                 onSelectLayoutMode = { viewModel.setLayoutMode(it, context) },
-                onToggleShowResolutionTier = { viewModel.toggleShowResolutionTier(context) },
-                onSelectSort = { viewModel.handleSortOptionClick(it, context) },
-                onDismiss = { viewModel.clearAllOverlays() },
-                isAudioTab = uiState.bottomTab == BottomTab.AUDIO
+                onSelectSortField = { viewModel.setSortField(it, context) },
+                onSelectSortDir = { viewModel.setSortDir(it, context) },
+                onDismiss = { viewModel.clearAllOverlays() }
             )
         }
 
         if (uiState.detailsVideo != null) {
-            ColorOsDetailsSheet(
+            VideoDetailsSheet(
                 video = uiState.detailsVideo,
-                onCopyPath = { path ->
+                onCopy = { label, value ->
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    clipboard?.setPrimaryClip(ClipData.newPlainText("Video Path", path))
-                    viewModel.triggerToast("Path copied")
+                    clipboard?.setPrimaryClip(ClipData.newPlainText(label, value))
+                    viewModel.triggerToast("$label copied")
                 },
                 onDismiss = { viewModel.clearAllOverlays() }
             )
         }
 
         if (uiState.renameTarget != null) {
-            ColorOsRenameDialog(
+            RenameVideoDialog(
                 video = uiState.renameTarget,
                 renameValue = uiState.renameValue,
                 onValueChange = { viewModel.updateRenameValue(it) },
@@ -990,10 +1034,25 @@ fun Material3VideoPlayerScreen(
         }
 
         if (uiState.playlistTargetIds.isNotEmpty()) {
-            AddToPlaylistDialog(
+            AddVideosToPlaylistSheet(
                 playlists = uiState.playlists,
                 onSelectPlaylistName = { plName -> viewModel.addTargetsToPlaylist(plName, context) },
                 onDismiss = { viewModel.clearAllOverlays() }
+            )
+        }
+
+        // 4b. Full-screen video search (official Material 3 search view)
+        if (uiState.bottomTab == BottomTab.VIDEOS && uiState.hasVideoPermission) {
+            VideoSearchView(
+                state = videoSearchState,
+                textFieldState = videoSearchText,
+                videos = uiState.videos,
+                showResolutionTier = uiState.showResolutionTier,
+                effectiveAmoled = effectiveAmoled,
+                onPlay = { video ->
+                    headerScope.launch { videoSearchState.animateToCollapsed() }
+                    viewModel.playVideo(video, context)
+                }
             )
         }
 
@@ -1017,10 +1076,8 @@ fun Material3VideoPlayerScreen(
                 },
                 onPreviousVideo = { viewModel.playAdjacentVideo(-1, context) },
                 onNextVideo = { viewModel.playAdjacentVideo(1, context) },
-                onOpenDetails = {
-                    viewModel.closeVideoPlayer(context)
-                    viewModel.openDetailsSheet(activePlaying)
-                },
+                onPlaybackEnded = { viewModel.playNextInFolder(context) },
+                onUpdatePlaybackSettings = { transform -> viewModel.updatePlaybackSettings(context, transform) },
                 onClose = { viewModel.closeVideoPlayer(context) }
             )
         }
@@ -1056,256 +1113,100 @@ fun Material3VideoPlayerScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun M3ExpressiveHeader(
     uiState: VideoUiState,
     effectiveAmoled: Boolean,
     onClearSelection: () -> Unit,
     onToggleSelectAll: () -> Unit,
-    onOpenSearch: () -> Unit,
-    onCloseSearch: () -> Unit,
-    onSearchQueryChange: (String) -> Unit,
     onOpenSortSheet: () -> Unit,
-    onClearSubFilter: () -> Unit
+    onClearSubFilter: () -> Unit,
+    searchButton: (@Composable () -> Unit)?,
+    scrollBehavior: TopAppBarScrollBehavior?
 ) {
-    val palette = LocalM3Palette.current
-    val motionScheme = MaterialTheme.motionScheme
-    val outerChromeBg = if (effectiveAmoled) Color.Black else MaterialTheme.colorScheme.background
+    val scheme = MaterialTheme.colorScheme
+    val outerChromeBg = if (effectiveAmoled) Color.Black else scheme.background
     val headerBg by animateColorAsState(
-        targetValue = if (uiState.isSelectionMode) palette.surfaceContainerHigh else outerChromeBg,
-        animationSpec = motionScheme.defaultEffectsSpec(),
+        targetValue = if (uiState.isSelectionMode) scheme.surfaceContainerHigh else outerChromeBg,
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "headerBg"
     )
-
     val activePlaylistName = uiState.playlists.find { it.id == uiState.selectedPlaylistFilter }?.name
-    val activeSubTitle = uiState.selectedFolderFilter ?: activePlaylistName
-
+    val activeSubTitle = uiState.selectedFolderFilter?.substringAfterLast('/') ?: activePlaylistName
     val titleText = when {
         activeSubTitle != null -> activeSubTitle
         uiState.bottomTab == BottomTab.AUDIO -> "Music"
         uiState.bottomTab == BottomTab.ME -> "Me"
         else -> "Videos"
     }
+    val allSelected = uiState.selectedIds.size == uiState.filteredAndSortedVideos.size &&
+        uiState.filteredAndSortedVideos.isNotEmpty()
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(headerBg)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        when {
-            uiState.isSelectionMode -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("selection_mode_header"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+    // Official top app bar. On Videos it slides away while scrolling down and returns on scroll up.
+    TopAppBar(
+        title = {
+            when {
+                uiState.isSelectionMode -> Text(
+                    "${uiState.selectedIds.size} selected",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.testTag("selection_mode_header")
+                )
+                activeSubTitle != null -> Text(
+                    titleText,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                else -> Text(
+                    titleText,
+                    style = MaterialTheme.typography.headlineLargeEmphasized,
+                    maxLines = 1
+                )
+            }
+        },
+        navigationIcon = {
+            when {
+                uiState.isSelectionMode -> IconButton(
+                    onClick = onClearSelection,
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("clear_selection_btn")
+                ) { Icon(Icons.Default.Close, contentDescription = "Clear selection") }
+                activeSubTitle != null -> IconButton(
+                    onClick = onClearSubFilter,
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("back_from_folder_btn")
+                ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            }
+        },
+        actions = {
+            when {
+                uiState.isSelectionMode -> IconButton(
+                    onClick = onToggleSelectAll,
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("select_all_btn")
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        IconButton(
-                            onClick = onClearSelection,
-                            shapes = IconButtonDefaults.shapes(),
-                            modifier = Modifier
-                                .size(48.dp)
-                                .minimumInteractiveComponentSize()
-                                .testTag("clear_selection_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear selection",
-                                tint = palette.onSurface,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        Text(
-                            text = "${uiState.selectedIds.size}",
-                            color = palette.onSurface,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    val allSelected = uiState.selectedIds.size == uiState.filteredAndSortedVideos.size &&
-                        uiState.filteredAndSortedVideos.isNotEmpty()
-                    TextButton(
-                        onClick = onToggleSelectAll,
-                        shapes = ButtonDefaults.shapes(),
-                        modifier = Modifier.testTag("select_all_btn")
-                    ) {
-                        Text(
-                            text = if (allSelected) "Deselect all" else "Select all",
-                            color = palette.primary,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    Icon(
+                        if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
+                        contentDescription = if (allSelected) "Deselect all" else "Select all"
+                    )
+                }
+                uiState.bottomTab == BottomTab.VIDEOS -> {
+                    IconButton(
+                        onClick = onOpenSortSheet,
+                        shapes = IconButtonDefaults.shapes(),
+                        modifier = Modifier.testTag("header_sort_btn")
+                    ) { Icon(Icons.Default.Tune, contentDescription = "View and sort") }
+                    searchButton?.invoke()
                 }
             }
-
-            uiState.searchOpen -> {
-                val searchFocusRequester = remember { FocusRequester() }
-                val keyboardController = LocalSoftwareKeyboardController.current
-
-                LaunchedEffect(uiState.searchOpen) {
-                    if (uiState.searchOpen) {
-                        searchFocusRequester.requestFocus()
-                        keyboardController?.show()
-                    }
-                }
-
-                Surface(
-                    shape = CircleShape,
-                    color = palette.surfaceContainerHigh,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("search_bar_container")
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = null,
-                            tint = palette.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (uiState.searchQuery.isEmpty()) {
-                                Text(
-                                    text = "Search videos",
-                                    color = palette.outline,
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontSize = 16.sp
-                                )
-                            }
-                            BasicTextField(
-                                value = uiState.searchQuery,
-                                onValueChange = onSearchQueryChange,
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    color = palette.onSurface,
-                                    fontFamily = PlusJakartaSansFontFamily,
-                                    fontSize = 16.sp
-                                ),
-                                cursorBrush = SolidColor(palette.primary),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(searchFocusRequester)
-                                    .testTag("search_input_field")
-                            )
-                        }
-                        IconButton(
-                            onClick = onCloseSearch,
-                            shapes = IconButtonDefaults.shapes(),
-                            modifier = Modifier
-                                .size(36.dp)
-                                .testTag("close_search_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close search",
-                                tint = palette.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            else -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        if (activeSubTitle != null) {
-                            IconButton(
-                                onClick = onClearSubFilter,
-                                shapes = IconButtonDefaults.shapes(),
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .testTag("back_from_folder_btn")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = palette.onSurface
-                                )
-                            }
-                        }
-                        Text(
-                            text = titleText,
-                            color = palette.onSurface,
-                            style = MaterialTheme.typography.headlineLargeEmphasized,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    if (uiState.bottomTab != BottomTab.ME) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            IconButton(
-                                onClick = onOpenSearch,
-                                shapes = IconButtonDefaults.shapes(),
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .minimumInteractiveComponentSize()
-                                    .testTag("header_search_btn")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search videos",
-                                    tint = palette.onSurfaceVariant,
-                                    modifier = Modifier.size(21.dp)
-                                )
-                            }
-                            if (uiState.bottomTab == BottomTab.VIDEOS) {
-                                IconButton(
-                                    onClick = onOpenSortSheet,
-                                    shapes = IconButtonDefaults.shapes(),
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .minimumInteractiveComponentSize()
-                                        .testTag("header_sort_btn")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Tune,
-                                        contentDescription = "Sort and view options",
-                                        tint = palette.onSurfaceVariant,
-                                        modifier = Modifier.size(21.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = headerBg,
+            scrolledContainerColor = headerBg
+        ),
+        scrollBehavior = scrollBehavior
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -1316,12 +1217,17 @@ private fun VideosContentListOrGrid(
     onVideoClick: (VideoItem) -> Unit,
     onVideoLongClick: (VideoItem) -> Unit,
     onVideoMenuClick: (VideoItem) -> Unit,
+    menu: @Composable (VideoItem) -> Unit,
     onRescan: () -> Unit
 ) {
-    val palette = LocalM3Palette.current
     val videos = uiState.filteredAndSortedVideos
 
     if (videos.isEmpty()) {
+        if (!uiState.videosLoaded) {
+            // First scan still running: a single calm indicator instead of an empty message.
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+            return
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1332,72 +1238,48 @@ private fun VideosContentListOrGrid(
         ) {
             Box(
                 modifier = Modifier
-                    .size(68.dp)
+                    .size(72.dp)
                     .clip(MaterialShapes.Cookie9Sided.toShape())
-                    .background(palette.surfaceContainerHigh),
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.VideoLibrary,
                     contentDescription = null,
-                    tint = palette.primary,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.size(30.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(14.dp))
-            Text(
-                text = if (uiState.searchQuery.isNotBlank()) "No matching videos found" else "No videos found on device",
-                color = palette.onSurface,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
-            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("No videos found", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = if (uiState.searchQuery.isNotBlank()) {
-                    "Try a different search term."
-                } else {
-                    "Videos saved to your device storage will automatically appear here."
-                },
-                color = palette.onSurfaceVariant,
-                fontFamily = PlusJakartaSansFontFamily,
-                fontSize = 13.sp,
+                "Videos saved on your phone show up here automatically.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             FilledTonalButton(
                 onClick = onRescan,
                 shapes = ButtonDefaults.shapes(),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = palette.surfaceContainerHigh,
-                    contentColor = palette.primary
-                ),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
                 modifier = Modifier.testTag("rescan_media_btn")
             ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    tint = palette.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Rescan storage",
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Scan again")
             }
         }
         return
     }
 
+    val seriesData = uiState.smartSeriesData
+    val grouped = uiState.smartGroups && seriesData.groups.isNotEmpty()
+
     if (uiState.layoutMode == LayoutMode.GRID) {
-        val seriesData = uiState.smartSeriesData
+        // Adaptive: two columns on a phone held upright, more when there's room.
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = 168.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("videos_grid_container"),
@@ -1405,138 +1287,84 @@ private fun VideosContentListOrGrid(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (uiState.smartGroups && seriesData.groups.isNotEmpty()) {
-                seriesData.groups.forEach { (seriesTitle, eps) ->
-                    item(span = { GridItemSpan(2) }, key = "header_$seriesTitle") {
-                        SeriesGroupHeader(seriesTitle = seriesTitle)
-                    }
-                    items(eps, key = { it.id }) { ep ->
-                        VideoGridItem(
-                            video = ep,
-                            isSelected = ep.id in uiState.selectedIds,
-                            isSelectionMode = uiState.isSelectionMode,
-                            amoledBlack = effectiveAmoled,
-                            showResolutionTier = uiState.showResolutionTier,
-                            badgeOverride = ep.episode?.let { "EP $it" },
-                            onClick = { onVideoClick(ep) },
-                            onLongClick = { onVideoLongClick(ep) },
-                            onMenuClick = { onVideoMenuClick(ep) }
-                        )
-                    }
-                }
-                if (seriesData.standalone.isNotEmpty()) {
-                    item(span = { GridItemSpan(2) }, key = "header_standalone") {
-                        Text(
-                            text = "Other Videos",
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-                        )
-                    }
-                    items(seriesData.standalone, key = { it.id }) { v ->
-                        VideoGridItem(
-                            video = v,
-                            isSelected = v.id in uiState.selectedIds,
-                            isSelectionMode = uiState.isSelectionMode,
-                            amoledBlack = effectiveAmoled,
-                            showResolutionTier = uiState.showResolutionTier,
-                            onClick = { onVideoClick(v) },
-                            onLongClick = { onVideoLongClick(v) },
-                            onMenuClick = { onVideoMenuClick(v) }
-                        )
-                    }
-                }
-            } else {
-                items(videos, key = { it.id }) { v ->
+            fun gridItems(list: List<VideoItem>, episodes: Boolean) {
+                items(list, key = { it.id }, contentType = { "video" }) { v ->
                     VideoGridItem(
                         video = v,
                         isSelected = v.id in uiState.selectedIds,
                         isSelectionMode = uiState.isSelectionMode,
                         amoledBlack = effectiveAmoled,
                         showResolutionTier = uiState.showResolutionTier,
+                        badgeOverride = if (episodes) v.episode?.let { "EP $it" } else null,
                         onClick = { onVideoClick(v) },
                         onLongClick = { onVideoLongClick(v) },
-                        onMenuClick = { onVideoMenuClick(v) }
+                        onMenuClick = { onVideoMenuClick(v) },
+                        menu = { menu(v) }
                     )
                 }
             }
+            if (grouped) {
+                seriesData.groups.forEach { (seriesTitle, eps) ->
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "header_$seriesTitle", contentType = "header") {
+                        SeriesGroupHeader(seriesTitle = seriesTitle)
+                    }
+                    gridItems(eps, episodes = true)
+                }
+                if (seriesData.standalone.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "header_standalone", contentType = "header") {
+                        SeriesGroupHeader(seriesTitle = "Other videos", icon = Icons.Default.VideoLibrary)
+                    }
+                    gridItems(seriesData.standalone, episodes = false)
+                }
+            } else {
+                gridItems(videos, episodes = false)
+            }
         }
     } else {
-        val seriesData = uiState.smartSeriesData
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("videos_list_container"),
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 128.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
         ) {
-            if (uiState.smartGroups && seriesData.groups.isNotEmpty()) {
-                seriesData.groups.forEach { (seriesTitle, eps) ->
-                    item(key = "series_header_$seriesTitle") {
-                        SeriesGroupHeader(
-                            seriesTitle = seriesTitle,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                        )
-                    }
-                    itemsIndexed(eps, key = { _, ep -> ep.id }) { idx, ep ->
-                        VideoListItem(
-                            video = ep,
-                            index = idx,
-                            totalCount = eps.size,
-                            isSelected = ep.id in uiState.selectedIds,
-                            isSelectionMode = uiState.isSelectionMode,
-                            amoledBlack = effectiveAmoled,
-                            showResolutionTier = uiState.showResolutionTier,
-                            badgeOverride = ep.episode?.let { "EP $it" },
-                            onClick = { onVideoClick(ep) },
-                            onLongClick = { onVideoLongClick(ep) },
-                            onMenuClick = { onVideoMenuClick(ep) }
-                        )
-                    }
-                }
-                if (seriesData.standalone.isNotEmpty()) {
-                    item(key = "standalone_header") {
-                        Text(
-                            text = "Other Videos",
-                            color = palette.onSurfaceVariant,
-                            fontFamily = PlusJakartaSansFontFamily,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)
-                        )
-                    }
-                    itemsIndexed(seriesData.standalone, key = { _, v -> v.id }) { idx, v ->
-                        VideoListItem(
-                            video = v,
-                            index = idx,
-                            totalCount = seriesData.standalone.size,
-                            isSelected = v.id in uiState.selectedIds,
-                            isSelectionMode = uiState.isSelectionMode,
-                            amoledBlack = effectiveAmoled,
-                            showResolutionTier = uiState.showResolutionTier,
-                            onClick = { onVideoClick(v) },
-                            onLongClick = { onVideoLongClick(v) },
-                            onMenuClick = { onVideoMenuClick(v) }
-                        )
-                    }
-                }
-            } else {
-                itemsIndexed(videos, key = { _, v -> v.id }) { idx, v ->
+            fun listItems(list: List<VideoItem>, episodes: Boolean) {
+                itemsIndexed(list, key = { _, v -> v.id }, contentType = { _, _ -> "video" }) { idx, v ->
                     VideoListItem(
                         video = v,
                         index = idx,
-                        totalCount = videos.size,
+                        totalCount = list.size,
                         isSelected = v.id in uiState.selectedIds,
                         isSelectionMode = uiState.isSelectionMode,
                         amoledBlack = effectiveAmoled,
                         showResolutionTier = uiState.showResolutionTier,
+                        badgeOverride = if (episodes) v.episode?.let { "EP $it" } else null,
                         onClick = { onVideoClick(v) },
                         onLongClick = { onVideoLongClick(v) },
-                        onMenuClick = { onVideoMenuClick(v) }
+                        onMenuClick = { onVideoMenuClick(v) },
+                        menu = { menu(v) }
                     )
                 }
+            }
+            if (grouped) {
+                seriesData.groups.forEach { (seriesTitle, eps) ->
+                    item(key = "series_header_$seriesTitle", contentType = "header") {
+                        SeriesGroupHeader(seriesTitle = seriesTitle, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    listItems(eps, episodes = true)
+                }
+                if (seriesData.standalone.isNotEmpty()) {
+                    item(key = "standalone_header", contentType = "header") {
+                        SeriesGroupHeader(
+                            seriesTitle = "Other videos",
+                            icon = Icons.Default.VideoLibrary,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    listItems(seriesData.standalone, episodes = false)
+                }
+            } else {
+                listItems(videos, episodes = false)
             }
         }
     }
@@ -1545,30 +1373,18 @@ private fun VideosContentListOrGrid(
 @Composable
 private fun SeriesGroupHeader(
     seriesTitle: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: ImageVector = Icons.Default.Layers
 ) {
-    val palette = LocalM3Palette.current
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(
-            imageVector = Icons.Default.Layers,
-            contentDescription = null,
-            tint = palette.primary,
-            modifier = Modifier.size(18.dp)
-        )
-        Text(
-            text = seriesTitle,
-            color = palette.onSurface,
-            fontFamily = PlusJakartaSansFontFamily,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = (-0.2).sp
-        )
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        Text(seriesTitle, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 

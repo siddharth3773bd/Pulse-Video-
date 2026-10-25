@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.media3.common.text.Cue
 import com.example.model.DecoderMode
 import kotlinx.coroutines.flow.StateFlow
 
@@ -33,7 +35,9 @@ data class PlayerState(
     val playbackSpeed: Float = 1.0f,
     val isBuffering: Boolean = false,
     val isEnded: Boolean = false,
-    val activeSubtitleText: String = ""
+    val activeSubtitleText: String = "",
+    /** Current subtitle cues with their styling and position, for Media3's SubtitleView. */
+    val cues: List<Cue> = emptyList()
 )
 
 /**
@@ -60,8 +64,11 @@ interface PlayerController {
     fun selectAudioTrack(option: PlayerTrackOption)
     fun selectSubtitleTrack(option: PlayerTrackOption)
     fun setSubtitlesEnabled(enabled: Boolean)
+    /** Adds a subtitle file the user picked (.srt, .vtt, .ass, .ssa, .ttml) and turns it on. */
+    fun addSubtitleFile(uri: Uri, name: String)
     fun release()
 
+    /** The video, drawn with the official Media3 Compose ContentFrame. */
     @Composable
-    fun RenderVideoSurface(modifier: Modifier)
+    fun RenderVideoSurface(modifier: Modifier, contentScale: ContentScale)
 }

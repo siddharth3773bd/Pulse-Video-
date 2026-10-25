@@ -2115,6 +2115,24 @@ private fun VideoPlaybackSettingsSubPage(
                 onToggle = { onUpdateSettings { it.copy(showRemainingTime = !it.showRemainingTime) } },
                 testTag = "setting_show_remaining_time"
             )
+
+            ExpressiveSettingToggleCard(
+                title = "Autoplay next video",
+                subtitle = "When a video ends, play the next one from the same folder",
+                checked = settings.autoplayNext,
+                effectiveAmoled = effectiveAmoled,
+                onToggle = { onUpdateSettings { it.copy(autoplayNext = !it.autoplayNext) } },
+                testTag = "setting_autoplay_next"
+            )
+
+            ExpressiveSettingToggleCard(
+                title = "Picture-in-picture",
+                subtitle = "Keep the video playing in a small window when you leave the app",
+                checked = settings.pictureInPicture,
+                effectiveAmoled = effectiveAmoled,
+                onToggle = { onUpdateSettings { it.copy(pictureInPicture = !it.pictureInPicture) } },
+                testTag = "setting_picture_in_picture"
+            )
         }
     }
 

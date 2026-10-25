@@ -4,15 +4,15 @@ import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
-import android.view.ViewGroup
-import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.layout.ContentScale
+import androidx.media3.ui.compose.ContentFrame
+import kotlinx.coroutines.withContext
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -26,8 +26,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import com.example.model.DecoderMode
 import java.io.File
 import java.util.Locale
@@ -88,7 +86,7 @@ class ExoPlayerController(
                 .mapNotNull { it.text?.toString()?.trim() }
                 .filter { it.isNotEmpty() }
                 .joinToString("\n")
-            _state.update { it.copy(activeSubtitleText = text) }
+            _state.update { it.copy(activeSubtitleText = text, cues = cueGroup.cues) }
         }
     }
 
@@ -162,17 +160,61 @@ class ExoPlayerController(
             )
         }
 
-        val subtitleConfigs = discoverExternalSubtitles(filePath)
-        val mediaItem = MediaItem.Builder()
-            .setUri(uri)
-            .setSubtitleConfigurations(subtitleConfigs)
-            .build()
+        extraSubtitles.clear()
+        prepareJob?.cancel()
+        // Looking for subtitle files next to the video touches the disk, so it runs off the main
+        // thread; the video then starts with them attached.
+        prepareJob = scope.launch {
+            val subtitleConfigs = withContext(Dispatchers.IO) { discoverExternalSubtitles(filePath) }
+            baseSubtitles = subtitleConfigs
+            currentUri = uri
+            val mediaItem = MediaItem.Builder()
+                .setUri(uri)
+                .setSubtitleConfigurations(subtitleConfigs)
+                .build()
+            player.setPlaybackParameters(PlaybackParameters(1.0f))
+            player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
+            player.prepare()
+            player.playWhenReady = autoPlay
+            syncStateFromPlayer()
+        }
+    }
 
-        player.setPlaybackParameters(PlaybackParameters(1.0f))
-        player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
+    private var prepareJob: Job? = null
+    private var currentUri: Uri? = null
+    private var baseSubtitles: List<MediaItem.SubtitleConfiguration> = emptyList()
+    private val extraSubtitles = mutableListOf<MediaItem.SubtitleConfiguration>()
+
+    override fun addSubtitleFile(uri: Uri, name: String) {
+        val player = exoPlayer ?: return
+        val videoUri = currentUri ?: return
+        val ext = name.substringAfterLast('.', "").lowercase(Locale.US)
+        val mime = when (ext) {
+            "vtt" -> MimeTypes.TEXT_VTT
+            "ass", "ssa" -> MimeTypes.TEXT_SSA
+            "ttml", "xml", "dfxp" -> MimeTypes.APPLICATION_TTML
+            else -> MimeTypes.APPLICATION_SUBRIP
+        }
+        extraSubtitles += MediaItem.SubtitleConfiguration.Builder(uri)
+            .setMimeType(mime)
+            .setLanguage("und")
+            .setLabel(name)
+            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+            .build()
+        val position = player.currentPosition
+        val wasPlaying = player.playWhenReady
+        val item = MediaItem.Builder()
+            .setUri(videoUri)
+            .setSubtitleConfigurations(baseSubtitles + extraSubtitles)
+            .build()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setPreferredTextLanguage("und")
+            .build()
+        player.setMediaItem(item, position)
         player.prepare()
-        player.playWhenReady = autoPlay
-        syncStateFromPlayer()
+        player.playWhenReady = wasPlaying
+        _tracks.update { it.copy(subtitlesEnabled = true) }
     }
 
     private fun discoverExternalSubtitles(
@@ -351,7 +393,7 @@ class ExoPlayerController(
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enabled)
             .build()
         if (!enabled) {
-            _state.update { it.copy(activeSubtitleText = "") }
+            _state.update { it.copy(activeSubtitleText = "", cues = emptyList()) }
         }
         _tracks.update { it.copy(subtitlesEnabled = enabled) }
     }
@@ -422,6 +464,7 @@ class ExoPlayerController(
 
     private fun releaseInternalPlayer() {
         positionPollJob?.cancel()
+        prepareJob?.cancel()
         try {
             exoPlayer?.removeListener(playerListener)
             exoPlayer?.release()
@@ -443,26 +486,11 @@ class ExoPlayerController(
     }
 
     @Composable
-    override fun RenderVideoSurface(modifier: Modifier) {
-        val currentPlayer = activePlayerInstance
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    player = currentPlayer
-                }
-            },
-            update = { view ->
-                if (view.player !== currentPlayer) {
-                    view.player = currentPlayer
-                }
-            },
-            modifier = modifier
+    override fun RenderVideoSurface(modifier: Modifier, contentScale: ContentScale) {
+        ContentFrame(
+            player = activePlayerInstance,
+            modifier = modifier,
+            contentScale = contentScale
         )
     }
 }

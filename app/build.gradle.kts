@@ -106,6 +106,8 @@ dependencies {
   implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.media3.exoplayer)
   implementation(libs.androidx.media3.ui)
+  // Official Compose video surface (ContentFrame)
+  implementation(libs.androidx.media3.ui.compose)
   implementation(libs.androidx.media3.common)
   implementation(libs.androidx.media3.session)
   // Reads lyrics stored inside song files (official Media3 MetadataRetriever)
