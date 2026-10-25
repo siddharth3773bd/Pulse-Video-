@@ -52,8 +52,24 @@ data class LibraryPreferences(
     val groupAscending: Boolean = true,
     val trayOrder: List<NowPlayingAction> = NowPlayingAction.entries,
     val hiddenTray: Set<NowPlayingAction> = emptySet(),
-    val likedIds: Set<String> = emptySet()
+    val likedIds: Set<String> = emptySet(),
+    /** Hide audio shorter than [SHORT_AUDIO_LIMIT_MS] (ringtones, notification sounds, clips). */
+    val hideShortAudio: Boolean = true,
+    /** Hide voice and call recordings. */
+    val hideRecordings: Boolean = true
 ) {
+    companion object {
+        const val SHORT_AUDIO_LIMIT_MS = 30_000L
+    }
+
+    /** Applies the library filters to the scanned tracks. */
+    fun filterTracks(tracks: List<AudioTrackItem>): List<AudioTrackItem> =
+        if (!hideShortAudio && !hideRecordings) tracks
+        else tracks.filter { t ->
+            !(hideShortAudio && t.durationMs in 1 until SHORT_AUDIO_LIMIT_MS) &&
+                !(hideRecordings && t.looksLikeRecording)
+        }
+
     /** Tray buttons in the user's order with hidden ones removed. */
     val visibleTray: List<NowPlayingAction>
         get() = trayOrder.filter { it !in hiddenTray }

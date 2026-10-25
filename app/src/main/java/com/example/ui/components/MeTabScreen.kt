@@ -1,5 +1,13 @@
 package com.example.ui.components
 
+import com.example.data.AppPreferencesRepository
+import com.example.model.LibraryPreferences
+import com.example.model.LibraryTab
+import com.example.model.NowPlayingAction
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import android.graphics.Color as AndroidColor
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -247,6 +255,11 @@ fun MeTabScreen(
                 onUpdateSettings = onUpdatePlaybackSettings
             )
 
+            MeSubPage.MUSIC_SETTINGS -> MusicSettingsSubPage(
+                effectiveAmoled = effectiveAmoled,
+                onBack = onCloseSubPage
+            )
+
             MeSubPage.NAVIGATION -> NavigationCustomizeSubPage(
                 activeTabs = uiState.activeTabs,
                 effectiveAmoled = effectiveAmoled,
@@ -322,7 +335,7 @@ private fun MeHomeMenuScreen(
                 title = "Appearance",
                 subtitle = "Theme and colors",
                 index = 0,
-                totalCount = 3,
+                totalCount = 4,
                 effectiveAmoled = effectiveAmoled,
                 onClick = { onOpenSubPage(MeSubPage.APPEARANCE) },
                 testTag = "me_pref_appearance"
@@ -332,17 +345,27 @@ private fun MeHomeMenuScreen(
                 title = "Video",
                 subtitle = "Playback, gestures and more",
                 index = 1,
-                totalCount = 3,
+                totalCount = 4,
                 effectiveAmoled = effectiveAmoled,
                 onClick = { onOpenSubPage(MeSubPage.VIDEO_SETTINGS) },
                 testTag = "me_pref_video"
             )
             ExpressivePreferenceMenuRow(
+                icon = Icons.Default.MusicNote,
+                title = "Music",
+                subtitle = "Library tabs, Now Playing buttons and filters",
+                index = 2,
+                totalCount = 4,
+                effectiveAmoled = effectiveAmoled,
+                onClick = { onOpenSubPage(MeSubPage.MUSIC_SETTINGS) },
+                testTag = "me_pref_music"
+            )
+            ExpressivePreferenceMenuRow(
                 icon = Icons.Default.ViewCarousel,
                 title = "Navigation",
                 subtitle = "Customize navigation bar items",
-                index = 2,
-                totalCount = 3,
+                index = 3,
+                totalCount = 4,
                 effectiveAmoled = effectiveAmoled,
                 onClick = { onOpenSubPage(MeSubPage.NAVIGATION) },
                 testTag = "me_pref_navigation"
@@ -2462,4 +2485,131 @@ private fun ExpressiveSettingToggleCard(
             .fillMaxWidth()
             .testTag(testTag)
     )
+}
+
+// ============================================================================
+// MUSIC SETTINGS SUB-PAGE
+// ============================================================================
+@Composable
+private fun MusicSettingsSubPage(
+    effectiveAmoled: Boolean,
+    onBack: () -> Unit
+) {
+    val palette = LocalM3Palette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val prefs by remember(context) {
+        AppPreferencesRepository.observeLibraryPreferences(context)
+    }.collectAsState(initial = LibraryPreferences())
+
+    var showTabsSheet by remember { mutableStateOf(false) }
+    var showTraySheet by remember { mutableStateOf(false) }
+
+    @Composable
+    fun SectionTitle(text: String) {
+        Text(
+            text = text,
+            color = palette.primary,
+            fontFamily = PlusJakartaSansFontFamily,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("me_subpage_music_settings")
+    ) {
+        ExpressiveSubPageHeader(
+            icon = Icons.Default.MusicNote,
+            title = "Music",
+            onBack = onBack
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = 4.dp, bottom = 148.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SectionTitle("Library")
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ExpressivePreferenceMenuRow(
+                    icon = Icons.Default.ViewCarousel,
+                    title = "Library tabs",
+                    subtitle = "Show, hide and reorder the music tabs",
+                    index = 0,
+                    totalCount = 2,
+                    effectiveAmoled = effectiveAmoled,
+                    onClick = { showTabsSheet = true },
+                    testTag = "music_pref_library_tabs"
+                )
+                ExpressivePreferenceMenuRow(
+                    icon = Icons.Default.Tune,
+                    title = "Now Playing buttons",
+                    subtitle = "Choose and reorder the buttons in the bottom tray",
+                    index = 1,
+                    totalCount = 2,
+                    effectiveAmoled = effectiveAmoled,
+                    onClick = { showTraySheet = true },
+                    testTag = "music_pref_now_playing_buttons"
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            SectionTitle("Hide from library")
+            ExpressiveSettingToggleCard(
+                title = "Short clips",
+                subtitle = "Audio shorter than 30 seconds, like ringtones and notification sounds",
+                checked = prefs.hideShortAudio,
+                effectiveAmoled = effectiveAmoled,
+                onToggle = {
+                    scope.launch { AppPreferencesRepository.setLibraryHideShortAudio(context, !prefs.hideShortAudio) }
+                },
+                testTag = "music_hide_short_audio"
+            )
+            ExpressiveSettingToggleCard(
+                title = "Voice recordings",
+                subtitle = "Files from recorder and call-recording apps",
+                checked = prefs.hideRecordings,
+                effectiveAmoled = effectiveAmoled,
+                onToggle = {
+                    scope.launch { AppPreferencesRepository.setLibraryHideRecordings(context, !prefs.hideRecordings) }
+                },
+                testTag = "music_hide_recordings"
+            )
+        }
+    }
+
+    if (showTabsSheet) {
+        ManageTabsSheet(
+            prefs = prefs,
+            onChange = { order, hidden ->
+                scope.launch { AppPreferencesRepository.updateLibraryTabs(context, order, hidden) }
+            },
+            onReset = {
+                scope.launch { AppPreferencesRepository.updateLibraryTabs(context, LibraryTab.entries, emptySet()) }
+            },
+            onDismiss = { showTabsSheet = false }
+        )
+    }
+    if (showTraySheet) {
+        NowPlayingTraySheet(
+            order = prefs.trayOrder,
+            hidden = prefs.hiddenTray,
+            onChange = { order, hidden ->
+                scope.launch { AppPreferencesRepository.updateLibraryTray(context, order, hidden) }
+            },
+            onReset = {
+                scope.launch {
+                    AppPreferencesRepository.updateLibraryTray(context, NowPlayingAction.entries, emptySet())
+                }
+            },
+            onDismiss = { showTraySheet = false }
+        )
+    }
 }

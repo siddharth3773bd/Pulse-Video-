@@ -210,6 +210,36 @@ class AudioPlaybackManager private constructor(context: Context) {
         }
     }
 
+    /** Inserts [track] right after the current song. Starts playback if nothing is loaded. */
+    fun playNext(track: AudioTrackItem) = insertIntoQueue(track, next = true)
+
+    /** Appends [track] to the end of the queue. Starts playback if nothing is loaded. */
+    fun addToQueue(track: AudioTrackItem) = insertIntoQueue(track, next = false)
+
+    private fun insertIntoQueue(track: AudioTrackItem, next: Boolean) {
+        tracksById[track.id] = track
+        if (_state.value.currentTrack == null) {
+            playQueue(listOf(track), 0)
+            return
+        }
+        scope.launch {
+            val art = withContext(Dispatchers.IO) { loadTrackArtworkBytes(track) }
+            val item = buildMediaItem(track, art)
+            withController { controller ->
+                if (controller.mediaItemCount == 0) {
+                    controller.setMediaItem(item)
+                    controller.prepare()
+                    controller.play()
+                } else if (next) {
+                    controller.addMediaItem(controller.currentMediaItemIndex + 1, item)
+                } else {
+                    controller.addMediaItem(item)
+                }
+                syncFromController()
+            }
+        }
+    }
+
     private fun buildMediaItem(track: AudioTrackItem, artworkBytes: ByteArray?): MediaItem {
         val metadataBuilder = MediaMetadata.Builder()
             .setTitle(track.title)

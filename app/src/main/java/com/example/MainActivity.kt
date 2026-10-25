@@ -578,7 +578,10 @@ fun Material3VideoPlayerScreen(
                                     onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
                                     onSeekAudio = { viewModel.seekAudio(it) },
                                     onSkipPrevious = { viewModel.skipAudioPrevious() },
-                                    onSkipNext = { viewModel.skipAudioNext() }
+                                    onSkipNext = { viewModel.skipAudioNext() },
+                                    onPlayNext = { track -> audioManager.playNext(track) },
+                                    onAddToQueue = { track -> audioManager.addToQueue(track) },
+                                    onLibraryChanged = { viewModel.refreshPermissionsAndScan(context) }
                                 )
                             }
                         }

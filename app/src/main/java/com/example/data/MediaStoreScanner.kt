@@ -187,7 +187,8 @@ object MediaStoreScanner {
                             durationLabel = formatDurationMs(durationMs),
                             progress = savedProgress,
                             folder = bucketName.ifBlank { "Videos" },
-                            path = fullPath
+                            path = fullPath,
+                            isRecording = isRecordingCol >= 0 && cursor.getInt(isRecordingCol) == 1
                         )
                     )
                 }
@@ -220,7 +221,8 @@ object MediaStoreScanner {
             MediaStore.Audio.Media.ARTIST_ID,
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.DATA,
-            MediaStore.Audio.Media.RELATIVE_PATH
+            MediaStore.Audio.Media.RELATIVE_PATH,
+            MediaStore.Audio.Media.IS_RECORDING
         )
 
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
@@ -250,6 +252,7 @@ object MediaStoreScanner {
                 val dateAddedCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_ADDED)
                 val dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
                 val relPathCol = cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
+                val isRecordingCol = cursor.getColumnIndex(MediaStore.Audio.Media.IS_RECORDING)
 
                 while (cursor.moveToNext()) {
                     val mediaId = cursor.getLong(idCol)

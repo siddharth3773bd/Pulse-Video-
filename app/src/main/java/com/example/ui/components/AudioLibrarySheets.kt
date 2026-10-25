@@ -123,68 +123,6 @@ private fun SheetTitle(title: String, subtitle: String? = null) {
 // Library settings (gear)
 // ---------------------------------------------------------------------------------------------
 
-@Composable
-fun LibrarySettingsSheet(
-    onOpenManageTabs: () -> Unit,
-    onOpenTray: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val palette = LocalM3Palette.current
-    LibrarySheet(onDismiss = onDismiss) {
-        SheetTitle(title = "Library settings")
-
-        Surface(
-            onClick = onOpenManageTabs,
-            shape = RoundedCornerShape(24.dp),
-            color = palette.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Text(
-                    text = "Manage tabs",
-                    color = palette.onSurface,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Reorder, show or hide Library tabs.",
-                    color = palette.onSurfaceVariant,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 13.sp
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Surface(
-            onClick = onOpenTray,
-            shape = RoundedCornerShape(24.dp),
-            color = palette.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Text(
-                    text = "Now Playing buttons",
-                    color = palette.onSurface,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Choose and reorder the buttons in the bottom tray.",
-                    color = palette.onSurfaceVariant,
-                    fontFamily = PlusJakartaSansFontFamily,
-                    fontSize = 13.sp
-                )
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------------------------
 // Now Playing tray buttons
 // ---------------------------------------------------------------------------------------------

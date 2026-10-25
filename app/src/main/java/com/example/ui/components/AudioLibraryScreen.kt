@@ -6,7 +6,19 @@
 
 package com.example.ui.components
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
+import android.provider.MediaStore
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,11 +55,16 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AppBarWithSearch
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExpandedFullScreenContainedSearchBar
@@ -64,6 +81,7 @@ import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -105,7 +123,7 @@ import com.example.model.NowPlayingAction
 import com.example.ui.theme.LocalM3Palette
 import kotlinx.coroutines.launch
 
-private enum class LibrarySheetType { SETTINGS, MANAGE, SORT, TRAY }
+private enum class LibrarySheetType { SORT }
 
 /** Bottom padding of every list so the last rows scroll above the nav pill (and the mini player). */
 private val LocalLibraryBottomPadding = compositionLocalOf { 132.dp }
@@ -183,9 +201,10 @@ private fun artistCountLabel(count: Int): String = if (count == 1) "1 artist" el
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Music library, built from official Material 3 components:
- * TopAppBar (title, search, settings) -> PrimaryScrollableTabRow -> one action row
- * (count, Shuffle, Sort) -> HorizontalPager of ListItem lists / Card grid on one flat background.
+ * Music library, built from official Material 3 components inside a Surface (so every icon and
+ * text gets the theme's content colour): AppBarWithSearch -> PrimaryScrollableTabRow -> one action
+ * row (Play + Shuffle button group, count, Sort) -> HorizontalPager of segmented lists / Card grid.
+ * Library settings live in Me > Music.
  */
 @Composable
 fun AudioLibraryScreen(
@@ -201,7 +220,10 @@ fun AudioLibraryScreen(
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
     modifier: Modifier = Modifier,
-    extraBottomPadding: Dp = 0.dp
+    extraBottomPadding: Dp = 0.dp,
+    onPlayNext: (AudioTrackItem) -> Unit = {},
+    onAddToQueue: (AudioTrackItem) -> Unit = {},
+    onLibraryChanged: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -209,6 +231,11 @@ fun AudioLibraryScreen(
     val prefs by remember(context) {
         AppPreferencesRepository.observeLibraryPreferences(context)
     }.collectAsState(initial = LibraryPreferences())
+
+    // Library filters from Me > Music (short clips, voice recordings).
+    val libraryTracks = remember(tracks, prefs.hideShortAudio, prefs.hideRecordings) {
+        prefs.filterTracks(tracks)
+    }
 
     val visibleTabs = prefs.visibleTabs
     val tabsState by rememberUpdatedState(visibleTabs)
@@ -253,15 +280,16 @@ fun AudioLibraryScreen(
     val query = textFieldState.text.toString()
     var sheet by remember { mutableStateOf<LibrarySheetType?>(null) }
     var infoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
+    var actionsTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
 
-    val sortedSongs = remember(tracks, prefs.songSort, prefs.songAscending) {
-        sortSongs(tracks, prefs.songSort, prefs.songAscending)
+    val sortedSongs = remember(libraryTracks, prefs.songSort, prefs.songAscending) {
+        sortSongs(libraryTracks, prefs.songSort, prefs.songAscending)
     }
     val likedSongs = remember(sortedSongs, prefs.likedIds) {
         sortedSongs.filter { it.id in prefs.likedIds }
     }
-    val albums = remember(tracks, prefs.groupAscending) { buildAlbums(tracks, prefs.groupAscending) }
-    val artists = remember(tracks, prefs.groupAscending) { buildArtists(tracks, prefs.groupAscending) }
+    val albums = remember(libraryTracks, prefs.groupAscending) { buildAlbums(libraryTracks, prefs.groupAscending) }
+    val artists = remember(libraryTracks, prefs.groupAscending) { buildArtists(libraryTracks, prefs.groupAscending) }
 
     fun detailTracksFor(tab: LibraryTab): List<AudioTrackItem>? {
         if (detailTabId != tab.id || detailKey == null) return null
@@ -304,10 +332,14 @@ fun AudioLibraryScreen(
     }
 
     CompositionLocalProvider(LocalLibraryBottomPadding provides (132.dp + extraBottomPadding)) {
+        Surface(
+            color = background,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = modifier.fillMaxSize()
+        ) {
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
-                .background(background)
                 .testTag("audio_library_screen")
         ) {
             if (inDetail) {
@@ -375,16 +407,7 @@ fun AudioLibraryScreen(
                 AppBarWithSearch(
                     state = searchBarState,
                     inputField = inputField,
-                    colors = appBarWithSearchColors,
-                    actions = {
-                        IconButton(
-                            onClick = { sheet = LibrarySheetType.SETTINGS },
-                            shapes = IconButtonDefaults.shapes(),
-                            modifier = Modifier.testTag("library_settings_button")
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Library settings")
-                        }
-                    }
+                    colors = appBarWithSearchColors
                 )
                 ExpandedFullScreenContainedSearchBar(
                     state = searchBarState,
@@ -409,7 +432,7 @@ fun AudioLibraryScreen(
                             songs = results,
                             playingAudio = playingAudio,
                             onPlay = playFromList,
-                            onMore = { infoTrack = it },
+                            onMore = { actionsTrack = it },
                             bottomPadding = WindowInsets.navigationBars.asPaddingValues()
                                 .calculateBottomPadding() + 16.dp
                         )
@@ -438,26 +461,31 @@ fun AudioLibraryScreen(
             when {
                 detail != null -> LibraryActionRow(
                     label = songCountLabel(detail.size),
+                    onPlay = { onPlayQueue(detail, 0, false) }.takeIf { detail.isNotEmpty() },
                     onShuffle = { shuffle(detail) }.takeIf { detail.isNotEmpty() },
                     onSort = null
                 )
                 currentTab == LibraryTab.SONGS -> LibraryActionRow(
                     label = songCountLabel(sortedSongs.size),
+                    onPlay = { onPlayQueue(sortedSongs, 0, false) }.takeIf { sortedSongs.isNotEmpty() },
                     onShuffle = { shuffle(sortedSongs) }.takeIf { sortedSongs.isNotEmpty() },
                     onSort = { sheet = LibrarySheetType.SORT }
                 )
                 currentTab == LibraryTab.LIKED -> LibraryActionRow(
                     label = songCountLabel(likedSongs.size),
+                    onPlay = { onPlayQueue(likedSongs, 0, false) }.takeIf { likedSongs.isNotEmpty() },
                     onShuffle = { shuffle(likedSongs) }.takeIf { likedSongs.isNotEmpty() },
                     onSort = null
                 )
                 currentTab == LibraryTab.ALBUMS -> LibraryActionRow(
                     label = albumCountLabel(albums.size),
+                    onPlay = null,
                     onShuffle = null,
                     onSort = { sheet = LibrarySheetType.SORT }
                 )
                 currentTab == LibraryTab.ARTISTS -> LibraryActionRow(
                     label = artistCountLabel(artists.size),
+                    onPlay = null,
                     onShuffle = null,
                     onSort = { sheet = LibrarySheetType.SORT }
                 )
@@ -480,7 +508,7 @@ fun AudioLibraryScreen(
                             songs = pageDetail,
                             playingAudio = playingAudio,
                             onPlay = playFromList,
-                            onMore = { infoTrack = it }
+                            onMore = { actionsTrack = it }
                         )
                         tab == LibraryTab.SONGS -> {
                             if (sortedSongs.isEmpty()) {
@@ -494,7 +522,7 @@ fun AudioLibraryScreen(
                                     songs = sortedSongs,
                                     playingAudio = playingAudio,
                                     onPlay = playFromList,
-                                    onMore = { infoTrack = it }
+                                    onMore = { actionsTrack = it }
                                 )
                             }
                         }
@@ -510,7 +538,7 @@ fun AudioLibraryScreen(
                                     songs = likedSongs,
                                     playingAudio = playingAudio,
                                     onPlay = playFromList,
-                                    onMore = { infoTrack = it }
+                                    onMore = { actionsTrack = it }
                                 )
                             }
                         }
@@ -537,38 +565,11 @@ fun AudioLibraryScreen(
                 }
             }
         }
+        }
     }
 
     // ---- Sheets -------------------------------------------------------------------------
-    val saveTabs: (List<LibraryTab>, Set<LibraryTab>) -> Unit = { order, hidden ->
-        scope.launch { AppPreferencesRepository.updateLibraryTabs(context, order, hidden) }
-    }
-
     when (sheet) {
-        LibrarySheetType.SETTINGS -> LibrarySettingsSheet(
-            onOpenManageTabs = { sheet = LibrarySheetType.MANAGE },
-            onOpenTray = { sheet = LibrarySheetType.TRAY },
-            onDismiss = { sheet = null }
-        )
-        LibrarySheetType.TRAY -> NowPlayingTraySheet(
-            order = prefs.trayOrder,
-            hidden = prefs.hiddenTray,
-            onChange = { order, hidden ->
-                scope.launch { AppPreferencesRepository.updateLibraryTray(context, order, hidden) }
-            },
-            onReset = {
-                scope.launch {
-                    AppPreferencesRepository.updateLibraryTray(context, NowPlayingAction.entries, emptySet())
-                }
-            },
-            onDismiss = { sheet = null }
-        )
-        LibrarySheetType.MANAGE -> ManageTabsSheet(
-            prefs = prefs,
-            onChange = saveTabs,
-            onReset = { saveTabs(LibraryTab.entries, emptySet()) },
-            onDismiss = { sheet = null }
-        )
         LibrarySheetType.SORT -> {
             val isSongs = currentTab == LibraryTab.SONGS
             LibrarySortSheet(
@@ -602,47 +603,198 @@ fun AudioLibraryScreen(
     infoTrack?.let { track ->
         SongInfoSheet(track = track, onDismiss = { infoTrack = null })
     }
+
+    // Delete uses Android's own confirmation dialog (MediaStore.createDeleteRequest).
+    val deleteLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) onLibraryChanged()
+    }
+
+    actionsTrack?.let { track ->
+        val albumKey = albumKeyOf(track)
+        val artistKey = track.artist.lowercase()
+        SongActionsSheet(
+            track = track,
+            liked = track.id in prefs.likedIds,
+            canGoToAlbum = LibraryTab.ALBUMS in visibleTabs && albums.any { it.key == albumKey },
+            canGoToArtist = LibraryTab.ARTISTS in visibleTabs && artists.any { it.key == artistKey },
+            onPlayNext = { onPlayNext(track) },
+            onAddToQueue = { onAddToQueue(track) },
+            onToggleLike = {
+                scope.launch {
+                    AppPreferencesRepository.setTrackLiked(context, track.id, track.id !in prefs.likedIds)
+                }
+            },
+            onGoToAlbum = {
+                scope.launch { searchBarState.animateToCollapsed() }
+                detailTabId = LibraryTab.ALBUMS.id
+                detailKey = albumKey
+                selectTab(LibraryTab.ALBUMS)
+            },
+            onGoToArtist = {
+                scope.launch { searchBarState.animateToCollapsed() }
+                detailTabId = LibraryTab.ARTISTS.id
+                detailKey = artistKey
+                selectTab(LibraryTab.ARTISTS)
+            },
+            onShare = { shareTrack(context, track) },
+            onSongInfo = { infoTrack = track },
+            onSetRingtone = { setAsRingtone(context, track) },
+            onDelete = {
+                runCatching {
+                    val request = MediaStore.createDeleteRequest(context.contentResolver, listOf(track.contentUri))
+                    deleteLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+                }.onFailure {
+                    Toast.makeText(context, "Couldn't delete this file", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { actionsTrack = null }
+        )
+    }
+}
+
+/** Same key the Albums tab groups by. */
+private fun albumKeyOf(track: AudioTrackItem): String =
+    if (track.albumId != 0L) "id:${track.albumId}" else "name:${track.album.lowercase()}"
+
+/** Android share sheet with the audio file attached. */
+private fun shareTrack(context: Context, track: AudioTrackItem) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "audio/*"
+        putExtra(Intent.EXTRA_STREAM, track.contentUri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching { context.startActivity(Intent.createChooser(send, "Share \u201C${track.title}\u201D")) }
+        .onFailure { Toast.makeText(context, "No app available to share", Toast.LENGTH_SHORT).show() }
+}
+
+/**
+ * Sets the phone ringtone. Android requires the "Modify system settings" permission for this;
+ * if it isn't granted yet, open that settings page so the user can allow it.
+ */
+private fun setAsRingtone(context: Context, track: AudioTrackItem) {
+    if (Settings.System.canWrite(context)) {
+        runCatching {
+            RingtoneManager.setActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE, track.contentUri)
+        }.onSuccess {
+            Toast.makeText(context, "\u201C${track.title}\u201D set as ringtone", Toast.LENGTH_SHORT).show()
+        }.onFailure {
+            Toast.makeText(context, "Couldn't set ringtone", Toast.LENGTH_SHORT).show()
+        }
+    } else {
+        Toast.makeText(context, "Allow Pulse to modify system settings, then try again", Toast.LENGTH_LONG).show()
+        runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
+            )
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Action row
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Play and Shuffle sit first (left) as an official Expressive ButtonGroup; the count and Sort
+ * sit on the right.
+ */
 @Composable
 private fun LibraryActionRow(
     label: String,
+    onPlay: (() -> Unit)?,
     onShuffle: (() -> Unit)?,
     onSort: (() -> Unit)?
 ) {
+    val playInteraction = remember { MutableInteractionSource() }
+    val shuffleInteraction = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
-            .padding(start = 20.dp, end = 8.dp),
+            .padding(start = 16.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (onPlay != null || onShuffle != null) {
+            ButtonGroup(
+                overflowIndicator = { menuState ->
+                    ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
+                },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (onPlay != null) {
+                    customItem(
+                        buttonGroupContent = {
+                            Button(
+                                onClick = onPlay,
+                                shapes = ButtonDefaults.shapes(),
+                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                interactionSource = playInteraction,
+                                modifier = Modifier
+                                    .animateWidth(playInteraction)
+                                    .testTag("library_play_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(ButtonDefaults.IconSize)
+                                )
+                                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                                Text("Play")
+                            }
+                        },
+                        menuContent = { menuState ->
+                            DropdownMenuItem(
+                                text = { Text("Play") },
+                                onClick = {
+                                    onPlay()
+                                    menuState.dismiss()
+                                }
+                            )
+                        }
+                    )
+                }
+                if (onShuffle != null) {
+                    customItem(
+                        buttonGroupContent = {
+                            FilledTonalButton(
+                                onClick = onShuffle,
+                                shapes = ButtonDefaults.shapes(),
+                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                interactionSource = shuffleInteraction,
+                                modifier = Modifier
+                                    .animateWidth(shuffleInteraction)
+                                    .testTag("library_shuffle_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shuffle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(ButtonDefaults.IconSize)
+                                )
+                                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                                Text("Shuffle")
+                            }
+                        },
+                        menuContent = { menuState ->
+                            DropdownMenuItem(
+                                text = { Text("Shuffle") },
+                                onClick = {
+                                    onShuffle()
+                                    menuState.dismiss()
+                                }
+                            )
+                        }
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.weight(1f))
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        if (onShuffle != null) {
-            FilledTonalButton(
-                onClick = onShuffle,
-                shapes = ButtonDefaults.shapes(),
-                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                modifier = Modifier.testTag("library_shuffle_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Shuffle,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize)
-                )
-                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Shuffle")
-            }
-        }
         if (onSort != null) {
             IconButton(
                 onClick = onSort,
@@ -651,6 +803,8 @@ private fun LibraryActionRow(
             ) {
                 Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
             }
+        } else {
+            Spacer(modifier = Modifier.size(8.dp))
         }
     }
 }

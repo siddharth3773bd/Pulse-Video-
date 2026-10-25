@@ -52,8 +52,20 @@ data class AudioTrackItem(
     val albumId: Long = 0L,
     val artistId: Long = 0L,
     val dateAddedSec: Long = 0L,
-    val path: String = ""
-)
+    val path: String = "",
+    /** MediaStore IS_RECORDING (Android 12+): the file was made by a recorder app. */
+    val isRecording: Boolean = false
+) {
+    /** Voice/call recordings: flagged by MediaStore or stored in a Recordings folder. */
+    val looksLikeRecording: Boolean
+        get() {
+            if (isRecording) return true
+            val p = path.lowercase()
+            return p.contains("/recordings/") || p.startsWith("recordings/") ||
+                p.contains("/call recordings/") || p.contains("/recorder/") ||
+                p.contains("/voice recorder/") || p.contains("/sound recordings/")
+        }
+}
 
 @Immutable
 data class PlaylistItem(
@@ -123,6 +135,7 @@ enum class MeSubPage(val id: String, val title: String) {
     HISTORY("history", "Video History"),
     APPEARANCE("appearance", "Appearance"),
     VIDEO_SETTINGS("video_settings", "Video"),
+    MUSIC_SETTINGS("music_settings", "Music"),
     NAVIGATION("navigation", "Navigation")
 }
 

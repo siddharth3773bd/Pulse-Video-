@@ -87,6 +87,8 @@ object AppPreferencesRepository {
     private val KEY_LIB_TRAY_ORDER = stringPreferencesKey("lib_tray_order")
     private val KEY_LIB_TRAY_HIDDEN = stringPreferencesKey("lib_tray_hidden")
     private val KEY_LIB_LIKED_IDS = stringSetPreferencesKey("lib_liked_ids")
+    private val KEY_LIB_HIDE_SHORT = booleanPreferencesKey("lib_hide_short_audio")
+    private val KEY_LIB_HIDE_RECORDINGS = booleanPreferencesKey("lib_hide_recordings")
 
     // Playlists & History
     private val KEY_PLAYLISTS_JSON = stringPreferencesKey("playlists_json")
@@ -180,7 +182,9 @@ object AppPreferencesRepository {
                 groupAscending = prefs[KEY_LIB_GROUP_ASC] ?: true,
                 trayOrder = trayOrder,
                 hiddenTray = trayHidden,
-                likedIds = prefs[KEY_LIB_LIKED_IDS] ?: emptySet()
+                likedIds = prefs[KEY_LIB_LIKED_IDS] ?: emptySet(),
+                hideShortAudio = prefs[KEY_LIB_HIDE_SHORT] ?: true,
+                hideRecordings = prefs[KEY_LIB_HIDE_RECORDINGS] ?: true
             )
         }
     }
@@ -205,6 +209,14 @@ object AppPreferencesRepository {
             val current = it[KEY_LIB_LIKED_IDS] ?: emptySet()
             it[KEY_LIB_LIKED_IDS] = if (liked) current + trackId else current - trackId
         }
+    }
+
+    suspend fun setLibraryHideShortAudio(context: Context, hide: Boolean) {
+        context.appDataStore.edit { it[KEY_LIB_HIDE_SHORT] = hide }
+    }
+
+    suspend fun setLibraryHideRecordings(context: Context, hide: Boolean) {
+        context.appDataStore.edit { it[KEY_LIB_HIDE_RECORDINGS] = hide }
     }
 
     suspend fun updateLibrarySongSort(context: Context, sort: LibrarySongSort, ascending: Boolean) {
