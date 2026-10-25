@@ -187,8 +187,7 @@ object MediaStoreScanner {
                             durationLabel = formatDurationMs(durationMs),
                             progress = savedProgress,
                             folder = bucketName.ifBlank { "Videos" },
-                            path = fullPath,
-                            isRecording = isRecordingCol >= 0 && cursor.getInt(isRecordingCol) == 1
+                            path = fullPath
                         )
                     )
                 }
@@ -302,7 +301,8 @@ object MediaStoreScanner {
                             albumId = if (albumIdCol >= 0) cursor.getLong(albumIdCol) else 0L,
                             artistId = if (artistIdCol >= 0) cursor.getLong(artistIdCol) else 0L,
                             dateAddedSec = if (dateAddedCol >= 0) cursor.getLong(dateAddedCol) else 0L,
-                            path = fullPath
+                            path = fullPath,
+                            isRecording = isRecordingCol >= 0 && cursor.getInt(isRecordingCol) == 1
                         )
                     )
                 }
