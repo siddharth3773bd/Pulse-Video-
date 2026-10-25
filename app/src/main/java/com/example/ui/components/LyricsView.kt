@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -27,8 +28,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VerticalAlignCenter
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -235,7 +234,7 @@ fun LyricsView(
                 ),
                 modifier = Modifier.testTag("lyrics_back_to_current")
             ) {
-                Icon(Icons.Default.VerticalAlignCenter, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Symbols.VerticalAlignCenter, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
                 Text("Back to current line")
             }

@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -26,15 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -273,7 +265,7 @@ fun AmbientModeScreen(
                     .padding(12.dp)
                     .testTag("ambient_options_btn")
             ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Ambient mode options")
+                Icon(Symbols.MoreVert, contentDescription = "Ambient mode options")
             }
 
             if (showOptions) {
@@ -329,7 +321,7 @@ private fun LyricsOnlyGestures(
                     haptic.performHapticFeedback(
                         if (wasPlaying) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn
                     )
-                    flash(if (wasPlaying) Icons.Default.Pause else Icons.Default.PlayArrow)
+                    flash(if (wasPlaying) Symbols.Pause else Symbols.PlayArrow)
                 })
             }
             .pointerInput(Unit) {
@@ -396,17 +388,17 @@ private fun AmbientOptionsSheet(
             val rows = listOf(
                 AmbientOption(
                     "Show artwork", "The album art; swipe it to change song",
-                    Icons.Default.Image, settings.showArtwork,
+                    Symbols.Image, settings.showArtwork,
                     enabled = !settings.showArtwork || settings.showLyrics
                 ) { onChange(settings.copy(showArtwork = it)) },
                 AmbientOption(
                     "Show song name", if (settings.showArtwork) "Next to the artwork" else "Needs the artwork",
-                    Icons.Default.MusicNote, settings.showTitle && settings.showArtwork,
+                    Symbols.MusicNote, settings.showTitle && settings.showArtwork,
                     enabled = settings.showArtwork
                 ) { onChange(settings.copy(showTitle = it)) },
                 AmbientOption(
                     "Show artist name", if (settings.showArtwork) "Under the song name" else "Needs the artwork",
-                    Icons.Default.Person, settings.showArtist && settings.showArtwork,
+                    Symbols.Person, settings.showArtist && settings.showArtwork,
                     enabled = settings.showArtwork
                 ) { onChange(settings.copy(showArtist = it)) },
                 AmbientOption(
@@ -421,7 +413,7 @@ private fun AmbientOptionsSheet(
                 listOf(
                     AmbientOption(
                         "AMOLED black", "Black background and white text, no album colours",
-                        Icons.Default.DarkMode, settings.amoled
+                        Symbols.DarkMode, settings.amoled
                     ) { onChange(settings.copy(amoled = it)) }
                 )
             )
@@ -429,7 +421,7 @@ private fun AmbientOptionsSheet(
             SegmentedListItem(
                 onClick = onExit,
                 shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
-                leadingContent = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) },
+                leadingContent = { Icon(Symbols.ArrowBack, contentDescription = null) },
                 colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 modifier = Modifier.testTag("ambient_exit")
             ) {

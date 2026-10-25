@@ -1,13 +1,10 @@
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import com.example.model.AudioTrackItem
-import androidx.compose.material.icons.filled.FolderOff
-import androidx.compose.material.icons.filled.Block
 import com.example.model.NowPlayingBackground
 import com.example.model.NowPlayingButtonColors
 import com.example.model.NowPlayingColorSource
-import androidx.compose.material.icons.filled.Gradient
-import androidx.compose.material.icons.filled.RadioButtonChecked
 import com.example.data.AppPreferencesRepository
 import com.example.model.LibraryPreferences
 import com.example.model.LibraryTab
@@ -52,28 +49,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Colorize
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.RemoveCircleOutline
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
@@ -297,7 +272,7 @@ private fun MeHomeMenuScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ExpressiveTopWideCard(
-                icon = Icons.Default.PlaylistPlay,
+                icon = Symbols.PlaylistPlay,
                 title = "Video Playlist",
                 subtitle = if (playlistCount == 1) "1 playlist" else "$playlistCount playlists",
                 effectiveAmoled = effectiveAmoled,
@@ -307,7 +282,7 @@ private fun MeHomeMenuScreen(
             )
 
             ExpressiveTopWideCard(
-                icon = Icons.Default.History,
+                icon = Symbols.History,
                 title = "Video History",
                 subtitle = if (historyCount == 1) "1 watched" else "$historyCount watched",
                 effectiveAmoled = effectiveAmoled,
@@ -335,7 +310,7 @@ private fun MeHomeMenuScreen(
         // Segmented Expressive preference rows using official SegmentedListItem
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ExpressivePreferenceMenuRow(
-                icon = Icons.Default.Palette,
+                icon = Symbols.Palette,
                 title = "Appearance",
                 subtitle = "Theme and colors",
                 index = 0,
@@ -345,7 +320,7 @@ private fun MeHomeMenuScreen(
                 testTag = "me_pref_appearance"
             )
             ExpressivePreferenceMenuRow(
-                icon = Icons.Default.Tune,
+                icon = Symbols.Tune,
                 title = "Video",
                 subtitle = "Playback, gestures and more",
                 index = 1,
@@ -355,7 +330,7 @@ private fun MeHomeMenuScreen(
                 testTag = "me_pref_video"
             )
             ExpressivePreferenceMenuRow(
-                icon = Icons.Default.MusicNote,
+                icon = Symbols.MusicNote,
                 title = "Music",
                 subtitle = "Library tabs, Now Playing buttons and filters",
                 index = 2,
@@ -365,7 +340,7 @@ private fun MeHomeMenuScreen(
                 testTag = "me_pref_music"
             )
             ExpressivePreferenceMenuRow(
-                icon = Icons.Default.ViewCarousel,
+                icon = Symbols.ViewCarousel,
                 title = "Navigation",
                 subtitle = "Customize navigation bar items",
                 index = 3,
@@ -523,7 +498,7 @@ private fun ExpressivePreferenceMenuRow(
         },
         trailingContent = {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = Symbols.KeyboardArrowRight,
                 contentDescription = null,
                 tint = palette.onSurfaceVariant,
                 modifier = Modifier.size(22.dp)
@@ -599,7 +574,7 @@ private fun ExpressiveSubPageHeader(
                     .testTag("me_subpage_back_btn")
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = Symbols.ArrowBack,
                     contentDescription = "Back",
                     modifier = Modifier.size(20.dp)
                 )
@@ -639,7 +614,7 @@ private fun VideoHistorySubPage(
             .testTag("me_subpage_video_history")
     ) {
         ExpressiveSubPageHeader(
-            icon = Icons.Default.History,
+            icon = Symbols.History,
             title = "Video History",
             onBack = onBack,
             trailingAction = if (historyPairs.isNotEmpty()) {
@@ -655,7 +630,7 @@ private fun VideoHistorySubPage(
                         modifier = Modifier.testTag("clear_history_btn")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.DeleteOutline,
+                            imageVector = Symbols.DeleteOutline,
                             contentDescription = "Clear history",
                             tint = palette.error,
                             modifier = Modifier.size(16.dp)
@@ -690,7 +665,7 @@ private fun VideoHistorySubPage(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.History,
+                            imageVector = Symbols.History,
                             contentDescription = null,
                             tint = palette.onSurfaceVariant,
                             modifier = Modifier.size(30.dp)
@@ -837,7 +812,7 @@ private fun VideoPlaylistSubPage(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             ExpressiveSubPageHeader(
-                icon = Icons.Default.PlaylistPlay,
+                icon = Symbols.PlaylistPlay,
                 title = "Video Playlist",
                 onBack = onBack,
                 trailingAction = {
@@ -851,7 +826,7 @@ private fun VideoPlaylistSubPage(
                                 modifier = Modifier.testTag("me_create_playlist_btn")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Add,
+                                    imageVector = Symbols.Add,
                                     contentDescription = "Create playlist",
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -870,7 +845,7 @@ private fun VideoPlaylistSubPage(
                                 onCheckedChange = { fabMenuExpanded = it }
                             ) {
                                 Icon(
-                                    imageVector = if (fabMenuExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    imageVector = if (fabMenuExpanded) Symbols.ExpandLess else Symbols.ExpandMore,
                                     contentDescription = "Playlist actions",
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -897,7 +872,7 @@ private fun VideoPlaylistSubPage(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PlaylistPlay,
+                                imageVector = Symbols.PlaylistPlay,
                                 contentDescription = null,
                                 tint = palette.onSurfaceVariant,
                                 modifier = Modifier.size(30.dp)
@@ -982,7 +957,7 @@ private fun VideoPlaylistSubPage(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.PlaylistPlay,
+                                                    imageVector = Symbols.PlaylistPlay,
                                                     contentDescription = null,
                                                     tint = palette.primary,
                                                     modifier = Modifier.size(26.dp)
@@ -1018,7 +993,7 @@ private fun VideoPlaylistSubPage(
                                             modifier = Modifier.size(36.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Add,
+                                                imageVector = Symbols.Add,
                                                 contentDescription = "Add videos to ${pl.name}",
                                                 tint = palette.primary,
                                                 modifier = Modifier.size(20.dp)
@@ -1033,7 +1008,7 @@ private fun VideoPlaylistSubPage(
                                             modifier = Modifier.size(36.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Edit,
+                                                imageVector = Symbols.Edit,
                                                 contentDescription = "Rename ${pl.name}",
                                                 tint = palette.onSurfaceVariant,
                                                 modifier = Modifier.size(18.dp)
@@ -1045,14 +1020,14 @@ private fun VideoPlaylistSubPage(
                                             modifier = Modifier.size(36.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.DeleteOutline,
+                                                imageVector = Symbols.DeleteOutline,
                                                 contentDescription = "Delete ${pl.name}",
                                                 tint = palette.error,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
                                         Icon(
-                                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            imageVector = if (isExpanded) Symbols.ExpandLess else Symbols.ExpandMore,
                                             contentDescription = null,
                                             tint = palette.onSurfaceVariant,
                                             modifier = Modifier.size(20.dp)
@@ -1128,7 +1103,7 @@ private fun VideoPlaylistSubPage(
                                                             modifier = Modifier.size(36.dp)
                                                         ) {
                                                             Icon(
-                                                                imageVector = Icons.Default.RemoveCircleOutline,
+                                                                imageVector = Symbols.RemoveCircleOutline,
                                                                 contentDescription = "Remove from playlist",
                                                                 tint = palette.error,
                                                                 modifier = Modifier.size(18.dp)
@@ -1168,7 +1143,7 @@ private fun VideoPlaylistSubPage(
                     onCheckedChange = { fabMenuExpanded = it }
                 ) {
                     Icon(
-                        imageVector = if (fabMenuExpanded) Icons.Default.Close else Icons.Default.Add,
+                        imageVector = if (fabMenuExpanded) Symbols.Close else Symbols.Add,
                         contentDescription = "Playlist quick actions"
                     )
                 }
@@ -1185,7 +1160,7 @@ private fun VideoPlaylistSubPage(
                 },
                 icon = {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        imageVector = Symbols.Add,
                         contentDescription = null
                     )
                 },
@@ -1352,7 +1327,7 @@ private fun VideoPlaylistSubPage(
                                 },
                                 trailingContent = {
                                     Icon(
-                                        imageVector = Icons.Default.Add,
+                                        imageVector = Symbols.Add,
                                         contentDescription = "Add",
                                         tint = palette.primary,
                                         modifier = Modifier.size(18.dp)
@@ -1413,7 +1388,7 @@ private fun AppearanceSubPage(
             .testTag("me_subpage_appearance")
     ) {
         ExpressiveSubPageHeader(
-            icon = Icons.Default.Palette,
+            icon = Symbols.Palette,
             title = "Appearance",
             onBack = onBack
         )
@@ -1608,14 +1583,14 @@ private fun AppearanceSubPage(
                                                 ) {
                                                     if (active) {
                                                         Icon(
-                                                            imageVector = Icons.Default.Check,
+                                                            imageVector = Symbols.Check,
                                                             contentDescription = "Selected",
                                                             tint = Color.White,
                                                             modifier = Modifier.size(18.dp)
                                                         )
                                                     } else if (isCustom) {
                                                         Icon(
-                                                            imageVector = Icons.Default.Colorize,
+                                                            imageVector = Symbols.Colorize,
                                                             contentDescription = "Custom color",
                                                             tint = Color.White,
                                                             modifier = Modifier.size(18.dp)
@@ -1896,7 +1871,7 @@ private fun VideoPlaybackSettingsSubPage(
             .testTag("me_subpage_video_settings")
     ) {
         ExpressiveSubPageHeader(
-            icon = Icons.Default.Tune,
+            icon = Symbols.Tune,
             title = "Video",
             onBack = onBack
         )
@@ -2195,7 +2170,7 @@ private fun ExpressiveDropdownSettingRow(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
+                    imageVector = Symbols.KeyboardArrowDown,
                     contentDescription = null,
                     tint = palette.primary,
                     modifier = Modifier.size(20.dp)
@@ -2312,9 +2287,9 @@ private fun NavigationCustomizeSubPage(
 ) {
     val palette = LocalM3Palette.current
     val fixedOrderTabs = listOf(
-        Triple(BottomTab.AUDIO, "Music", Icons.Default.MusicNote to "Play local music and audio tracks"),
-        Triple(BottomTab.VIDEOS, "Videos", Icons.Default.PlayArrow to "Main video library with list, grid and tree views"),
-        Triple(BottomTab.ME, "Me", Icons.Default.Person to "Playlists, watch history and app preferences")
+        Triple(BottomTab.AUDIO, "Music", Symbols.MusicNote to "Play local music and audio tracks"),
+        Triple(BottomTab.VIDEOS, "Videos", Symbols.PlayArrow to "Main video library with list, grid and tree views"),
+        Triple(BottomTab.ME, "Me", Symbols.Person to "Playlists, watch history and app preferences")
     )
 
     Column(
@@ -2323,7 +2298,7 @@ private fun NavigationCustomizeSubPage(
             .testTag("me_subpage_navigation")
     ) {
         ExpressiveSubPageHeader(
-            icon = Icons.Default.ViewCarousel,
+            icon = Symbols.ViewCarousel,
             title = "Navigation",
             onBack = onBack
         )
@@ -2414,7 +2389,7 @@ private fun NavigationCustomizeSubPage(
                             thumbContent = if (isChecked) {
                                 {
                                     Icon(
-                                        imageVector = Icons.Default.Check,
+                                        imageVector = Symbols.Check,
                                         contentDescription = null,
                                         modifier = Modifier.size(SwitchDefaults.IconSize)
                                     )
@@ -2483,7 +2458,7 @@ private fun ExpressiveSettingToggleCard(
                 thumbContent = if (checked) {
                     {
                         Icon(
-                            imageVector = Icons.Default.Check,
+                            imageVector = Symbols.Check,
                             contentDescription = null,
                             modifier = Modifier.size(SwitchDefaults.IconSize)
                         )
@@ -2551,7 +2526,7 @@ private fun MusicSettingsSubPage(
             .testTag("me_subpage_music_settings")
     ) {
         ExpressiveSubPageHeader(
-            icon = Icons.Default.MusicNote,
+            icon = Symbols.MusicNote,
             title = "Music",
             onBack = onBack
         )
@@ -2567,7 +2542,7 @@ private fun MusicSettingsSubPage(
             SectionTitle("Library")
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ExpressivePreferenceMenuRow(
-                    icon = Icons.Default.ViewCarousel,
+                    icon = Symbols.ViewCarousel,
                     title = "Library tabs",
                     subtitle = "Show, hide and reorder the music tabs",
                     index = 0,
@@ -2577,7 +2552,7 @@ private fun MusicSettingsSubPage(
                     testTag = "music_pref_library_tabs"
                 )
                 ExpressivePreferenceMenuRow(
-                    icon = Icons.Default.Tune,
+                    icon = Symbols.Tune,
                     title = "Now Playing buttons",
                     subtitle = "Choose and reorder the buttons in the bottom tray",
                     index = 1,
@@ -2592,7 +2567,7 @@ private fun MusicSettingsSubPage(
             SectionTitle("Now Playing look")
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ExpressivePreferenceMenuRow(
-                    icon = Icons.Default.Palette,
+                    icon = Symbols.Palette,
                     title = "Colours from",
                     subtitle = prefs.nowPlayingColorSource.label,
                     index = 0,
@@ -2602,7 +2577,7 @@ private fun MusicSettingsSubPage(
                     testTag = "music_np_color_source"
                 )
                 ExpressivePreferenceMenuRow(
-                    icon = Icons.Default.Gradient,
+                    icon = Symbols.Gradient,
                     title = "Background",
                     subtitle = prefs.nowPlayingBackground.label,
                     index = 1,
@@ -2612,7 +2587,7 @@ private fun MusicSettingsSubPage(
                     testTag = "music_np_background"
                 )
                 ExpressivePreferenceMenuRow(
-                    icon = Icons.Default.RadioButtonChecked,
+                    icon = Symbols.RadioButtonChecked,
                     title = "Button colours",
                     subtitle = prefs.nowPlayingButtonColors.label,
                     index = 2,
@@ -2665,7 +2640,7 @@ private fun MusicSettingsSubPage(
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ExpressivePreferenceMenuRow(
-                    icon = Icons.Default.Block,
+                    icon = Symbols.Block,
                     title = "Blacklisted songs",
                     subtitle = when (val n = prefs.blacklistedSongs.size) {
                         0 -> "None. Hide a song from its ⋮ menu"
@@ -2679,7 +2654,7 @@ private fun MusicSettingsSubPage(
                     testTag = "music_blacklisted_songs"
                 )
                 ExpressivePreferenceMenuRow(
-                    icon = Icons.Default.FolderOff,
+                    icon = Symbols.FolderOff,
                     title = "Blacklisted folders",
                     subtitle = when (val n = prefs.blacklistedFolders.size) {
                         0 -> "None. Hide whole folders, like WhatsApp audio"

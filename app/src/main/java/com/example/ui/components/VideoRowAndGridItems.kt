@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -29,10 +30,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,7 +83,7 @@ private fun VideoMenuSlot(
                 modifier = Modifier.testTag("video_menu_button_${video.mediaId}")
             ) {
                 Icon(
-                    imageVector = Icons.Default.MoreVert,
+                    imageVector = Symbols.MoreVert,
                     contentDescription = "More options for ${video.title}",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -316,7 +313,7 @@ fun VideoThumbnailBox(
                 )
             } else if (failed) {
                 Icon(
-                    imageVector = Icons.Default.Movie,
+                    imageVector = Symbols.Movie,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(26.dp)
@@ -365,7 +362,7 @@ private fun SelectionCheck(selected: Boolean) {
     ) {
         if (selected) {
             Icon(
-                Icons.Default.Check,
+                Symbols.Check,
                 contentDescription = "Selected",
                 tint = scheme.onPrimary,
                 modifier = Modifier.size(16.dp)

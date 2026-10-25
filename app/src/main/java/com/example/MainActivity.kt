@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.ui.icons.Symbols
 import androidx.compose.material3.AppBarWithSearch
 import androidx.compose.material3.SearchBarScrollBehavior
 import androidx.compose.material3.SearchBarState
@@ -16,8 +17,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import com.example.ui.components.VideoSearchInputField
 import android.Manifest
 import android.app.Activity
@@ -86,24 +85,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Deselect
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -115,8 +96,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialShapes
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.TopAppBar
@@ -1127,7 +1106,7 @@ private fun MainHeader(
     val sortButton: @Composable () -> Unit = {
         TooltipIconButton(
             label = "View and sort",
-            icon = Icons.Default.Tune,
+            icon = Symbols.Tune,
             onClick = onOpenSortSheet,
             modifier = Modifier.testTag("header_sort_btn")
         )
@@ -1158,7 +1137,7 @@ private fun MainHeader(
                 navigationIcon = {
                     TooltipIconButton(
                         label = "Clear selection",
-                        icon = Icons.Default.Close,
+                        icon = Symbols.Close,
                         onClick = onClearSelection,
                         modifier = Modifier.testTag("clear_selection_btn")
                     )
@@ -1186,7 +1165,7 @@ private fun MainHeader(
                 navigationIcon = {
                     TooltipIconButton(
                         label = "Back",
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = Symbols.ArrowBack,
                         onClick = onClearSubFilter,
                         modifier = Modifier.testTag("back_from_folder_btn")
                     )
@@ -1267,7 +1246,7 @@ private fun VideosContentListOrGrid(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.VideoLibrary,
+                    imageVector = Symbols.VideoLibrary,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.size(30.dp)
@@ -1288,7 +1267,7 @@ private fun VideosContentListOrGrid(
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.testTag("rescan_media_btn")
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Icon(Symbols.Refresh, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                 Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
                 Text("Scan again")
             }
@@ -1338,7 +1317,7 @@ private fun VideosContentListOrGrid(
                 }
                 if (seriesData.standalone.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "header_standalone", contentType = "header") {
-                        SeriesGroupHeader(seriesTitle = "Other videos", icon = Icons.Default.VideoLibrary)
+                        SeriesGroupHeader(seriesTitle = "Other videos", icon = Symbols.VideoLibrary)
                     }
                     gridItems(seriesData.standalone, episodes = false)
                 }
@@ -1378,7 +1357,7 @@ private fun VideosContentListOrGrid(
                     item(key = "standalone_header", contentType = "header") {
                         SeriesGroupHeader(
                             seriesTitle = "Other videos",
-                            icon = Icons.Default.VideoLibrary,
+                            icon = Symbols.VideoLibrary,
                             modifier = Modifier.padding(top = 8.dp)
                         )
                     }
@@ -1395,7 +1374,7 @@ private fun VideosContentListOrGrid(
 private fun SeriesGroupHeader(
     seriesTitle: String,
     modifier: Modifier = Modifier,
-    icon: ImageVector = Icons.Default.Layers
+    icon: ImageVector = Symbols.Layers
 ) {
     Row(
         modifier = modifier
@@ -1425,9 +1404,9 @@ private fun SelectionToolbar(
         colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
         modifier = Modifier.testTag("multi_select_pill_toolbar")
     ) {
-        TooltipIconButton("Share", Icons.Default.Share, onShare, Modifier.testTag("pill_share_btn"))
-        TooltipIconButton("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd, onAddToPlaylist, Modifier.testTag("pill_add_to_btn"))
-        TooltipIconButton("Delete", Icons.Default.DeleteOutline, onDelete, Modifier.testTag("pill_delete_btn"))
+        TooltipIconButton("Share", Symbols.Share, onShare, Modifier.testTag("pill_share_btn"))
+        TooltipIconButton("Add to playlist", Symbols.PlaylistAdd, onAddToPlaylist, Modifier.testTag("pill_add_to_btn"))
+        TooltipIconButton("Delete", Symbols.DeleteOutline, onDelete, Modifier.testTag("pill_delete_btn"))
     }
 }
 
@@ -1443,10 +1422,10 @@ private fun MainNavigationBar(
     onSelectTab: (BottomTab) -> Unit
 ) {
     val tabs = listOf(
-        Triple(BottomTab.AUDIO, "Music", Icons.Default.MusicNote),
-        Triple(BottomTab.VIDEOS, "Videos", Icons.Default.PlayCircle),
-        Triple(BottomTab.ME, "Me", Icons.Default.Person)
-    ).filter { it.first in activeTabs }.ifEmpty { listOf(Triple(BottomTab.VIDEOS, "Videos", Icons.Default.PlayCircle)) }
+        Triple(BottomTab.AUDIO, "Music", Symbols.MusicNote),
+        Triple(BottomTab.VIDEOS, "Videos", Symbols.PlayCircle),
+        Triple(BottomTab.ME, "Me", Symbols.Person)
+    ).filter { it.first in activeTabs }.ifEmpty { listOf(Triple(BottomTab.VIDEOS, "Videos", Symbols.PlayCircle)) }
 
     ShortNavigationBar(modifier = Modifier.testTag("main_navigation_bar")) {
         tabs.forEach { (tab, label, icon) ->

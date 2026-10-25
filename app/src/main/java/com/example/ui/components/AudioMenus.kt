@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -32,29 +33,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.FolderOff
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlaylistRemove
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.SortByAlpha
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuGroup
@@ -236,29 +214,29 @@ fun SongActionsMenu(
                     .padding(top = 12.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                QuickAction(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next", "song_action_play_next") { act(onPlayNext) }
-                QuickAction(Icons.AutoMirrored.Filled.QueueMusic, "Add to queue", "song_action_add_queue") { act(onAddToQueue) }
-                QuickAction(Icons.AutoMirrored.Filled.PlaylistAdd, "Add to playlist", "song_action_add_playlist") { act(onAddToPlaylist) }
-                QuickAction(Icons.Default.Share, "Share", "song_action_share") { act(onShare) }
+                QuickAction(Symbols.PlaylistPlay, "Play next", "song_action_play_next") { act(onPlayNext) }
+                QuickAction(Symbols.QueueMusic, "Add to queue", "song_action_add_queue") { act(onAddToQueue) }
+                QuickAction(Symbols.PlaylistAdd, "Add to playlist", "song_action_add_playlist") { act(onAddToPlaylist) }
+                QuickAction(Symbols.Share, "Share", "song_action_share") { act(onShare) }
             }
 
             // Library actions
             val main = listOfNotNull(
-                AudioMenuEntry("Go to album", Icons.Default.Album, "song_action_album", onClick = onGoToAlbum)
+                AudioMenuEntry("Go to album", Symbols.Album, "song_action_album", onClick = onGoToAlbum)
                     .takeIf { canGoToAlbum },
-                AudioMenuEntry("Go to artist", Icons.Default.Person, "song_action_artist", onClick = onGoToArtist)
+                AudioMenuEntry("Go to artist", Symbols.Person, "song_action_artist", onClick = onGoToArtist)
                     .takeIf { canGoToArtist },
-                AudioMenuEntry("Song info", Icons.Default.Info, "song_action_info", onClick = onSongInfo),
+                AudioMenuEntry("Song info", Symbols.Info, "song_action_info", onClick = onSongInfo),
                 onRemoveFromPlaylist?.let {
-                    AudioMenuEntry("Remove from playlist", Icons.Default.PlaylistRemove, "song_action_remove_playlist", onClick = it)
+                    AudioMenuEntry("Remove from playlist", Symbols.PlaylistRemove, "song_action_remove_playlist", onClick = it)
                 }
             )
             SheetActionGroup(main, onAct = { act(it) })
             Spacer(modifier = Modifier.height(12.dp))
             SheetActionGroup(
                 listOf(
-                    AudioMenuEntry("Blacklist song", Icons.Default.Block, "song_action_blacklist", onClick = onBlacklistSong),
-                    AudioMenuEntry("Delete from device", Icons.Default.DeleteOutline, "song_action_delete", destructive = true, onClick = onDelete)
+                    AudioMenuEntry("Blacklist song", Symbols.Block, "song_action_blacklist", onClick = onBlacklistSong),
+                    AudioMenuEntry("Delete from device", Symbols.DeleteOutline, "song_action_delete", destructive = true, onClick = onDelete)
                 ),
                 onAct = { act(it) }
             )
@@ -350,12 +328,12 @@ fun PlaylistActionsMenu(
         onDismiss = onDismiss,
         groups = listOf(
             listOf(
-                AudioMenuEntry("Play next", Icons.AutoMirrored.Filled.PlaylistPlay, "playlist_action_play_next", onClick = onPlayNext),
-                AudioMenuEntry("Add to queue", Icons.AutoMirrored.Filled.QueueMusic, "playlist_action_add_queue", onClick = onAddToQueue)
+                AudioMenuEntry("Play next", Symbols.PlaylistPlay, "playlist_action_play_next", onClick = onPlayNext),
+                AudioMenuEntry("Add to queue", Symbols.QueueMusic, "playlist_action_add_queue", onClick = onAddToQueue)
             ),
             listOf(
-                AudioMenuEntry("Rename", Icons.Default.Edit, "playlist_action_rename", onClick = onRename),
-                AudioMenuEntry("Delete playlist", Icons.Default.DeleteOutline, "playlist_action_delete", destructive = true, onClick = onDelete)
+                AudioMenuEntry("Rename", Symbols.Edit, "playlist_action_rename", onClick = onRename),
+                AudioMenuEntry("Delete playlist", Symbols.DeleteOutline, "playlist_action_delete", destructive = true, onClick = onDelete)
             )
         )
     )
@@ -367,11 +345,11 @@ fun PlaylistActionsMenu(
 
 private val LibrarySongSort.icon: ImageVector
     get() = when (this) {
-        LibrarySongSort.TITLE -> Icons.Default.SortByAlpha
-        LibrarySongSort.ARTIST -> Icons.Default.Person
-        LibrarySongSort.ALBUM -> Icons.Default.Album
-        LibrarySongSort.DATE_ADDED -> Icons.Default.CalendarToday
-        LibrarySongSort.DURATION -> Icons.Default.Timer
+        LibrarySongSort.TITLE -> Symbols.SortByAlpha
+        LibrarySongSort.ARTIST -> Symbols.Person
+        LibrarySongSort.ALBUM -> Symbols.Album
+        LibrarySongSort.DATE_ADDED -> Symbols.CalendarToday
+        LibrarySongSort.DURATION -> Symbols.Timer
     }
 
 /**
@@ -422,7 +400,7 @@ fun LibrarySortMenu(
                             label = { Text(option.label) },
                             leadingIcon = {
                                 Icon(
-                                    imageVector = if (selected) Icons.Default.Check else option.icon,
+                                    imageVector = if (selected) Symbols.Check else option.icon,
                                     contentDescription = null,
                                     modifier = Modifier.size(FilterChipDefaults.IconSize)
                                 )
@@ -501,12 +479,12 @@ fun AudioSelectionToolbar(
         ),
         modifier = modifier.testTag("audio_selection_toolbar")
     ) {
-        SelectionToolbarButton(Icons.AutoMirrored.Filled.PlaylistPlay, "Next", onPlayNext, "selection_play_next")
-        SelectionToolbarButton(Icons.AutoMirrored.Filled.QueueMusic, "Queue", onAddToQueue, "selection_add_queue")
-        SelectionToolbarButton(Icons.AutoMirrored.Filled.PlaylistAdd, "Playlist", onAddToPlaylist, "selection_add_playlist")
-        SelectionToolbarButton(Icons.Default.Block, "Blacklist", onBlacklist, "selection_blacklist")
+        SelectionToolbarButton(Symbols.PlaylistPlay, "Next", onPlayNext, "selection_play_next")
+        SelectionToolbarButton(Symbols.QueueMusic, "Queue", onAddToQueue, "selection_add_queue")
+        SelectionToolbarButton(Symbols.PlaylistAdd, "Playlist", onAddToPlaylist, "selection_add_playlist")
+        SelectionToolbarButton(Symbols.Block, "Blacklist", onBlacklist, "selection_blacklist")
         SelectionToolbarButton(
-            Icons.Default.DeleteOutline,
+            Symbols.DeleteOutline,
             "Delete",
             onDelete,
             "selection_delete",
@@ -590,7 +568,7 @@ fun AddToPlaylistSheet(
                         modifier = Modifier.size(40.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Add, contentDescription = null)
+                            Icon(Symbols.Add, contentDescription = null)
                         }
                     }
                 },
@@ -611,7 +589,7 @@ fun AddToPlaylistSheet(
                             modifier = Modifier.size(40.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null)
+                                Icon(Symbols.PlaylistPlay, contentDescription = null)
                             }
                         }
                     },

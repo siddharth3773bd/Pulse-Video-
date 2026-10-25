@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import android.app.Activity
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
@@ -52,11 +53,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.material.icons.automirrored.filled.*
-import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -288,7 +284,7 @@ fun VideoPlayerModal(
         }
         sleepDeadline = null
         controlsVisible = true
-        gestureHud = Icons.Rounded.Bedtime to "Sleep timer: paused"
+        gestureHud = Symbols.Bedtime to "Sleep timer: paused"
     }
 
     // ---- Save the position every few seconds (not on every tick) ----
@@ -317,7 +313,7 @@ fun VideoPlayerModal(
             if (sleepEndOfVideo) {
                 sleepEndOfVideo = false
                 controlsVisible = true
-                gestureHud = Icons.Rounded.Bedtime to "Sleep timer: stopped"
+                gestureHud = Symbols.Bedtime to "Sleep timer: stopped"
             } else if (playbackSettings.autoplayNext) {
                 // Normally the queued video has already taken over; this is only a fallback.
                 if (!endedLatest()) controlsVisible = true
@@ -407,7 +403,7 @@ fun VideoPlayerModal(
 
     fun setAspect(mode: VideoAspectMode) {
         aspectMode = mode
-        gestureHud = Icons.Default.AspectRatio to mode.label
+        gestureHud = Symbols.AspectRatio to mode.label
     }
 
     Box(
@@ -450,18 +446,18 @@ fun VideoPlayerModal(
                             playbackSettings.doubleTapToSeek && offset.x < width * 0.35f -> {
                                 val target = (playerController.state.value.positionMs - skipMs).coerceAtLeast(0L)
                                 playerController.seekTo(target)
-                                gestureHud = Icons.Default.FastRewind to "-${playbackSettings.skipDurationSec}s"
+                                gestureHud = Symbols.FastRewind to "-${playbackSettings.skipDurationSec}s"
                             }
                             playbackSettings.doubleTapToSeek && offset.x > width * 0.65f -> {
                                 val dur = playerController.state.value.durationMs.takeIf { it > 0L } ?: effectiveDurationMs
                                 val target = (playerController.state.value.positionMs + skipMs).coerceAtMost(dur)
                                 playerController.seekTo(target)
-                                gestureHud = Icons.Default.FastForward to "+${playbackSettings.skipDurationSec}s"
+                                gestureHud = Symbols.FastForward to "+${playbackSettings.skipDurationSec}s"
                             }
                             playbackSettings.doubleTapToPause -> {
                                 val wasPlaying = playerController.state.value.isPlaying
                                 playerController.togglePlayPause()
-                                gestureHud = if (wasPlaying) Icons.Default.Pause to "Paused" else Icons.Default.PlayArrow to "Playing"
+                                gestureHud = if (wasPlaying) Symbols.Pause to "Paused" else Symbols.PlayArrow to "Playing"
                             }
                         }
                     },
@@ -470,7 +466,7 @@ fun VideoPlayerModal(
                         speedBeforeLongPress = playerController.state.value.playbackSpeed
                         isLongPressing2x = true
                         playerController.setSpeed(2.0f)
-                        gestureHud = Icons.Default.Speed to "2× speed"
+                        gestureHud = Symbols.Speed to "2× speed"
                     },
                     onPress = {
                         tryAwaitRelease()
@@ -519,7 +515,7 @@ fun VideoPlayerModal(
                                 val target = (dragStartSeekMs + delta).coerceIn(0L, dur)
                                 playerController.seekTo(target)
                                 val sign = if (delta >= 0) "+" else "-"
-                                gestureHud = (if (delta >= 0) Icons.Default.FastForward else Icons.Default.FastRewind) to
+                                gestureHud = (if (delta >= 0) Symbols.FastForward else Symbols.FastRewind) to
                                     "${formatDurationMs(target)} ($sign${abs(delta / 1000L)}s)"
                             }
                             "VOLUME" -> {
@@ -528,14 +524,14 @@ fun VideoPlayerModal(
                                 val ratio = -dragAccumulatedY / (surfaceHeightPx * 0.65f)
                                 val target = (dragStartVolume + (ratio * maxVol).toInt()).coerceIn(0, maxVol)
                                 am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
-                                gestureHud = Icons.AutoMirrored.Filled.VolumeUp to "Volume ${target * 100 / maxVol}%"
+                                gestureHud = Symbols.VolumeUp to "Volume ${target * 100 / maxVol}%"
                             }
                             "BRIGHTNESS" -> {
                                 val win = activity?.window ?: return@detectDragGestures
                                 val ratio = -dragAccumulatedY / (surfaceHeightPx * 0.65f)
                                 val target = (dragStartBrightness + ratio).coerceIn(0.02f, 1.0f)
                                 win.attributes = win.attributes.also { it.screenBrightness = target }
-                                gestureHud = Icons.Default.BrightnessMedium to "Brightness ${(target * 100).toInt()}%"
+                                gestureHud = Symbols.BrightnessMedium to "Brightness ${(target * 100).toInt()}%"
                             }
                         }
                     }
@@ -614,7 +610,7 @@ fun VideoPlayerModal(
                         onClick = {
                             playerController.seekTo(0L)
                             showResumedPill = false
-                            gestureHud = Icons.Rounded.Replay to "From the beginning"
+                            gestureHud = Symbols.Replay to "From the beginning"
                         },
                         shapes = ButtonDefaults.shapes(),
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.inversePrimary)
@@ -622,7 +618,7 @@ fun VideoPlayerModal(
                 },
                 dismissAction = {
                     IconButton(onClick = { showResumedPill = false }, shapes = IconButtonDefaults.shapes()) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Dismiss")
+                        Icon(Symbols.Close, contentDescription = "Dismiss")
                     }
                 },
                 shape = MaterialTheme.shapes.extraLarge,
@@ -656,7 +652,7 @@ fun VideoPlayerModal(
                             .windowInsetsPadding(WindowInsets.safeDrawing)
                             .padding(bottom = 32.dp)
                     ) {
-                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Icon(Symbols.Lock, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                         Text("Tap to unlock")
                     }
@@ -679,12 +675,12 @@ fun VideoPlayerModal(
                             val landscapeNow = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
                             rotationOverride = if (landscapeNow) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                             else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                            gestureHud = Icons.Rounded.ScreenRotation to (if (landscapeNow) "Portrait" else "Landscape")
+                            gestureHud = Symbols.ScreenRotation to (if (landscapeNow) "Portrait" else "Landscape")
                             poke()
                         },
                         onRotateLongPress = {
                             rotationOverride = null
-                            gestureHud = Icons.Rounded.ScreenRotation to "Auto-rotate"
+                            gestureHud = Symbols.ScreenRotation to "Auto-rotate"
                             poke()
                         },
                         onMore = { showMoreSheet = true; poke() },
@@ -731,7 +727,7 @@ fun VideoPlayerModal(
     if (showAudioSheet) {
         TrackSheet(
             title = "Audio",
-            icon = Icons.Default.Audiotrack,
+            icon = Symbols.Audiotrack,
             tracks = playerTracks.audioTracks,
             offOption = null,
             onSelect = { playerController.selectAudioTrack(it); showAudioSheet = false },
@@ -778,19 +774,19 @@ fun VideoPlayerModal(
                 sleepEndOfVideo = false
                 sleepRemainingMs = minutes * 60_000L
                 sleepDeadline = SystemClock.elapsedRealtime() + minutes * 60_000L
-                gestureHud = Icons.Rounded.Bedtime to "Sleep in $minutes min"
+                gestureHud = Symbols.Bedtime to "Sleep in $minutes min"
                 showSleepSheet = false
             },
             onEndOfVideo = {
                 sleepDeadline = null
                 sleepEndOfVideo = true
-                gestureHud = Icons.Rounded.Bedtime to "Sleep at the end of this video"
+                gestureHud = Symbols.Bedtime to "Sleep at the end of this video"
                 showSleepSheet = false
             },
             onTurnOff = {
                 sleepDeadline = null
                 sleepEndOfVideo = false
-                gestureHud = Icons.Rounded.Bedtime to "Sleep timer off"
+                gestureHud = Symbols.Bedtime to "Sleep timer off"
                 showSleepSheet = false
             },
             onDismiss = { showSleepSheet = false }
@@ -888,7 +884,7 @@ private fun PlayerTopBar(
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         IconButton(onClick = onBack, shapes = IconButtonDefaults.shapes(), colors = white, modifier = Modifier.testTag("player_close_btn")) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+            Icon(Symbols.ArrowBack, contentDescription = "Back")
         }
         Column(Modifier.weight(1f)) {
             Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -896,7 +892,7 @@ private fun PlayerTopBar(
                 AssistChip(
                     onClick = onSleep,
                     label = { Text(sleepLabel, style = MaterialTheme.typography.labelMedium) },
-                    leadingIcon = { Icon(Icons.Rounded.Bedtime, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
+                    leadingIcon = { Icon(Symbols.Bedtime, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = Color.White.copy(alpha = 0.16f),
                         labelColor = Color.White,
@@ -909,13 +905,13 @@ private fun PlayerTopBar(
         }
         // Order: subtitles, speed, rotate, more.
         PlayerIconButton(onClick = onSubtitles, contentDescription = "Subtitles", active = subtitlesOn, modifier = Modifier.testTag("player_subtitles_btn")) {
-            Icon(if (subtitlesOn) Icons.Rounded.ClosedCaption else Icons.Rounded.ClosedCaptionDisabled, contentDescription = null)
+            Icon(if (subtitlesOn) Symbols.ClosedCaption else Symbols.ClosedCaptionDisabled, contentDescription = null)
         }
         PlayerIconButton(onClick = onSpeed, contentDescription = "Playback speed", active = speed != 1.0f, modifier = Modifier.testTag("player_speed_btn")) {
             if (speed != 1.0f) {
                 Text(speedLabel(speed), style = MaterialTheme.typography.labelLarge)
             } else {
-                Icon(Icons.Rounded.Speed, contentDescription = null)
+                Icon(Symbols.Speed, contentDescription = null)
             }
         }
         PlayerIconButton(
@@ -925,10 +921,10 @@ private fun PlayerTopBar(
             active = rotationLocked,
             modifier = Modifier.testTag("player_rotate_btn")
         ) {
-            Icon(Icons.Rounded.ScreenRotation, contentDescription = null)
+            Icon(Symbols.ScreenRotation, contentDescription = null)
         }
         PlayerIconButton(onClick = onMore, contentDescription = "More", modifier = Modifier.testTag("player_more_btn")) {
-            Icon(Icons.Rounded.MoreVert, contentDescription = null)
+            Icon(Symbols.MoreVert, contentDescription = null)
         }
     }
 }
@@ -979,7 +975,7 @@ private fun PlayerBottomBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             PlayerIconButton(onClick = onLock, contentDescription = "Lock controls") {
-                Icon(Icons.Rounded.LockOpen, contentDescription = null)
+                Icon(Symbols.LockOpen, contentDescription = null)
             }
             // Official Expressive button group: the pressed button springs wider and squeezes
             // its neighbours; the shapes morph on press.
@@ -1003,7 +999,7 @@ private fun PlayerBottomBar(
                                 .weight(1f)
                                 .animateWidth(prevInteraction)
                                 .height(56.dp)
-                        ) { Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous video", modifier = Modifier.size(28.dp)) }
+                        ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous video", modifier = Modifier.size(28.dp)) }
                     },
                     menuContent = { menuState ->
                         DropdownMenuItem(text = { Text("Previous") }, onClick = { onPrevious(); menuState.dismiss() })
@@ -1023,7 +1019,7 @@ private fun PlayerBottomBar(
                                 .testTag("player_play_pause_btn")
                         ) {
                             Icon(
-                                if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
                                 contentDescription = if (isPlaying) "Pause" else "Play",
                                 modifier = Modifier.size(32.dp)
                             )
@@ -1044,7 +1040,7 @@ private fun PlayerBottomBar(
                                 .weight(1f)
                                 .animateWidth(nextInteraction)
                                 .height(56.dp)
-                        ) { Icon(Icons.Rounded.SkipNext, contentDescription = "Next video", modifier = Modifier.size(28.dp)) }
+                        ) { Icon(Symbols.SkipNext, contentDescription = "Next video", modifier = Modifier.size(28.dp)) }
                     },
                     menuContent = { menuState ->
                         DropdownMenuItem(text = { Text("Next") }, onClick = { onNext(); menuState.dismiss() })
@@ -1053,7 +1049,7 @@ private fun PlayerBottomBar(
             }
             PlayerIconButton(onClick = onAspect, contentDescription = "Aspect: ${aspectMode.label}", modifier = Modifier.testTag("player_aspect_btn")) {
                 Icon(
-                    if (aspectMode == VideoAspectMode.FIT) Icons.Rounded.AspectRatio else Icons.Rounded.ZoomOutMap,
+                    if (aspectMode == VideoAspectMode.FIT) Symbols.AspectRatio else Symbols.ZoomOutMap,
                     contentDescription = null
                 )
             }
@@ -1163,7 +1159,7 @@ private fun SubtitleSheet(
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Icon(Symbols.FileOpen, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                 Text("Load subtitle file")
             }
@@ -1175,7 +1171,7 @@ private fun SubtitleSheet(
                 modifier = Modifier.padding(start = 8.dp, top = 20.dp, bottom = 8.dp)
             )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)) {
-                Icon(Icons.Default.TextFields, contentDescription = null, tint = scheme.onSurfaceVariant)
+                Icon(Symbols.TextFields, contentDescription = null, tint = scheme.onSurfaceVariant)
                 Spacer(Modifier.width(12.dp))
                 Text("Text size", style = MaterialTheme.typography.bodyLarge)
             }
@@ -1314,7 +1310,7 @@ private fun AudioOnlyCover(title: String, onShowVideo: () -> Unit, modifier: Mod
                 modifier = Modifier.size(112.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Headphones, contentDescription = null, modifier = Modifier.size(52.dp))
+                    Icon(Symbols.Headphones, contentDescription = null, modifier = Modifier.size(52.dp))
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -1335,7 +1331,7 @@ private fun AudioOnlyCover(title: String, onShowVideo: () -> Unit, modifier: Mod
                 modifier = Modifier.height(ButtonDefaults.MediumContainerHeight).testTag("player_show_video_btn"),
                 contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight)
             ) {
-                Icon(Icons.Rounded.Videocam, contentDescription = null, modifier = Modifier.size(ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight)))
+                Icon(Symbols.Videocam, contentDescription = null, modifier = Modifier.size(ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight)))
                 Spacer(Modifier.size(ButtonDefaults.iconSpacingFor(ButtonDefaults.MediumContainerHeight)))
                 Text("Show video", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
             }
@@ -1380,7 +1376,7 @@ private fun PlayerMoreSheet(
                 checked = audioOnly,
                 onCheckedChange = onAudioOnly,
                 shapes = ListItemDefaults.segmentedShapes(index = i++, count = count),
-                leadingContent = { Icon(Icons.Rounded.Headphones, contentDescription = null) },
+                leadingContent = { Icon(Symbols.Headphones, contentDescription = null) },
                 supportingContent = { Text("Hide the picture; keeps playing when you leave the app") },
                 trailingContent = { Switch(checked = audioOnly, onCheckedChange = null) },
                 colors = colors,
@@ -1389,7 +1385,7 @@ private fun PlayerMoreSheet(
             SegmentedListItem(
                 onClick = onSleep,
                 shapes = ListItemDefaults.segmentedShapes(index = i++, count = count),
-                leadingContent = { Icon(Icons.Rounded.Bedtime, contentDescription = null) },
+                leadingContent = { Icon(Symbols.Bedtime, contentDescription = null) },
                 supportingContent = { Text(sleepStatus) },
                 colors = colors
             ) { Text("Sleep timer") }
@@ -1397,7 +1393,7 @@ private fun PlayerMoreSheet(
                 SegmentedListItem(
                     onClick = onPip,
                     shapes = ListItemDefaults.segmentedShapes(index = i++, count = count),
-                    leadingContent = { Icon(Icons.Rounded.PictureInPictureAlt, contentDescription = null) },
+                    leadingContent = { Icon(Symbols.PictureInPictureAlt, contentDescription = null) },
                     colors = colors
                 ) { Text("Picture-in-picture") }
             }
@@ -1405,7 +1401,7 @@ private fun PlayerMoreSheet(
                 SegmentedListItem(
                     onClick = onAudioTrack,
                     shapes = ListItemDefaults.segmentedShapes(index = i++, count = count),
-                    leadingContent = { Icon(Icons.Rounded.Audiotrack, contentDescription = null) },
+                    leadingContent = { Icon(Symbols.Audiotrack, contentDescription = null) },
                     supportingContent = { Text(audioTrackLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     colors = colors
                 ) { Text("Audio track") }
@@ -1413,7 +1409,7 @@ private fun PlayerMoreSheet(
             SegmentedListItem(
                 onClick = onDetails,
                 shapes = ListItemDefaults.segmentedShapes(index = i, count = count),
-                leadingContent = { Icon(Icons.Rounded.Info, contentDescription = null) },
+                leadingContent = { Icon(Symbols.Info, contentDescription = null) },
                 colors = colors
             ) { Text("Details") }
         }
@@ -1463,7 +1459,7 @@ private fun SleepTimerSheet(
                     selected = endOfVideo,
                     onClick = onEndOfVideo,
                     label = { Text("End of video") },
-                    leadingIcon = { Icon(Icons.Rounded.Movie, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) },
+                    leadingIcon = { Icon(Symbols.Movie, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = scheme.primary,
                         selectedLabelColor = scheme.onPrimary,

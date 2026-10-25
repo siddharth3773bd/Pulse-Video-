@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,16 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SdCard
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -115,7 +106,7 @@ fun MediaPermissionPromptCard(
     modifier: Modifier = Modifier
 ) {
     LibraryMessage(
-        icon = Icons.Default.LockOpen,
+        icon = Symbols.LockOpen,
         title = title,
         body = explanation,
         modifier = modifier.testTag("permission_prompt_card")
@@ -133,7 +124,7 @@ fun MediaPermissionPromptCard(
                     shapes = ButtonDefaults.shapes(),
                     modifier = Modifier.testTag("open_settings_btn")
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Icon(Symbols.Settings, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                     Text("Open settings")
                 }
@@ -191,7 +182,7 @@ fun FoldersLibraryView(
 
     if (folders.isEmpty()) {
         LibraryMessage(
-            icon = Icons.Default.Folder,
+            icon = Symbols.Folder,
             title = "No video folders",
             body = "Folders with videos in them will show up here.",
             modifier = modifier.testTag("folders_empty_state")
@@ -217,7 +208,7 @@ fun FoldersLibraryView(
                             .background(scheme.secondaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Folder, contentDescription = null, tint = scheme.onSecondaryContainer)
+                        Icon(Symbols.Folder, contentDescription = null, tint = scheme.onSecondaryContainer)
                     }
                 },
                 supportingContent = {
@@ -335,7 +326,7 @@ private fun flatten(roots: List<Pair<String, TreeNode>>, expanded: Set<String>):
         if (showVolumes) {
             rows += TreeRow.Volume(
                 label = if (path == INTERNAL_ROOT) "Internal storage" else if (path.isBlank()) "Other" else "SD card",
-                icon = if (path == INTERNAL_ROOT) Icons.Default.PhoneAndroid else Icons.Default.SdCard
+                icon = if (path == INTERNAL_ROOT) Symbols.PhoneAndroid else Symbols.SdCard
             )
         }
         root.children.forEach { add(it, 0) }
@@ -360,7 +351,7 @@ fun TreeHierarchyView(
 ) {
     if (videos.isEmpty()) {
         LibraryMessage(
-            icon = Icons.Default.AccountTree,
+            icon = Symbols.AccountTree,
             title = "No videos",
             body = "Folders with videos in them will show up here as a tree.",
             modifier = modifier
@@ -417,14 +408,14 @@ private fun TreeFolderRow(row: TreeRow.Folder, onToggle: () -> Unit) {
             .testTag("tree_folder_${row.node.path}")
     ) {
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            Symbols.KeyboardArrowRight,
             contentDescription = if (row.expanded) "Collapse" else "Expand",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp).rotate(rotation)
         )
         Spacer(Modifier.width(6.dp))
         Icon(
-            if (row.expanded) Icons.Default.FolderOpen else Icons.Default.Folder,
+            if (row.expanded) Symbols.FolderOpen else Symbols.Folder,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(22.dp)
@@ -481,7 +472,7 @@ private fun TreeVideoRow(
         }
         Box {
             IconButton(onClick = onMenu, shapes = IconButtonDefaults.shapes()) {
-                Icon(Icons.Default.MoreVert, contentDescription = "More options for ${video.title}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Symbols.MoreVert, contentDescription = "More options for ${video.title}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             menu()
         }

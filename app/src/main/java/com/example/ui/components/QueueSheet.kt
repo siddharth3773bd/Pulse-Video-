@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,10 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -199,7 +196,7 @@ fun QueueSheet(
                                             modifier = Modifier.size(48.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
-                                                Icon(Icons.Default.BarChart, contentDescription = "Playing")
+                                                Icon(Symbols.BarChart, contentDescription = "Playing")
                                             }
                                         }
                                     }
@@ -236,7 +233,7 @@ fun QueueSheet(
                                     shapes = IconButtonDefaults.shapes(),
                                     modifier = Modifier.testTag("queue_remove_$index")
                                 ) {
-                                    Icon(Icons.Default.Close, contentDescription = "Remove from queue")
+                                    Icon(Symbols.Close, contentDescription = "Remove from queue")
                                 }
                                 IconButton(
                                     onClick = {},
@@ -254,7 +251,7 @@ fun QueueSheet(
                                         )
                                         .testTag("queue_handle_$index")
                                 ) {
-                                    Icon(Icons.Default.DragHandle, contentDescription = "Reorder")
+                                    Icon(Symbols.DragHandle, contentDescription = "Reorder")
                                 }
                             }
                         }

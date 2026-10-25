@@ -6,6 +6,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -61,23 +62,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Deselect
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -386,7 +370,7 @@ fun AudioLibraryScreen(
                     subtitle = "${songCountLabel(list.size)} · ${totalDurationLabel(list)}",
                     artUri = list.firstOrNull()?.contentUri,
                     artShape = RoundedCornerShape(28.dp),
-                    placeholderIcon = Icons.AutoMirrored.Filled.PlaylistPlay,
+                    placeholderIcon = Symbols.PlaylistPlay,
                     tracks = list,
                     playlist = playlist
                 )
@@ -553,7 +537,7 @@ fun AudioLibraryScreen(
                     shapes = IconButtonDefaults.shapes(),
                     modifier = Modifier.testTag("playlist_detail_more_btn")
                 ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Playlist options")
+                    Icon(Symbols.MoreVert, contentDescription = "Playlist options")
                 }
                 PlaylistActionsMenu(
                     expanded = openPlaylistMenu == "detail|${detailPlaylist.id}",
@@ -608,7 +592,7 @@ fun AudioLibraryScreen(
                                     shapes = IconButtonDefaults.shapes(),
                                     modifier = Modifier.testTag("library_sort_button")
                                 ) {
-                                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+                                    Icon(Symbols.Sort, contentDescription = "Sort")
                                 }
                             }
                         },
@@ -623,7 +607,7 @@ fun AudioLibraryScreen(
                                         modifier = Modifier.testTag("header_search_btn")
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Search,
+                                            imageVector = Symbols.Search,
                                             contentDescription = "Search music",
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -685,7 +669,7 @@ fun AudioLibraryScreen(
                             tab == LibraryTab.SONGS -> {
                                 if (sortedSongs.isEmpty()) {
                                     LibraryEmptyState(
-                                        icon = Icons.Default.MusicNote,
+                                        icon = Symbols.MusicNote,
                                         title = "No audio files found",
                                         subtitle = "Music files stored on your device will appear here."
                                     )
@@ -725,7 +709,7 @@ fun AudioLibraryScreen(
                                                 modifier = Modifier.testTag("library_new_playlist_button")
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Add,
+                                                    imageVector = Symbols.Add,
                                                     contentDescription = null,
                                                     modifier = Modifier.size(ButtonDefaults.IconSize)
                                                 )
@@ -799,7 +783,7 @@ fun AudioLibraryScreen(
                         onClick = { scope.launch { searchBarState.animateToCollapsed() } },
                         shapes = IconButtonDefaults.shapes()
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Symbols.ArrowBack, contentDescription = "Back")
                     }
                 },
                 trailingIcon = {
@@ -808,7 +792,7 @@ fun AudioLibraryScreen(
                             onClick = { textFieldState.clearText() },
                             shapes = IconButtonDefaults.shapes()
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear search")
+                            Icon(Symbols.Close, contentDescription = "Clear search")
                         }
                     }
                 },
@@ -822,12 +806,12 @@ fun AudioLibraryScreen(
         }
         when {
             query.isBlank() -> LibraryEmptyState(
-                icon = Icons.Default.Search,
+                icon = Symbols.Search,
                 title = "Search your music",
                 subtitle = "Find songs by title, artist or album."
             )
             results.isEmpty() -> LibraryEmptyState(
-                icon = Icons.Default.Search,
+                icon = Symbols.Search,
                 title = "No results",
                 subtitle = "Nothing matches “${query.trim()}”."
             )
@@ -1016,14 +1000,14 @@ private fun MusicHeader(
                     shapes = IconButtonDefaults.shapes(),
                     modifier = Modifier.testTag("selection_close_btn")
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel selection")
+                    Icon(Symbols.Close, contentDescription = "Cancel selection")
                 }
                 detailTitle != null -> IconButton(
                     onClick = onBack,
                     shapes = IconButtonDefaults.shapes(),
                     modifier = Modifier.testTag("music_detail_back_btn")
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Symbols.ArrowBack, contentDescription = "Back")
                 }
             }
         },
@@ -1035,7 +1019,7 @@ private fun MusicHeader(
                     modifier = Modifier.testTag("selection_all_btn")
                 ) {
                     Icon(
-                        imageVector = if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
+                        imageVector = if (allSelected) Symbols.Deselect else Symbols.SelectAll,
                         contentDescription = if (allSelected) "Deselect all" else "Select all"
                     )
                 }
@@ -1082,7 +1066,7 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
                             .testTag("library_play_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
+                            imageVector = Symbols.PlayArrow,
                             contentDescription = null,
                             modifier = Modifier.size(ButtonDefaults.IconSize)
                         )
@@ -1106,7 +1090,7 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
                 buttonGroupContent = {
                     val shuffleContent: @Composable RowScope.() -> Unit = {
                         Icon(
-                            imageVector = Icons.Default.Shuffle,
+                            imageVector = Symbols.Shuffle,
                             contentDescription = null,
                             modifier = Modifier.size(ButtonDefaults.IconSize)
                         )
@@ -1368,7 +1352,7 @@ private fun SongRow(
                         modifier = Modifier.size(52.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Check, contentDescription = null)
+                            Icon(Symbols.Check, contentDescription = null)
                         }
                     }
                 }
@@ -1386,7 +1370,7 @@ private fun SongRow(
             if (!selectionMode) {
                 Box {
                     IconButton(onClick = onMore, shapes = IconButtonDefaults.shapes()) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                        Icon(Symbols.MoreVert, contentDescription = "More options")
                     }
                     menu()
                 }
@@ -1531,7 +1515,7 @@ private fun ArtistsList(
                 supportingContent = { Text(songCountLabel(artist.tracks.size)) },
                 trailingContent = {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        imageVector = Symbols.KeyboardArrowRight,
                         contentDescription = null
                     )
                 },
@@ -1603,7 +1587,7 @@ private fun PlaylistsList(
                             modifier = Modifier.size(52.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null)
+                                Icon(Symbols.PlaylistPlay, contentDescription = null)
                             }
                         }
                     }
@@ -1612,7 +1596,7 @@ private fun PlaylistsList(
                 trailingContent = {
                     Box {
                         IconButton(onClick = { onMore(playlist) }, shapes = IconButtonDefaults.shapes()) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Playlist options")
+                            Icon(Symbols.MoreVert, contentDescription = "Playlist options")
                         }
                         menu(playlist)
                     }

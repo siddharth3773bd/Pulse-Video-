@@ -74,8 +74,6 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 google-material = { group = "com.google.android.material", name = "material", version.ref = "googleMaterial" }
 androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = "paletteKtx" }
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
-androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
-androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 converter-moshi = { group = "com.squareup.retrofit2", name = "converter-moshi", version.ref = "converterMoshi" }

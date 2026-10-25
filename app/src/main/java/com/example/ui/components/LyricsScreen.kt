@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -34,25 +35,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BlurOn
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.FormatAlignCenter
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
@@ -175,7 +157,7 @@ fun LyricsScreen(
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                     modifier = Modifier.testTag("lyrics_close")
                 ) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close lyrics")
+                    Icon(Symbols.KeyboardArrowDown, contentDescription = "Close lyrics")
                 }
                 Column(
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
@@ -202,7 +184,7 @@ fun LyricsScreen(
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                     modifier = Modifier.testTag("lyrics_settings_btn")
                 ) {
-                    Icon(Icons.Default.Tune, contentDescription = "Lyrics settings")
+                    Icon(Symbols.Tune, contentDescription = "Lyrics settings")
                 }
             }
 
@@ -234,14 +216,14 @@ fun LyricsScreen(
                         onLoadFile = loadFile
                     )
                     LyricsState.NotFound -> MessagePanel(
-                        icon = Icons.Default.Search,
+                        icon = Symbols.Search,
                         title = "No lyrics found",
                         body = "LRCLIB doesn't have this song under its current name. Try Search again to fix the title or artist, or load your own file.",
                         primary = "Search again" to { showSearch = true },
                         secondary = "Load file" to loadFile
                     )
                     LyricsState.NoInternet -> MessagePanel(
-                        icon = Icons.Default.WifiOff,
+                        icon = Symbols.WifiOff,
                         title = "No internet connection",
                         body = "Connect and try again, or load your own lyrics file.",
                         primary = "Retry" to { handle.reload(true) },
@@ -270,7 +252,7 @@ fun LyricsScreen(
                     shapes = IconButtonDefaults.shapes(),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                     modifier = Modifier.size(56.dp)
-                ) { Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(30.dp)) }
+                ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(30.dp)) }
                 Spacer(Modifier.width(20.dp))
                 FilledIconButton(
                     onClick = onTogglePlayPause,
@@ -282,7 +264,7 @@ fun LyricsScreen(
                     modifier = Modifier.size(64.dp).testTag("lyrics_play_pause")
                 ) {
                     Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         modifier = Modifier.size(32.dp)
                     )
@@ -293,7 +275,7 @@ fun LyricsScreen(
                     shapes = IconButtonDefaults.shapes(),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                     modifier = Modifier.size(56.dp)
-                ) { Icon(Icons.Default.SkipNext, contentDescription = "Next", modifier = Modifier.size(30.dp)) }
+                ) { Icon(Symbols.SkipNext, contentDescription = "Next", modifier = Modifier.size(30.dp)) }
             }
         }
     }
@@ -388,7 +370,7 @@ private fun ChoicePanel(
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
                     modifier = Modifier.fillMaxWidth().testTag("lyrics_search_online")
                 ) {
-                    Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Icon(Symbols.Cloud, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                     Text("Search online")
                 }
@@ -402,7 +384,7 @@ private fun ChoicePanel(
                     ),
                     modifier = Modifier.fillMaxWidth().testTag("lyrics_load_file")
                 ) {
-                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Icon(Symbols.FileOpen, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                     Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                     Text("Load lyrics file")
                 }
@@ -522,7 +504,7 @@ private fun LyricsSettingsSheet(
                             checked = useOnline,
                             onCheckedChange = onUseOnline,
                             shapes = ListItemDefaults.segmentedShapes(index = i, count = n),
-                            leadingContent = { Icon(Icons.Default.Cloud, contentDescription = null) },
+                            leadingContent = { Icon(Symbols.Cloud, contentDescription = null) },
                             supportingContent = { Text("Skip the lyrics inside the song file") },
                             trailingContent = { Switch(checked = useOnline, onCheckedChange = null) },
                             colors = sheetRowColors()
@@ -530,14 +512,14 @@ private fun LyricsSettingsSheet(
                     }
                 }
                 add { i, n ->
-                    ActionRow(i, n, Icons.Default.Search, "Search again", "Fix the title or artist and pick a match", onSearchAgain)
+                    ActionRow(i, n, Symbols.Search, "Search again", "Fix the title or artist and pick a match", onSearchAgain)
                 }
                 add { i, n ->
-                    ActionRow(i, n, Icons.Default.FileOpen, "Load lyrics file", "Your own .lrc or .txt; it takes priority", onLoadFile)
+                    ActionRow(i, n, Symbols.FileOpen, "Load lyrics file", "Your own .lrc or .txt; it takes priority", onLoadFile)
                 }
                 if (loaded?.hasUserFile == true) {
                     add { i, n ->
-                        ActionRow(i, n, Icons.Default.DeleteOutline, "Remove my file", "Go back to the other lyrics", onRemoveFile)
+                        ActionRow(i, n, Symbols.DeleteOutline, "Remove my file", "Go back to the other lyrics", onRemoveFile)
                     }
                 }
                 if (loaded?.lyrics?.synced == true) {
@@ -554,20 +536,20 @@ private fun LyricsSettingsSheet(
                     checked = settings.autoSearch,
                     onCheckedChange = { onSettingsChange(settings.copy(autoSearch = it)) },
                     shapes = ListItemDefaults.segmentedShapes(index = 0, count = 4),
-                    leadingContent = { Icon(Icons.Default.Sync, contentDescription = null) },
+                    leadingContent = { Icon(Symbols.Sync, contentDescription = null) },
                     supportingContent = { Text("Find lyrics automatically when a song has none") },
                     trailingContent = { Switch(checked = settings.autoSearch, onCheckedChange = null) },
                     colors = sheetRowColors()
                 ) { Text("Always search online") }
                 ChoiceRow(
-                    index = 1, count = 4, icon = Icons.Default.TextFields, title = "Text size",
+                    index = 1, count = 4, icon = Symbols.TextFields, title = "Text size",
                     options = LyricsTextSize.entries.map { it.label },
                     selected = settings.textSize.ordinal,
                     onSelect = { onSettingsChange(settings.copy(textSize = LyricsTextSize.entries[it])) }
                 )
                 ChoiceRow(
                     index = 2, count = 4,
-                    icon = if (settings.alignCenter) Icons.Default.FormatAlignCenter else Icons.AutoMirrored.Filled.FormatAlignLeft,
+                    icon = if (settings.alignCenter) Symbols.FormatAlignCenter else Symbols.FormatAlignLeft,
                     title = "Alignment",
                     options = listOf("Left", "Centre"),
                     selected = if (settings.alignCenter) 1 else 0,
@@ -577,7 +559,7 @@ private fun LyricsSettingsSheet(
                     checked = settings.blur,
                     onCheckedChange = { onSettingsChange(settings.copy(blur = it)) },
                     shapes = ListItemDefaults.segmentedShapes(index = 3, count = 4),
-                    leadingContent = { Icon(Icons.Default.BlurOn, contentDescription = null) },
+                    leadingContent = { Icon(Symbols.BlurOn, contentDescription = null) },
                     supportingContent = { Text("Soften lines far from the one being sung") },
                     trailingContent = { Switch(checked = settings.blur, onCheckedChange = null) },
                     colors = sheetRowColors()
@@ -625,15 +607,15 @@ private fun SyncRow(index: Int, count: Int, offsetMs: Long, onOffset: (Long) -> 
     SegmentedListItem(
         onClick = { if (offsetMs != 0L) onOffset(0L) },
         shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = { Icon(Icons.Default.Sync, contentDescription = null) },
+        leadingContent = { Icon(Symbols.Sync, contentDescription = null) },
         supportingContent = { Text(if (offsetMs == 0L) label else "$label · tap to reset") },
         trailingContent = {
             Row {
                 IconButton(onClick = { onOffset(offsetMs - 500L) }, shapes = IconButtonDefaults.shapes()) {
-                    Icon(Icons.Default.Remove, contentDescription = "Show lyrics earlier")
+                    Icon(Symbols.Remove, contentDescription = "Show lyrics earlier")
                 }
                 IconButton(onClick = { onOffset(offsetMs + 500L) }, shapes = IconButtonDefaults.shapes()) {
-                    Icon(Icons.Default.Add, contentDescription = "Show lyrics later")
+                    Icon(Symbols.Add, contentDescription = "Show lyrics later")
                 }
             }
         },
@@ -769,7 +751,7 @@ private fun LyricsSearchSheet(
                         shapes = ButtonDefaults.shapes(),
                         modifier = Modifier.fillMaxWidth().testTag("lyrics_search_go")
                     ) {
-                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Icon(Symbols.Search, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                         Text("Search")
                     }

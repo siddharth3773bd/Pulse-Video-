@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -19,9 +20,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -85,7 +83,7 @@ fun ArtworkPager(
         haptic.performHapticFeedback(
             if (wasPlaying) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn
         )
-        flashIcon = if (wasPlaying) Icons.Default.Pause else Icons.Default.PlayArrow
+        flashIcon = if (wasPlaying) Symbols.Pause else Symbols.PlayArrow
         scope.launch {
             flashAlpha.snapTo(1f)
             flashScale.snapTo(0.7f)
@@ -168,7 +166,7 @@ fun ArtworkPager(
                             contentColor = Color.White
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Pause,
+                                imageVector = Symbols.Pause,
                                 contentDescription = "Paused",
                                 modifier = Modifier
                                     .padding(8.dp)

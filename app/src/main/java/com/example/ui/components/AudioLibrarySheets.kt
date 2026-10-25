@@ -2,8 +2,8 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import sh.calvin.reorderable.ReorderableColumn
-import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.animation.core.animateDpAsState
@@ -30,12 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -69,11 +63,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AudioTrackItem
 import com.example.model.BlacklistedSong
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -510,7 +499,7 @@ private fun <T> ReorderableToggleList(
                             )
                         ) {
                             Icon(
-                                imageVector = Icons.Default.DragHandle,
+                                imageVector = Symbols.DragHandle,
                                 contentDescription = "Drag to reorder ${label(item)}",
                                 tint = palette.onSurfaceVariant
                             )
@@ -557,7 +546,7 @@ fun BlacklistedSongsSheet(
                 key(song.id) {
                     SegmentedListItem(
                         shapes = ListItemDefaults.segmentedShapes(index = index, count = songs.size),
-                        leadingContent = { Icon(Icons.Default.Block, contentDescription = null) },
+                        leadingContent = { Icon(Symbols.Block, contentDescription = null) },
                         supportingContent = {
                             Text(song.artist.ifBlank { "Unknown artist" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
@@ -617,7 +606,7 @@ fun BlacklistedFoldersSheet(
                         shapes = ListItemDefaults.segmentedShapes(index = index, count = all.size),
                         leadingContent = {
                             Icon(
-                                imageVector = if (hidden) Icons.Default.FolderOff else Icons.Default.Folder,
+                                imageVector = if (hidden) Symbols.FolderOff else Symbols.Folder,
                                 contentDescription = null
                             )
                         },

@@ -1,5 +1,6 @@
 package com.example.ui.popup
 
+import com.example.ui.icons.Symbols
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -37,15 +38,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ExpandLess
-import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -315,7 +307,7 @@ private fun AudioPopupContent(
                                     )
                                 } else {
                                     Icon(
-                                        imageVector = Icons.Rounded.MusicNote,
+                                        imageVector = Symbols.MusicNote,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                         modifier = Modifier.size(32.dp)
@@ -342,7 +334,7 @@ private fun AudioPopupContent(
                             }
                             Spacer(Modifier.width(8.dp))
                             FilledTonalIconButton(onClick = onStopAndClose) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Close")
+                                Icon(Symbols.Close, contentDescription = "Close")
                             }
                         }
 
@@ -383,11 +375,11 @@ private fun AudioPopupContent(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             FilledTonalButton(onClick = { infoExpanded = !infoExpanded }) {
-                                Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Symbols.Info, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Info")
                                 Icon(
-                                    imageVector = if (infoExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                    imageVector = if (infoExpanded) Symbols.ExpandLess else Symbols.ExpandMore,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -403,14 +395,14 @@ private fun AudioPopupContent(
                                 modifier = Modifier.size(60.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                    imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
                                     contentDescription = if (isPlaying) "Pause" else "Play",
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
                             FilledTonalButton(onClick = onOpenApp) {
                                 Icon(
-                                    Icons.AutoMirrored.Rounded.OpenInNew,
+                                    Symbols.OpenInNew,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )

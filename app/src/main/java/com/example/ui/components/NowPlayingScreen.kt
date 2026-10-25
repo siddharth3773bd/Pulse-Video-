@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -42,20 +43,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Landscape
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.BottomSheetDefaults
@@ -132,11 +119,11 @@ val LyricsIcon: ImageVector by lazy {
 }
 
 fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) {
-    NowPlayingAction.SHUFFLE -> Icons.Default.Shuffle
-    NowPlayingAction.REPEAT -> Icons.Default.Repeat
-    NowPlayingAction.SLEEP -> Icons.Default.Bedtime
-    NowPlayingAction.QUEUE -> Icons.AutoMirrored.Filled.QueueMusic
-    NowPlayingAction.AMBIENT -> Icons.Default.Landscape
+    NowPlayingAction.SHUFFLE -> Symbols.Shuffle
+    NowPlayingAction.REPEAT -> Symbols.Repeat
+    NowPlayingAction.SLEEP -> Symbols.Bedtime
+    NowPlayingAction.QUEUE -> Symbols.QueueMusic
+    NowPlayingAction.AMBIENT -> Symbols.Landscape
 }
 
 /**
@@ -276,7 +263,7 @@ fun NowPlayingScreen(
                 ),
                 modifier = Modifier.size(48.dp)
             ) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close Now Playing")
+                Icon(Symbols.KeyboardArrowDown, contentDescription = "Close Now Playing")
             }
             Column(
                 modifier = Modifier
@@ -459,7 +446,7 @@ fun NowPlayingScreen(
                             .testTag("now_playing_previous")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SkipPrevious,
+                            imageVector = Symbols.SkipPrevious,
                             contentDescription = "Previous",
                             modifier = Modifier.size(30.dp)
                         )
@@ -468,7 +455,7 @@ fun NowPlayingScreen(
                 menuContent = { menuState ->
                     DropdownMenuItem(
                         text = { Text("Previous") },
-                        leadingIcon = { Icon(Icons.Default.SkipPrevious, contentDescription = null) },
+                        leadingIcon = { Icon(Symbols.SkipPrevious, contentDescription = null) },
                         onClick = {
                             onSkipPrevious()
                             menuState.dismiss()
@@ -494,7 +481,7 @@ fun NowPlayingScreen(
                             .testTag("now_playing_play_pause")
                     ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             modifier = Modifier.size(36.dp)
                         )
@@ -505,7 +492,7 @@ fun NowPlayingScreen(
                         text = { Text(if (isPlaying) "Pause" else "Play") },
                         leadingIcon = {
                             Icon(
-                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
                                 contentDescription = null
                             )
                         },
@@ -533,7 +520,7 @@ fun NowPlayingScreen(
                             .testTag("now_playing_next")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SkipNext,
+                            imageVector = Symbols.SkipNext,
                             contentDescription = "Next",
                             modifier = Modifier.size(30.dp)
                         )
@@ -542,7 +529,7 @@ fun NowPlayingScreen(
                 menuContent = { menuState ->
                     DropdownMenuItem(
                         text = { Text("Next") },
-                        leadingIcon = { Icon(Icons.Default.SkipNext, contentDescription = null) },
+                        leadingIcon = { Icon(Symbols.SkipNext, contentDescription = null) },
                         onClick = {
                             onSkipNext()
                             menuState.dismiss()
@@ -586,7 +573,7 @@ fun NowPlayingScreen(
                     }
                     val icon = when {
                         action == NowPlayingAction.REPEAT && repeatMode == Player.REPEAT_MODE_ONE ->
-                            Icons.Default.RepeatOne
+                            Symbols.RepeatOne
                         else -> nowPlayingActionIcon(action)
                     }
                     val onTrayAction: () -> Unit = {
@@ -750,7 +737,7 @@ private fun SleepTimerSheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.Bedtime,
+                    imageVector = Symbols.Bedtime,
                     contentDescription = null,
                     tint = palette.primary,
                     modifier = Modifier.size(26.dp)

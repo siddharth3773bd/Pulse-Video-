@@ -102,8 +102,6 @@ dependencies {
   // implementation(libs.androidx.camera.core)
   // implementation(libs.androidx.camera.lifecycle)
   // implementation(libs.androidx.camera.view)
-  implementation(libs.androidx.compose.material.icons.core)
-  implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
   // Album-art colours: Google's Material colour engine + AndroidX Palette
   implementation(libs.google.material)

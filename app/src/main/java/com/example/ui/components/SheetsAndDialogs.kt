@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -22,26 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.SortByAlpha
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
@@ -113,13 +94,13 @@ fun VideoActionsMenu(
         onDismiss = onDismiss,
         groups = listOf(
             listOf(
-                AudioMenuEntry("Add to playlist", Icons.AutoMirrored.Filled.PlaylistAdd, "menu_action_add_to_playlist", onClick = onAddToPlaylist),
-                AudioMenuEntry("Rename", Icons.Default.Edit, "menu_action_rename", onClick = onRename),
-                AudioMenuEntry("Share", Icons.Default.Share, "menu_action_share", onClick = onShare),
-                AudioMenuEntry("Details", Icons.Default.Info, "menu_action_details", onClick = onDetails)
+                AudioMenuEntry("Add to playlist", Symbols.PlaylistAdd, "menu_action_add_to_playlist", onClick = onAddToPlaylist),
+                AudioMenuEntry("Rename", Symbols.Edit, "menu_action_rename", onClick = onRename),
+                AudioMenuEntry("Share", Symbols.Share, "menu_action_share", onClick = onShare),
+                AudioMenuEntry("Details", Symbols.Info, "menu_action_details", onClick = onDetails)
             ),
             listOf(
-                AudioMenuEntry("Delete", Icons.Default.DeleteOutline, "menu_action_delete", destructive = true, onClick = onDelete)
+                AudioMenuEntry("Delete", Symbols.DeleteOutline, "menu_action_delete", destructive = true, onClick = onDelete)
             )
         )
     )
@@ -213,7 +194,7 @@ fun SortAndViewBottomSheet(
                     .padding(vertical = 4.dp)
                     .testTag("smart_groups_toggle_card")
             ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                Icon(Symbols.AutoAwesome, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(12.dp))
                 Text("Group series together", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Switch(checked = smartGroups, onCheckedChange = null)
@@ -368,7 +349,7 @@ fun RenameVideoDialog(
     LaunchedEffect(Unit) { focus.requestFocus() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+        icon = { Icon(Symbols.Edit, contentDescription = null) },
         title = { Text("Rename video") },
         text = {
             OutlinedTextField(
@@ -434,7 +415,7 @@ fun AddVideosToPlaylistSheet(
                         SegmentedListItem(
                             onClick = { onSelectPlaylistName(pl.name) },
                             shapes = ListItemDefaults.segmentedShapes(index = i, count = playlists.size),
-                            leadingContent = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
+                            leadingContent = { Icon(Symbols.PlaylistAdd, contentDescription = null) },
                             supportingContent = {
                                 Text(if (pl.mediaUris.size == 1) "1 video" else "${pl.mediaUris.size} videos")
                             },
@@ -461,7 +442,7 @@ fun AddVideosToPlaylistSheet(
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Icon(Symbols.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                 Text("Create and add")
             }

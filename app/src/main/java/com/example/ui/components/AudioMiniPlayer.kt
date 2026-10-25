@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -15,11 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -142,13 +138,13 @@ fun AudioMiniPlayer(
                                 .animateWidth(previousInteraction)
                                 .size(42.dp)
                         ) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous")
+                            Icon(Symbols.SkipPrevious, contentDescription = "Previous")
                         }
                     },
                     menuContent = { menuState ->
                         DropdownMenuItem(
                             text = { Text("Previous") },
-                            leadingIcon = { Icon(Icons.Default.SkipPrevious, contentDescription = null) },
+                            leadingIcon = { Icon(Symbols.SkipPrevious, contentDescription = null) },
                             onClick = {
                                 onSkipPrevious()
                                 menuState.dismiss()
@@ -171,7 +167,7 @@ fun AudioMiniPlayer(
                                 .size(52.dp)
                         ) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
                                 contentDescription = if (isPlaying) "Pause" else "Play"
                             )
                         }
@@ -181,7 +177,7 @@ fun AudioMiniPlayer(
                             text = { Text(if (isPlaying) "Pause" else "Play") },
                             leadingIcon = {
                                 Icon(
-                                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
                                     contentDescription = null
                                 )
                             },
@@ -206,13 +202,13 @@ fun AudioMiniPlayer(
                                 .animateWidth(nextInteraction)
                                 .size(42.dp)
                         ) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Next")
+                            Icon(Symbols.SkipNext, contentDescription = "Next")
                         }
                     },
                     menuContent = { menuState ->
                         DropdownMenuItem(
                             text = { Text("Next") },
-                            leadingIcon = { Icon(Icons.Default.SkipNext, contentDescription = null) },
+                            leadingIcon = { Icon(Symbols.SkipNext, contentDescription = null) },
                             onClick = {
                                 onSkipNext()
                                 menuState.dismiss()

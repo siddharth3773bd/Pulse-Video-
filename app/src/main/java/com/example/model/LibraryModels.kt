@@ -1,10 +1,6 @@
 package com.example.model
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlaylistPlay
+import com.example.ui.icons.Symbols
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /** Tabs inside the Audio "Library" screen. */
@@ -16,10 +12,10 @@ enum class LibraryTab(val id: String, val label: String) {
 
     val icon: ImageVector
         get() = when (this) {
-            SONGS -> Icons.Default.MusicNote
-            ALBUMS -> Icons.Default.Album
-            ARTISTS -> Icons.Default.Person
-            PLAYLISTS -> Icons.Default.PlaylistPlay
+            SONGS -> Symbols.MusicNote
+            ALBUMS -> Symbols.Album
+            ARTISTS -> Symbols.Person
+            PLAYLISTS -> Symbols.PlaylistPlay
         }
 }
 

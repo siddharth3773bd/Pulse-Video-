@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import com.example.ui.icons.Symbols
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -11,10 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExpandedFullScreenContainedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -57,15 +54,15 @@ fun VideoSearchInputField(state: SearchBarState, textFieldState: TextFieldState)
                 IconButton(
                     onClick = { scope.launch { state.animateToCollapsed() } },
                     shapes = IconButtonDefaults.shapes()
-                ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                ) { Icon(Symbols.ArrowBack, contentDescription = "Back") }
             } else {
-                Icon(Icons.Default.Search, contentDescription = null)
+                Icon(Symbols.Search, contentDescription = null)
             }
         },
         trailingIcon = {
             if (expanded && textFieldState.text.isNotEmpty()) {
                 IconButton(onClick = { textFieldState.clearText() }, shapes = IconButtonDefaults.shapes()) {
-                    Icon(Icons.Default.Close, contentDescription = "Clear search")
+                    Icon(Symbols.Close, contentDescription = "Clear search")
                 }
             }
         },
@@ -101,12 +98,12 @@ fun VideoSearchView(
         }
         when {
             q.isEmpty() -> LibraryMessage(
-                icon = Icons.Default.Search,
+                icon = Symbols.Search,
                 title = "Search your videos",
                 body = "Find videos by name, folder or series."
             )
             results.isEmpty() -> LibraryMessage(
-                icon = Icons.Default.Search,
+                icon = Symbols.Search,
                 title = "No results",
                 body = "Nothing matches “${query.trim()}”."
             )
