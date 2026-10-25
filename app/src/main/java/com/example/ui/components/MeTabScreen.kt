@@ -223,7 +223,8 @@ fun MeTabScreen(
                 onSetDynamicColor = onSetDynamicColor,
                 onSelectColorTheme = onSelectColorTheme,
                 onSelectCustomColor = onSelectCustomColor,
-                onToggleAmoledBlack = onToggleAmoledBlack
+                onToggleAmoledBlack = onToggleAmoledBlack,
+                onUpdatePlaybackSettings = onUpdatePlaybackSettings
             )
 
             MeSubPage.VIDEO_SETTINGS -> VideoPlaybackSettingsSubPage(
@@ -1375,7 +1376,8 @@ private fun AppearanceSubPage(
     onSetDynamicColor: (Boolean) -> Unit,
     onSelectColorTheme: (String) -> Unit,
     onSelectCustomColor: (Int) -> Unit,
-    onToggleAmoledBlack: () -> Unit
+    onToggleAmoledBlack: () -> Unit,
+    onUpdatePlaybackSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit
 ) {
     val palette = LocalM3Palette.current
     val motionScheme = MaterialTheme.motionScheme
@@ -1626,6 +1628,16 @@ private fun AppearanceSubPage(
                 effectiveAmoled = effectiveAmoled,
                 onToggle = onToggleAmoledBlack,
                 testTag = "me_amoled_black_row"
+            )
+
+            // Video player: play buttons and seek bar in the theme colour, or plain white.
+            ExpressiveSettingToggleCard(
+                title = "Colourful player controls",
+                subtitle = "Video player play buttons and seek bar use the app's colour instead of white",
+                checked = uiState.playbackSettings.colorfulControls,
+                effectiveAmoled = effectiveAmoled,
+                onToggle = { onUpdatePlaybackSettings { it.copy(colorfulControls = !it.colorfulControls) } },
+                testTag = "me_colorful_player_controls"
             )
 
         }

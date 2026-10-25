@@ -86,6 +86,7 @@ object AppPreferencesRepository {
     private val KEY_REMEMBER_POSITION = booleanPreferencesKey("pb_remember_position")
     private val KEY_PREF_AUDIO_LANG = stringPreferencesKey("pb_pref_audio_lang")
     private val KEY_PREF_SUB_LANG = stringPreferencesKey("pb_pref_sub_lang")
+    private val KEY_COLORFUL_CONTROLS = booleanPreferencesKey("pb_colorful_controls")
     private val KEY_PIP = booleanPreferencesKey("pb_picture_in_picture")
     private val KEY_SUB_SIZE = stringPreferencesKey("pb_subtitle_size")
     private val KEY_SUB_BG = booleanPreferencesKey("pb_subtitle_background")
@@ -155,6 +156,7 @@ object AppPreferencesRepository {
                 rememberPosition = prefs[KEY_REMEMBER_POSITION] ?: true,
                 preferredAudioLanguage = prefs[KEY_PREF_AUDIO_LANG] ?: "",
                 preferredSubtitleLanguage = prefs[KEY_PREF_SUB_LANG] ?: "",
+                colorfulControls = prefs[KEY_COLORFUL_CONTROLS] ?: false,
                 pictureInPicture = prefs[KEY_PIP] ?: true,
                 subtitleSize = com.example.model.SubtitleSize.entries.find { it.id == prefs[KEY_SUB_SIZE] }
                     ?: com.example.model.SubtitleSize.MEDIUM,
@@ -526,6 +528,7 @@ object AppPreferencesRepository {
             it[KEY_REMEMBER_POSITION] = settings.rememberPosition
             it[KEY_PREF_AUDIO_LANG] = settings.preferredAudioLanguage
             it[KEY_PREF_SUB_LANG] = settings.preferredSubtitleLanguage
+            it[KEY_COLORFUL_CONTROLS] = settings.colorfulControls
             it[KEY_PIP] = settings.pictureInPicture
             it[KEY_SUB_SIZE] = settings.subtitleSize.id
             it[KEY_SUB_BG] = settings.subtitleBackground

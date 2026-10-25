@@ -49,6 +49,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -68,10 +70,6 @@ import android.content.res.Configuration
 import android.os.SystemClock
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.runtime.SideEffect
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SliderState
-import androidx.compose.material3.VerticalSlider
 import kotlin.math.roundToInt
 import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.CheckableDropdownMenuItem
@@ -86,6 +84,7 @@ import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
@@ -99,7 +98,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -610,9 +608,8 @@ fun VideoPlayerModal(
             )
         }
 
-        // 3. Gesture feedback. Volume and brightness show an upright level bar (the official
-        //    Expressive vertical slider, like Android's own volume panel) on the side being swiped;
-        //    everything else is a small chip in the middle.
+        // 3. Gesture feedback. Volume and brightness show a thin upright level bar on the side
+        //    being swiped; everything else is a small chip in the middle.
         val hud = gestureHud
         val level = hudLevel
         if (hud != null && !inPip) {
@@ -791,6 +788,7 @@ fun VideoPlayerModal(
                         },
 
                         isPlayingForSeekBar = playerState.isPlaying && !playerState.isEnded,
+                        colorful = playbackSettings.colorfulControls,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
                 }
@@ -862,11 +860,13 @@ fun VideoPlayerModal(
     }
 }
 
-/** Upright level bar for volume / brightness: percentage, the slider, then the icon. */
+/**
+ * Upright level bar for volume / brightness: percentage, a thin bar, then the icon. The bar is the
+ * official (thin, 4 dp) Material 3 progress indicator stood on its end, filling from the bottom.
+ */
 @Composable
 private fun LevelHud(icon: ImageVector, label: String, level: Float, modifier: Modifier = Modifier) {
-    val state = remember { SliderState(value = level.coerceIn(0f, 1f)) }
-    SideEffect { state.value = level.coerceIn(0f, 1f) }
+    val barLength = 150.dp
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
         color = Color.Black.copy(alpha = 0.6f),
@@ -875,24 +875,22 @@ private fun LevelHud(icon: ImageVector, label: String, level: Float, modifier: M
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 14.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp)
         ) {
             Text(label, style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(10.dp))
-            VerticalSlider(
-                state = state,
-                onValueChange = {},
-                topToBottom = false,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = Color.White,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                ),
-                modifier = Modifier
-                    .height(170.dp)
-                    .clearAndSetSemantics {}
-            )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
+            Box(Modifier.size(width = 24.dp, height = barLength), contentAlignment = Alignment.Center) {
+                LinearProgressIndicator(
+                    progress = { level.coerceIn(0f, 1f) },
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.25f),
+                    modifier = Modifier
+                        .requiredWidth(barLength)
+                        .graphicsLayer { rotationZ = -90f }
+                        .clearAndSetSemantics {}
+                )
+            }
+            Spacer(Modifier.height(12.dp))
             Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
         }
     }
@@ -1039,12 +1037,31 @@ private fun PlayerBottomBar(
     onMore: () -> Unit,
     moreMenu: @Composable () -> Unit,
     isPlayingForSeekBar: Boolean,
+    colorful: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val tonal = IconButtonDefaults.filledTonalIconButtonColors(
-        containerColor = OverlayContainer,
-        contentColor = Color.White
-    )
+    // "Colourful player controls" (Me › Appearance): theme colours; otherwise plain white.
+    val scheme = MaterialTheme.colorScheme
+    val tonal = if (colorful) {
+        IconButtonDefaults.filledTonalIconButtonColors()
+    } else {
+        IconButtonDefaults.filledTonalIconButtonColors(containerColor = OverlayContainer, contentColor = Color.White)
+    }
+    val playColors = if (colorful) {
+        IconButtonDefaults.filledIconToggleButtonColors(
+            containerColor = scheme.primary,
+            contentColor = scheme.onPrimary,
+            checkedContainerColor = scheme.primary,
+            checkedContentColor = scheme.onPrimary
+        )
+    } else {
+        IconButtonDefaults.filledIconToggleButtonColors(
+            containerColor = Color.White,
+            contentColor = Color.Black,
+            checkedContainerColor = Color.White,
+            checkedContentColor = Color.Black
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1059,6 +1076,7 @@ private fun PlayerBottomBar(
                 onSeekPreview = onSeekPreview,
                 onSeekFinished = onSeekFinished,
                 isPlaying = isPlayingForSeekBar,
+                activeColor = if (colorful) scheme.primary else Color.White,
                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp).testTag("player_seek_slider")
             )
             Text(rightLabel, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelLarge)
@@ -1113,10 +1131,12 @@ private fun PlayerBottomBar(
                 )
                 customItem(
                     buttonGroupContent = {
-                        FilledIconButton(
-                            onClick = onPlayPause,
-                            shapes = IconButtonDefaults.shapes(),
-                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color.White, contentColor = Color.Black),
+                        // Toggle button: round while playing, morphs to a rounded square when paused.
+                        FilledIconToggleButton(
+                            checked = !isPlaying,
+                            onCheckedChange = { onPlayPause() },
+                            shapes = IconButtonDefaults.toggleableShapes(),
+                            colors = playColors,
                             interactionSource = playInteraction,
                             modifier = Modifier
                                 .weight(1.4f)
@@ -1296,11 +1316,10 @@ private fun SubtitleSheet(
 // Speed & audio
 // ---------------------------------------------------------------------------------------------
 
-/** Speed: two rows of equal connected buttons (official Expressive), plus a slider for any speed. */
+/** Speed: two rows of the official Expressive standard button group. */
 @Composable
 private fun SpeedSheet(speed: Float, onSpeed: (Float) -> Unit, onDismiss: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    var slider by remember(speed) { mutableFloatStateOf(speed) }
     val rows = listOf(listOf(0.5f, 0.75f, 1f, 1.25f), listOf(1.5f, 1.75f, 2f, 3f))
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1313,7 +1332,7 @@ private fun SpeedSheet(speed: Float, onSpeed: (Float) -> Unit, onDismiss: () -> 
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Speed", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                Text(speedLabel(slider), style = MaterialTheme.typography.titleLarge, color = scheme.primary)
+                Text(speedLabel(speed), style = MaterialTheme.typography.titleLarge, color = scheme.primary)
                 if (abs(speed - 1f) > 0.01f) {
                     androidx.compose.material3.TextButton(onClick = { onSpeed(1f) }, shapes = ButtonDefaults.shapes()) { Text("Reset") }
                 }
@@ -1324,15 +1343,6 @@ private fun SpeedSheet(speed: Float, onSpeed: (Float) -> Unit, onDismiss: () -> 
                     selected = row.firstOrNull { abs(it - speed) < 0.01f },
                     onSelect = { v -> if (v != null) onSpeed(v) },
                     tag = { "speed_${it}" }
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            CompactRow("Custom") {
-                Slider(
-                    value = slider,
-                    onValueChange = { slider = (it * 20).roundToInt() / 20f },
-                    onValueChangeFinished = { onSpeed(slider) },
-                    valueRange = 0.25f..3f
                 )
             }
         }
@@ -1507,10 +1517,7 @@ private fun PlayerMoreMenu(
 private fun minutesLabel(m: Int): String =
     if (m < 60) "$m min" else if (m % 60 == 0) "${m / 60} h" else "${m / 60} h ${m % 60} min"
 
-/**
- * Sleep timer: pick a time (equal connected buttons, or the slider for any 5-minute step up to
- * 2 hours) or "at the end of this video", then Start.
- */
+/** Sleep timer: pick a time (official Expressive button group) or "at the end of this video", then Start. */
 @Composable
 private fun SleepTimerSheet(
     active: Boolean,
@@ -1554,16 +1561,6 @@ private fun SleepTimerSheet(
                         )
                     }
                 }
-            }
-            CompactRow("Custom · ${minutesLabel(minutes)}") {
-                Slider(
-                    value = minutes.toFloat(),
-                    onValueChange = {
-                        minutes = ((it / 5f).roundToInt() * 5).coerceIn(5, 120)
-                        atEnd = false
-                    },
-                    valueRange = 5f..120f
-                )
             }
             FilledTonalToggleButton(
                 checked = atEnd,

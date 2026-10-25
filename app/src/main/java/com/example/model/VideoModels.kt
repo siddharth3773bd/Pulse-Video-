@@ -197,6 +197,8 @@ data class PlaybackSettings(
     val preferredAudioLanguage: String = "",
     /** Subtitle language to turn on when a video has it (ISO code; blank = none chosen). */
     val preferredSubtitleLanguage: String = "",
+    /** Player play/previous/next buttons and seek bar in the app's theme colour (off = white). */
+    val colorfulControls: Boolean = false,
     /** Keep playing in a small window when leaving the app during a video. */
     val pictureInPicture: Boolean = true,
     val subtitleSize: SubtitleSize = SubtitleSize.MEDIUM,
