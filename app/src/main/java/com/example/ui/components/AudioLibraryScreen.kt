@@ -561,23 +561,25 @@ fun AudioLibraryScreen(
     /** Playlist pages get a ⋮ in the header with Rename and Delete. */
     val detailPlaylist = currentDetail?.playlist
     val detailTracks = currentDetail?.tracks.orEmpty()
-    val detailActions: (@Composable () -> Unit)? = if (detailPlaylist == null) null else @Composable {
-        Box {
-            IconButton(
-                onClick = { openPlaylistMenu = "detail|${detailPlaylist.id}" },
-                shapes = IconButtonDefaults.shapes(),
-                modifier = Modifier.testTag("playlist_detail_more_btn")
-            ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Playlist options")
+    val detailActions: @Composable () -> Unit = {
+        if (detailPlaylist != null) {
+            Box {
+                IconButton(
+                    onClick = { openPlaylistMenu = "detail|${detailPlaylist.id}" },
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("playlist_detail_more_btn")
+                ) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Playlist options")
+                }
+                PlaylistActionsMenu(
+                    expanded = openPlaylistMenu == "detail|${detailPlaylist.id}",
+                    onDismiss = { openPlaylistMenu = null },
+                    onPlayNext = { onPlayNext(detailTracks) },
+                    onAddToQueue = { onAddToQueue(detailTracks) },
+                    onRename = { playlistDialog = PlaylistDialog.Rename(detailPlaylist.id, detailPlaylist.name) },
+                    onDelete = { playlistDialog = PlaylistDialog.ConfirmDelete(detailPlaylist.id, detailPlaylist.name) }
+                )
             }
-            PlaylistActionsMenu(
-                expanded = openPlaylistMenu == "detail|${detailPlaylist.id}",
-                onDismiss = { openPlaylistMenu = null },
-                onPlayNext = { onPlayNext(detailTracks) },
-                onAddToQueue = { onAddToQueue(detailTracks) },
-                onRename = { playlistDialog = PlaylistDialog.Rename(detailPlaylist.id, detailPlaylist.name) },
-                onDelete = { playlistDialog = PlaylistDialog.ConfirmDelete(detailPlaylist.id, detailPlaylist.name) }
-            )
         }
     }
 
@@ -989,7 +991,7 @@ private fun MusicHeader(
     onToggleSelectAll: () -> Unit,
     onLikeSelected: () -> Unit,
     onBack: () -> Unit,
-    detailActions: (@Composable () -> Unit)?,
+    detailActions: @Composable () -> Unit,
     searchButton: @Composable () -> Unit
 ) {
     val headerBg by animateColorAsState(
@@ -1064,7 +1066,7 @@ private fun MusicHeader(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    detailActions?.invoke()
+                    detailActions()
                 }
                 else -> {
                     Text(
