@@ -59,6 +59,8 @@ data class VideoUiState(
     val hasAudioPermission: Boolean = false,
     val videoPermissionAsked: Boolean = false,
     val audioPermissionAsked: Boolean = false,
+    /** True once saved preferences (including the start tab) have been loaded. */
+    val prefsLoaded: Boolean = false,
     val isRefreshing: Boolean = false,
     val smartGroups: Boolean = false,
     val viewMode: ViewMode = ViewMode.VIDEOS,
@@ -213,6 +215,7 @@ class VideoPlayerViewModel : ViewModel() {
                         showResolutionTier = stored.showResolutionTier,
                         activeTabs = validTabs,
                         bottomTab = startTab,
+                        prefsLoaded = true,
                         smartGroups = stored.smartGroups,
                         viewMode = stored.viewMode,
                         layoutMode = stored.layoutMode,

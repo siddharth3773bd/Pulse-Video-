@@ -59,6 +59,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -276,7 +278,6 @@ private fun formatDurationLabel(durationMs: Long): String {
     return String.format(Locale.US, "%d:%02d", minutes, seconds)
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SongInfoSheet(
     track: AudioTrackItem,
@@ -285,9 +286,11 @@ fun SongInfoSheet(
     val palette = LocalM3Palette.current
     val context = LocalContext.current
     var tech by remember(track.id) { mutableStateOf<AudioTech?>(null) }
+    var techLoaded by remember(track.id) { mutableStateOf(false) }
 
     LaunchedEffect(track.id) {
         tech = readAudioTech(context, track.contentUri)
+        techLoaded = true
     }
 
     fun copy(label: String, value: String) {
@@ -296,21 +299,25 @@ fun SongInfoSheet(
         android.widget.Toast.makeText(context, "$label copied", android.widget.Toast.LENGTH_SHORT).show()
     }
 
+    val pending = if (techLoaded) "—" else "…"
+    val fileName = track.path.substringAfterLast('/').takeIf { it.isNotBlank() }
+    val folderName = track.path.substringBeforeLast('/', "").substringAfterLast('/').takeIf { it.isNotBlank() }
+
     LibrarySheet(onDismiss = onDismiss) {
-        // Cover + title
+        // Cover + full title and artist
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp, bottom = 16.dp),
+                .padding(top = 4.dp, bottom = 20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AudioArt(
                 uri = track.contentUri,
                 placeholderBackground = palette.surfaceContainerHigh,
                 placeholderTint = palette.primary,
-                modifier = Modifier.size(84.dp),
-                shape = RoundedCornerShape(24.dp),
-                iconSize = 34.dp
+                modifier = Modifier.size(72.dp),
+                shape = RoundedCornerShape(20.dp),
+                iconSize = 30.dp
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -318,74 +325,106 @@ fun SongInfoSheet(
                     text = track.title,
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = track.artist.ifBlank { "Unknown artist" },
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
         }
 
-        // Technical details as compact pills
-        val pills = listOfNotNull(
-            track.ext.uppercase(Locale.US).takeIf { it.isNotBlank() },
-            formatDurationLabel(track.durationMs),
-            tech?.bitrateBps?.let { "${it / 1000} kbps" },
-            tech?.sampleRateHz?.let { String.format(Locale.US, "%.1f kHz", it / 1000.0) }
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
+        // Sound details: small label on top, the value large
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            pills.forEach { pill ->
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ) {
-                    Text(
-                        text = pill,
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    SpecCell("Format", track.ext.uppercase(Locale.US).ifBlank { "—" }, Modifier.weight(1f))
+                    SpecCell("Duration", formatDurationLabel(track.durationMs), Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    SpecCell(
+                        "Bitrate",
+                        tech?.bitrateBps?.let { "${it / 1000} kbps" } ?: pending,
+                        Modifier.weight(1f)
+                    )
+                    SpecCell(
+                        "Sample rate",
+                        tech?.sampleRateHz?.let { String.format(Locale.US, "%.1f kHz", it / 1000.0) } ?: pending,
+                        Modifier.weight(1f)
                     )
                 }
             }
         }
 
-        // Details: tap a row to copy it
-        val details = listOf(
-            Triple("Album", track.album.ifBlank { "Unknown album" }, Icons.Default.Album),
-            Triple("Artist", track.artist.ifBlank { "Unknown artist" }, Icons.Default.Person),
-            Triple("Location", track.path.ifBlank { "-" }, Icons.Default.Folder)
+        // File details: plain text, long-press a value to copy it. Nothing the header already says.
+        val details = listOfNotNull(
+            ("Album" to track.album).takeIf {
+                track.album.isNotBlank() && track.album != "Unknown album" &&
+                    !track.album.equals(track.title, ignoreCase = true)
+            },
+            ("Size" to String.format(Locale.US, "%.1f MB", track.sizeMB)).takeIf { track.sizeBytes > 0L },
+            folderName?.let { "Folder" to it },
+            fileName?.let { "File" to it }
         )
-        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-            details.forEachIndexed { index, (label, value, icon) ->
-                SegmentedListItem(
-                    onClick = { copy(label, value) },
-                    shapes = ListItemDefaults.segmentedShapes(index = index, count = details.size),
-                    leadingContent = { Icon(icon, contentDescription = null) },
-                    supportingContent = {
-                        Text(
-                            text = value,
-                            maxLines = if (label == "Location") 4 else 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    colors = blacklistRowColors()
-                ) {
-                    Text(label)
-                }
+        Column(modifier = Modifier.padding(top = 20.dp, start = 4.dp, end = 4.dp)) {
+            details.forEach { (label, value) ->
+                DetailLine(label = label, value = value, onCopy = { copy(label, value) })
             }
         }
+    }
+}
+
+@Composable
+private fun SpecCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun DetailLine(label: String, value: String, onCopy: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(value) { detectTapGestures(onLongPress = { onCopy() }) }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(72.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

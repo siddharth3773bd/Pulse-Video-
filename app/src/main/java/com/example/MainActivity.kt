@@ -350,6 +350,30 @@ fun Material3VideoPlayerScreen(
         viewModel.refreshPermissionsAndScan(context)
     }
 
+    // Ask for a tab's permission as soon as that tab is shown (once per app session), instead of
+    // waiting for "Grant permission" to be tapped. If it is denied, the tab keeps its prompt card.
+    var autoAskedVideoPermission by rememberSaveable { mutableStateOf(false) }
+    var autoAskedAudioPermission by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(uiState.bottomTab, uiState.prefsLoaded) {
+        if (!uiState.prefsLoaded) return@LaunchedEffect
+        fun isGranted(name: String) = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, name
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        when (uiState.bottomTab) {
+            BottomTab.VIDEOS -> if (!autoAskedVideoPermission) {
+                autoAskedVideoPermission = true
+                val name = MediaStoreScanner.getVideoPermissionName()
+                if (!isGranted(name)) videoPermissionLauncher.launch(name)
+            }
+            BottomTab.AUDIO -> if (!autoAskedAudioPermission) {
+                autoAskedAudioPermission = true
+                val name = MediaStoreScanner.getAudioPermissionName()
+                if (!isGranted(name)) audioPermissionLauncher.launch(name)
+            }
+            else -> Unit
+        }
+    }
+
     var notificationPermissionAsked by remember { mutableStateOf(false) }
     var pendingAudioActionAfterNotifPerm by remember { mutableStateOf<(() -> Unit)?>(null) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(

@@ -33,28 +33,40 @@ enum class NowPlayingAction(val id: String, val label: String) {
 }
 
 enum class LibrarySongSort(val id: String, val label: String) {
-    DEFAULT("default", "Default"),
+    DATE_ADDED("date_added", "Date added"),
     TITLE("title", "Title"),
     ARTIST("artist", "Artist"),
     ALBUM("album", "Album"),
-    DATE_ADDED("date_added", "Date added"),
     DURATION("duration", "Duration");
 
-    /** Names for the two sort directions, e.g. "A to Z" / "Z to A". */
+    /**
+     * The order most people want for this field, used when the field is picked and shown first:
+     * newest and longest first; names A to Z.
+     */
+    val naturalAscending: Boolean
+        get() = when (this) {
+            TITLE, ARTIST, ALBUM -> true
+            DATE_ADDED, DURATION -> false
+        }
+
+    /** Plain names for the two sort directions, e.g. "A to Z" / "Z to A". */
     val ascendingLabel: String
         get() = when (this) {
-            DEFAULT -> "Normal"
             TITLE, ARTIST, ALBUM -> "A to Z"
             DATE_ADDED -> "Oldest first"
             DURATION -> "Shortest first"
         }
     val descendingLabel: String
         get() = when (this) {
-            DEFAULT -> "Reversed"
             TITLE, ARTIST, ALBUM -> "Z to A"
             DATE_ADDED -> "Newest first"
             DURATION -> "Longest first"
         }
+
+    companion object {
+        /** The old "Default" sort was the scan order: newest added first. */
+        const val LEGACY_DEFAULT_ID = "default"
+    }
 }
 
 /** A song hidden from the library. Title and artist are kept so the list still reads well. */
@@ -99,8 +111,8 @@ enum class NowPlayingButtonColors(val id: String, val label: String, val descrip
 data class LibraryPreferences(
     val tabOrder: List<LibraryTab> = LibraryTab.entries,
     val hiddenTabs: Set<LibraryTab> = emptySet(),
-    val songSort: LibrarySongSort = LibrarySongSort.DEFAULT,
-    val songAscending: Boolean = true,
+    val songSort: LibrarySongSort = LibrarySongSort.DATE_ADDED,
+    val songAscending: Boolean = false,
     val groupAscending: Boolean = true,
     val trayOrder: List<NowPlayingAction> = NowPlayingAction.entries,
     val hiddenTray: Set<NowPlayingAction> = emptySet(),

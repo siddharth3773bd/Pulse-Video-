@@ -13,6 +13,7 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.rememberCoroutineScope
 import com.example.model.AudioTrackItem
 import com.example.ui.theme.LocalM3Palette
@@ -372,7 +373,6 @@ fun PlaylistActionsMenu(
 
 private val LibrarySongSort.icon: ImageVector
     get() = when (this) {
-        LibrarySongSort.DEFAULT -> Icons.AutoMirrored.Filled.Sort
         LibrarySongSort.TITLE -> Icons.Default.SortByAlpha
         LibrarySongSort.ARTIST -> Icons.Default.Person
         LibrarySongSort.ALBUM -> Icons.Default.Album
@@ -381,9 +381,9 @@ private val LibrarySongSort.icon: ImageVector
     }
 
 /**
- * Sort panel (a bottom sheet): "Sort by" chips and an Ascending / Descending connected button
- * group. Changes apply right away, so the list can be watched re-ordering as you pick.
- * [field] is null for albums and artists, which only sort A to Z / Z to A.
+ * Sort panel (a bottom sheet): "Sort by" chips and an order choice as an Expressive connected
+ * button group. The order buttons are plain words (no arrows) with the usual choice first.
+ * Changes apply right away. [field] is null for albums and artists, which only sort A to Z / Z to A.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -396,6 +396,7 @@ fun LibrarySortMenu(
     onSelectAscending: (Boolean) -> Unit
 ) {
     if (!expanded) return
+    val scheme = MaterialTheme.colorScheme
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -413,68 +414,75 @@ fun LibrarySortMenu(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             if (field != null) {
-                Text(
-                    text = "Sort by",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                SortSectionLabel("Sort by")
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(bottom = 20.dp)
                 ) {
                     LibrarySongSort.entries.forEach { option ->
+                        val selected = option == field
                         FilterChip(
-                            selected = option == field,
-                            onClick = { if (option != field) onSelectField(option) },
+                            selected = selected,
+                            onClick = { if (!selected) onSelectField(option) },
                             label = { Text(option.label) },
                             leadingIcon = {
                                 Icon(
-                                    imageVector = if (option == field) Icons.Default.Check else option.icon,
+                                    imageVector = if (selected) Icons.Default.Check else option.icon,
                                     contentDescription = null,
                                     modifier = Modifier.size(FilterChipDefaults.IconSize)
                                 )
                             },
+                            // Same highlight as the selected order button below.
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = scheme.primary,
+                                selectedLabelColor = scheme.onPrimary,
+                                selectedLeadingIconColor = scheme.onPrimary
+                            ),
                             modifier = Modifier.testTag("sort_field_${option.id}")
                         )
                     }
                 }
             }
-            Text(
-                text = "Order",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            SortSectionLabel("Order")
+            // The usual choice for this field comes first: Newest, Longest, A to Z.
+            val naturalAscending = field?.naturalAscending ?: true
+            val choices = listOf(naturalAscending, !naturalAscending)
             Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                ToggleButton(
-                    checked = ascending,
-                    onCheckedChange = { if (!ascending) onSelectAscending(true) },
-                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("sort_order_asc")
-                ) {
-                    Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
-                    Text(field?.ascendingLabel ?: "A to Z", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                ToggleButton(
-                    checked = !ascending,
-                    onCheckedChange = { if (ascending) onSelectAscending(false) },
-                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("sort_order_desc")
-                ) {
-                    Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
-                    Text(field?.descendingLabel ?: "Z to A", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                choices.forEachIndexed { index, isAscending ->
+                    val label = if (isAscending) field?.ascendingLabel ?: "A to Z"
+                    else field?.descendingLabel ?: "Z to A"
+                    ToggleButton(
+                        checked = ascending == isAscending,
+                        onCheckedChange = { if (ascending != isAscending) onSelectAscending(isAscending) },
+                        shapes = if (index == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        else ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                        colors = ToggleButtonDefaults.colors(
+                            containerColor = scheme.surfaceContainerHighest,
+                            contentColor = scheme.onSurface,
+                            checkedContainerColor = scheme.primary,
+                            checkedContentColor = scheme.onPrimary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag(if (isAscending) "sort_order_asc" else "sort_order_desc")
+                    ) {
+                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun SortSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
 }
 
 // ---------------------------------------------------------------------------------------------

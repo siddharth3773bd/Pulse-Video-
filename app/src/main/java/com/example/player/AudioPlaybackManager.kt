@@ -101,6 +101,20 @@ class AudioPlaybackManager private constructor(context: Context) {
             syncFromController()
         }
 
+        // Say why a song couldn't play instead of failing silently (e.g. an unsupported file).
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            val title = _state.value.currentTrack?.title ?: "this song"
+            val cause = generateSequence(error.cause) { it.cause }.lastOrNull()?.message
+                ?.take(120)
+            android.util.Log.e("Doppler", "Playback error for $title: ${error.errorCodeName}", error)
+            android.widget.Toast.makeText(
+                appContext,
+                "Couldn't play “$title” (${error.errorCodeName})" + (cause?.let { ": $it" } ?: ""),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            syncFromController()
+        }
+
         override fun onPlaybackStateChanged(playbackState: Int) {
             syncFromController()
         }

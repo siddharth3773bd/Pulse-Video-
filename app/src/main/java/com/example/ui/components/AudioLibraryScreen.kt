@@ -181,7 +181,6 @@ private fun sortSongs(
     ascending: Boolean
 ): List<AudioTrackItem> {
     val base = when (sort) {
-        LibrarySongSort.DEFAULT -> tracks
         LibrarySongSort.TITLE -> tracks.sortedBy { it.title.lowercase() }
         LibrarySongSort.ARTIST -> tracks.sortedWith(
             compareBy<AudioTrackItem>({ it.artist.lowercase() }, { it.title.lowercase() })
@@ -668,8 +667,9 @@ fun AudioLibraryScreen(
                                         field = prefs.songSort,
                                         ascending = prefs.songAscending,
                                         onSelectField = { field ->
+                                            // A new field starts in its natural order (newest, longest, A to Z).
                                             scope.launch {
-                                                AppPreferencesRepository.updateLibrarySongSort(context, field, prefs.songAscending)
+                                                AppPreferencesRepository.updateLibrarySongSort(context, field, field.naturalAscending)
                                             }
                                         },
                                         onSelectAscending = { asc ->

@@ -189,8 +189,13 @@ object AppPreferencesRepository {
             LibraryPreferences(
                 tabOrder = order,
                 hiddenTabs = safeHidden,
-                songSort = LibrarySongSort.entries.find { it.id == prefs[KEY_LIB_SONG_SORT] } ?: LibrarySongSort.DEFAULT,
-                songAscending = prefs[KEY_LIB_SONG_ASC] ?: true,
+                songSort = LibrarySongSort.entries.find { it.id == prefs[KEY_LIB_SONG_SORT] } ?: LibrarySongSort.DATE_ADDED,
+                // "Default" (scan order = newest first) became Date added; its direction is flipped.
+                songAscending = when {
+                    prefs[KEY_LIB_SONG_SORT] == null -> false
+                    LibrarySongSort.entries.none { it.id == prefs[KEY_LIB_SONG_SORT] } -> !(prefs[KEY_LIB_SONG_ASC] ?: true)
+                    else -> prefs[KEY_LIB_SONG_ASC] ?: true
+                },
                 groupAscending = prefs[KEY_LIB_GROUP_ASC] ?: true,
                 trayOrder = trayOrder,
                 hiddenTray = trayHidden,
