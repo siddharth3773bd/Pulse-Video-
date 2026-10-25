@@ -176,7 +176,6 @@ fun VideoPlayerModal(
     video: VideoItem,
     playerController: PlayerController,
     playbackSettings: PlaybackSettings,
-    showResolutionTier: Boolean,
     resumedFromMs: Long,
     nextVideo: VideoItem?,
     onSavePosition: (positionMs: Long, durationMs: Long, forcePersist: Boolean) -> Unit,

@@ -59,6 +59,7 @@ import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.AlertDialog
@@ -84,7 +85,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.LayoutMode
 import com.example.model.PlaylistItem
-import com.example.model.ResumePromptTarget
 import com.example.model.SortBy
 import com.example.model.SortDir
 import com.example.model.VideoItem
@@ -129,14 +129,6 @@ fun VideoActionsMenu(
 // Sort & view
 // ---------------------------------------------------------------------------------------------
 
-private val SortBy.icon: ImageVector
-    get() = when (this) {
-        SortBy.NAME -> Icons.Default.SortByAlpha
-        SortBy.DATE -> Icons.Default.CalendarToday
-        SortBy.DURATION -> Icons.Default.Schedule
-        SortBy.SIZE -> Icons.Default.Storage
-    }
-
 /**
  * View & sort, kept compact: each part is one short row (Show, Layout, Sort by, Order) plus a
  * slim Smart groups switch, so the panel only takes the space it needs.
@@ -159,6 +151,8 @@ fun SortAndViewBottomSheet(
     val scheme = MaterialTheme.colorScheme
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // Opens fully, so nothing ends up under the gesture bar.
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("sort_and_view_sheet")
     ) {
         Column(
@@ -172,9 +166,9 @@ fun SortAndViewBottomSheet(
             CompactRow("Show") {
                 ConnectedChoice(
                     options = listOf(
-                        Triple(ViewMode.VIDEOS, "Videos", Icons.Default.Movie),
-                        Triple(ViewMode.FOLDERS, "Folders", Icons.Default.Folder),
-                        Triple(ViewMode.TREE, "Tree", Icons.Default.AccountTree)
+                        ViewMode.VIDEOS to "Videos",
+                        ViewMode.FOLDERS to "Folders",
+                        ViewMode.TREE to "Tree"
                     ),
                     selected = viewMode,
                     onSelect = onSelectViewMode,
@@ -184,8 +178,8 @@ fun SortAndViewBottomSheet(
             CompactRow("Layout") {
                 ConnectedChoice(
                     options = listOf(
-                        Triple(LayoutMode.LIST, "List", Icons.AutoMirrored.Filled.ViewList),
-                        Triple(LayoutMode.GRID, "Grid", Icons.Default.GridView)
+                        LayoutMode.LIST to "List",
+                        LayoutMode.GRID to "Grid"
                     ),
                     selected = layoutMode,
                     onSelect = onSelectLayoutMode,
@@ -193,59 +187,22 @@ fun SortAndViewBottomSheet(
                 )
             }
             CompactRow("Sort by") {
-                // Four equal, connected buttons: picking one never changes any widths, so the
-                // row doesn't jump or wrap.
-                Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                    val options = SortBy.entries
-                    options.forEachIndexed { i, option ->
-                        val selected = option == sortBy
-                        ToggleButton(
-                            checked = selected,
-                            onCheckedChange = { if (!selected) onSelectSortField(option) },
-                            shapes = when (i) {
-                                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                            },
-                            colors = ToggleButtonDefaults.colors(
-                                containerColor = scheme.surfaceContainerHighest,
-                                contentColor = scheme.onSurface,
-                                checkedContainerColor = scheme.primary,
-                                checkedContentColor = scheme.onPrimary
-                            ),
-                            contentPadding = PaddingValues(horizontal = 4.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .semantics { role = Role.RadioButton }
-                                .testTag("sort_option_btn_${option.id}")
-                        ) {
-                            Text(option.label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
+                ConnectedChoice(
+                    options = SortBy.entries.map { it to it.label },
+                    selected = sortBy,
+                    onSelect = onSelectSortField,
+                    tag = { "sort_option_btn_${it.id}" }
+                )
             }
             CompactRow("Order") {
                 val natural = sortBy.naturalDir
                 val dirs = listOf(natural, if (natural == SortDir.ASC) SortDir.DESC else SortDir.ASC)
-                Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                    dirs.forEachIndexed { i, dir ->
-                        ToggleButton(
-                            checked = sortDir == dir,
-                            onCheckedChange = { if (sortDir != dir) onSelectSortDir(dir) },
-                            shapes = if (i == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            else ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                            colors = ToggleButtonDefaults.colors(
-                                containerColor = scheme.surfaceContainerHighest,
-                                contentColor = scheme.onSurface,
-                                checkedContainerColor = scheme.primary,
-                                checkedContentColor = scheme.onPrimary
-                            ),
-                            modifier = Modifier.weight(1f).testTag("sort_dir_${dir.name.lowercase()}")
-                        ) {
-                            Text(if (dir == SortDir.ASC) sortBy.ascFull else sortBy.descFull, maxLines = 1)
-                        }
-                    }
-                }
+                ConnectedChoice(
+                    options = dirs.map { it to if (it == SortDir.ASC) sortBy.ascFull else sortBy.descFull },
+                    selected = sortDir,
+                    onSelect = onSelectSortDir,
+                    tag = { "sort_dir_${it.name.lowercase()}" }
+                )
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -279,28 +236,20 @@ private fun CompactRow(label: String, content: @Composable () -> Unit) {
     }
 }
 
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 8.dp)
-    )
-}
-
-/** An Expressive connected button group for picking one of a few options. */
+/**
+ * An Expressive connected button group for picking one of a few options. Every button has the
+ * same width and the official tonal colours, so picking one never moves anything.
+ */
 @Composable
 private fun <T> ConnectedChoice(
-    options: List<Triple<T, String, ImageVector>>,
+    options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
     tag: (T) -> String
 ) {
-    val scheme = MaterialTheme.colorScheme
     Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-        options.forEachIndexed { i, (value, label, icon) ->
-            ToggleButton(
+        options.forEachIndexed { i, (value, label) ->
+            FilledTonalToggleButton(
                 checked = value == selected,
                 onCheckedChange = { if (value != selected) onSelect(value) },
                 shapes = when (i) {
@@ -308,17 +257,13 @@ private fun <T> ConnectedChoice(
                     options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                 },
-                colors = ToggleButtonDefaults.colors(
-                    containerColor = scheme.surfaceContainerHighest,
-                    contentColor = scheme.onSurface,
-                    checkedContainerColor = scheme.primary,
-                    checkedContentColor = scheme.onPrimary
-                ),
-                modifier = Modifier.weight(1f).testTag(tag(value))
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { role = Role.RadioButton }
+                    .testTag(tag(value))
             ) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text(label, maxLines = 1)
+                Text(label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -519,61 +464,6 @@ fun AddVideosToPlaylistSheet(
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                 Text("Create and add")
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Resume
-// ---------------------------------------------------------------------------------------------
-
-@Composable
-fun ResumePlaybackBottomSheet(
-    target: ResumePromptTarget,
-    onResumeFromSaved: () -> Unit,
-    onStartFromBeginning: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.testTag("resume_playback_bottom_sheet")
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 28.dp)
-        ) {
-            Text(target.video.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Continue where you left off, or start again.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = onResumeFromSaved,
-                shapes = ButtonDefaults.shapes(),
-                contentPadding = ButtonDefaults.MediumContentPadding,
-                modifier = Modifier.fillMaxWidth().height(56.dp).testTag("resume_from_saved_btn")
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Resume from ${formatDurationMs(target.resumePositionMs)}")
-            }
-            Spacer(Modifier.height(8.dp))
-            FilledTonalButton(
-                onClick = onStartFromBeginning,
-                shapes = ButtonDefaults.shapes(),
-                contentPadding = ButtonDefaults.MediumContentPadding,
-                modifier = Modifier.fillMaxWidth().height(56.dp).testTag("start_from_beginning_btn")
-            ) {
-                Icon(Icons.Default.Replay, contentDescription = null)
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Start from the beginning")
             }
         }
     }

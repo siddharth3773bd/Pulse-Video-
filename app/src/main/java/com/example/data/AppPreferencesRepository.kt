@@ -45,7 +45,6 @@ data class StoredAppPreferences(
     val colorTheme: String = "indigo",
     val customColorArgb: Int = 0xFF6366F1.toInt(),
     val amoledBlack: Boolean = false,
-    val showResolutionTier: Boolean = true,
     val activeTabs: List<BottomTab> = BottomTab.entries,
     val lastBottomTab: BottomTab = BottomTab.VIDEOS,
     val smartGroups: Boolean = false,
@@ -64,7 +63,6 @@ object AppPreferencesRepository {
     private val KEY_COLOR_THEME = stringPreferencesKey("color_theme")
     private val KEY_CUSTOM_COLOR_ARGB = intPreferencesKey("custom_color_argb")
     private val KEY_AMOLED_BLACK = booleanPreferencesKey("amoled_black")
-    private val KEY_SHOW_RESOLUTION = booleanPreferencesKey("show_resolution_tier")
     private val KEY_ACTIVE_TABS = stringPreferencesKey("active_bottom_tabs")
     private val KEY_LAST_BOTTOM_TAB = stringPreferencesKey("last_bottom_tab")
     private val KEY_SMART_GROUPS = booleanPreferencesKey("smart_groups")
@@ -129,7 +127,6 @@ object AppPreferencesRepository {
             val colorTheme = prefs[KEY_COLOR_THEME] ?: "indigo"
             val customColorArgb = prefs[KEY_CUSTOM_COLOR_ARGB] ?: 0xFF6366F1.toInt()
             val amoledBlack = prefs[KEY_AMOLED_BLACK] ?: false
-            val showResolution = prefs[KEY_SHOW_RESOLUTION] ?: true
             val activeTabs = parseActiveTabs(prefs[KEY_ACTIVE_TABS])
             val lastBottomTab = BottomTab.entries.find { it.id == prefs[KEY_LAST_BOTTOM_TAB] } ?: BottomTab.VIDEOS
             val smartGroups = prefs[KEY_SMART_GROUPS] ?: false
@@ -166,7 +163,6 @@ object AppPreferencesRepository {
                 colorTheme = colorTheme,
                 customColorArgb = customColorArgb,
                 amoledBlack = amoledBlack,
-                showResolutionTier = showResolution,
                 activeTabs = activeTabs,
                 lastBottomTab = lastBottomTab,
                 smartGroups = smartGroups,
@@ -478,10 +474,6 @@ object AppPreferencesRepository {
 
     suspend fun updateAmoledBlack(context: Context, enabled: Boolean) {
         context.appDataStore.edit { it[KEY_AMOLED_BLACK] = enabled }
-    }
-
-    suspend fun updateShowResolutionTier(context: Context, enabled: Boolean) {
-        context.appDataStore.edit { it[KEY_SHOW_RESOLUTION] = enabled }
     }
 
     suspend fun updateActiveTabs(context: Context, tabs: List<BottomTab>) {

@@ -173,7 +173,6 @@ fun MeTabScreen(
     onSelectColorTheme: (String) -> Unit,
     onSelectCustomColor: (Int) -> Unit,
     onToggleAmoledBlack: () -> Unit,
-    onToggleShowResolutionTier: () -> Unit,
     onUpdatePlaybackSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit,
     onSetTabActive: (BottomTab, Boolean) -> Unit,
     modifier: Modifier = Modifier
@@ -223,7 +222,6 @@ fun MeTabScreen(
                 playlists = uiState.playlists,
                 allVideos = uiState.videos,
                 videoById = videoById,
-                showResolutionTier = uiState.showResolutionTier,
                 effectiveAmoled = effectiveAmoled,
                 onBack = onCloseSubPage,
                 onPlayVideo = onPlayVideo,
@@ -236,7 +234,6 @@ fun MeTabScreen(
 
             MeSubPage.HISTORY -> VideoHistorySubPage(
                 historyPairs = historyPairs,
-                showResolutionTier = uiState.showResolutionTier,
                 effectiveAmoled = effectiveAmoled,
                 onBack = onCloseSubPage,
                 onPlayVideo = onPlayVideo,
@@ -251,8 +248,7 @@ fun MeTabScreen(
                 onSetDynamicColor = onSetDynamicColor,
                 onSelectColorTheme = onSelectColorTheme,
                 onSelectCustomColor = onSelectCustomColor,
-                onToggleAmoledBlack = onToggleAmoledBlack,
-                onToggleShowResolutionTier = onToggleShowResolutionTier
+                onToggleAmoledBlack = onToggleAmoledBlack
             )
 
             MeSubPage.VIDEO_SETTINGS -> VideoPlaybackSettingsSubPage(
@@ -292,7 +288,7 @@ private fun MeHomeMenuScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 148.dp)
+            .padding(top = 8.dp, bottom = 24.dp)
             .testTag("me_tab_home_screen")
     ) {
         // Top: Two wide cards side by side ("Video Playlist" and "Video History")
@@ -630,7 +626,6 @@ private fun ExpressiveSubPageHeader(
 @Composable
 private fun VideoHistorySubPage(
     historyPairs: List<Pair<VideoHistoryEntry, VideoItem>>,
-    showResolutionTier: Boolean,
     effectiveAmoled: Boolean,
     onBack: () -> Unit,
     onPlayVideo: (VideoItem) -> Unit,
@@ -683,7 +678,7 @@ private fun VideoHistorySubPage(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 32.dp)
-                    .padding(bottom = 140.dp),
+                    .padding(bottom = 24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -727,7 +722,7 @@ private fun VideoHistorySubPage(
                     start = 16.dp,
                     end = 16.dp,
                     top = 4.dp,
-                    bottom = 148.dp
+                    bottom = 24.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -816,7 +811,6 @@ private fun VideoPlaylistSubPage(
     playlists: List<PlaylistItem>,
     allVideos: List<VideoItem>,
     videoById: Map<String, VideoItem>,
-    showResolutionTier: Boolean,
     effectiveAmoled: Boolean,
     onBack: () -> Unit,
     onPlayVideo: (VideoItem) -> Unit,
@@ -891,7 +885,7 @@ private fun VideoPlaylistSubPage(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 32.dp)
-                        .padding(bottom = 140.dp),
+                        .padding(bottom = 24.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -935,7 +929,7 @@ private fun VideoPlaylistSubPage(
                         start = 16.dp,
                         end = 16.dp,
                         top = 4.dp,
-                        bottom = 148.dp
+                        bottom = 24.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -1181,7 +1175,7 @@ private fun VideoPlaylistSubPage(
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 104.dp)
+                .padding(end = 16.dp, bottom = 16.dp)
         ) {
             FloatingActionButtonMenuItem(
                 onClick = {
@@ -1406,8 +1400,7 @@ private fun AppearanceSubPage(
     onSetDynamicColor: (Boolean) -> Unit,
     onSelectColorTheme: (String) -> Unit,
     onSelectCustomColor: (Int) -> Unit,
-    onToggleAmoledBlack: () -> Unit,
-    onToggleShowResolutionTier: () -> Unit
+    onToggleAmoledBlack: () -> Unit
 ) {
     val palette = LocalM3Palette.current
     val motionScheme = MaterialTheme.motionScheme
@@ -1430,7 +1423,7 @@ private fun AppearanceSubPage(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 148.dp),
+                .padding(top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Theme Mode Card: System (default), Light, Dark
@@ -1913,7 +1906,7 @@ private fun VideoPlaybackSettingsSubPage(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 148.dp),
+                .padding(top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
@@ -2340,7 +2333,7 @@ private fun NavigationCustomizeSubPage(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 148.dp),
+                .padding(top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
@@ -2568,7 +2561,7 @@ private fun MusicSettingsSubPage(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 148.dp),
+                .padding(top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             SectionTitle("Library")

@@ -567,7 +567,12 @@ fun AudioLibraryScreen(
         }
     }
 
-    CompositionLocalProvider(LocalLibraryBottomPadding provides (132.dp + extraBottomPadding)) {
+    // The navigation bar sits below this screen, so lists only need a little room at the end —
+    // more while selecting (the selection toolbar floats over the list then).
+    val listBottomPadding = if (selectionMode) {
+        96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    } else 16.dp
+    CompositionLocalProvider(LocalLibraryBottomPadding provides (listBottomPadding + extraBottomPadding)) {
         Surface(
             color = background,
             contentColor = MaterialTheme.colorScheme.onSurface,

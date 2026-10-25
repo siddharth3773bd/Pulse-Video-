@@ -96,12 +96,6 @@ data class VideoHistoryEntry(
         get() = positionMs >= 5_000L && progress <= 0.95f
 }
 
-@Immutable
-data class ResumePromptTarget(
-    val video: VideoItem,
-    val resumePositionMs: Long
-)
-
 enum class ViewMode(val id: String, val label: String) {
     VIDEOS("videos", "Videos"),
     FOLDERS("folders", "Folders"),

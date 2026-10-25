@@ -19,7 +19,6 @@ import com.example.model.MAX_HISTORY_ITEMS
 import com.example.model.MeSubPage
 import com.example.model.PlaybackSettings
 import com.example.model.PlaylistItem
-import com.example.model.ResumePromptTarget
 import com.example.model.SortBy
 import com.example.model.SortDir
 import com.example.model.ThemeMode
@@ -73,9 +72,7 @@ data class VideoUiState(
     val colorTheme: String = "indigo",
     val customColorArgb: Int = 0xFF6366F1.toInt(),
     val amoledBlack: Boolean = false,
-    val showResolutionTier: Boolean = true,
     val activeTabs: List<BottomTab> = BottomTab.entries,
-    val isPillEditMode: Boolean = false,
     val meSubPage: MeSubPage = MeSubPage.NONE,
     val playbackSettings: PlaybackSettings = PlaybackSettings(),
     val bottomTab: BottomTab = BottomTab.VIDEOS,
@@ -94,7 +91,6 @@ data class VideoUiState(
     val renameValue: String = "",
     val playlistTargetIds: List<String> = emptyList(),
     val sortSheetOpen: Boolean = false,
-    val resumePromptTarget: ResumePromptTarget? = null,
     /** Where the playing video was resumed from (0 = started from the beginning). */
     val resumedFromMs: Long = 0L,
     val playingVideo: VideoItem? = null,
@@ -254,7 +250,6 @@ class VideoPlayerViewModel : ViewModel() {
                         colorTheme = stored.colorTheme,
                         customColorArgb = stored.customColorArgb,
                         amoledBlack = stored.amoledBlack,
-                        showResolutionTier = stored.showResolutionTier,
                         activeTabs = validTabs,
                         bottomTab = startTab,
                         prefsLoaded = true,
@@ -348,13 +343,8 @@ class VideoPlayerViewModel : ViewModel() {
                 renameTarget = null,
                 playlistTargetIds = emptyList(),
                 sortSheetOpen = false,
-                resumePromptTarget = null
             )
         }
-    }
-
-    fun dismissResumePrompt() {
-        _uiState.update { it.copy(resumePromptTarget = null) }
     }
 
     fun toggleSmartGroups(context: Context? = null) {
@@ -475,21 +465,8 @@ class VideoPlayerViewModel : ViewModel() {
         }
     }
 
-    fun toggleShowResolutionTier(context: Context? = null) {
-        val next = !_uiState.value.showResolutionTier
-        _uiState.update { it.copy(showResolutionTier = next) }
-        if (context != null) {
-            val appCtx = context.applicationContext
-            viewModelScope.launch { AppPreferencesRepository.updateShowResolutionTier(appCtx, next) }
-        }
-    }
-
     fun setMeSubPage(subPage: MeSubPage) {
         _uiState.update { it.copy(meSubPage = subPage) }
-    }
-
-    fun setPillEditMode(editing: Boolean) {
-        _uiState.update { it.copy(isPillEditMode = editing) }
     }
 
     /**
@@ -1010,7 +987,6 @@ class VideoPlayerViewModel : ViewModel() {
         }
         _uiState.update {
             it.copy(
-                resumePromptTarget = null,
                 playingVideo = video,
                 resumedFromMs = if (resumed) startPositionMs else 0L
             )

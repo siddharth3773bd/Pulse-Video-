@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -43,7 +42,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
@@ -52,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -60,7 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.VideoItem
-import com.example.model.formatSizeLabel
+import com.example.model.formatCompactDate
 
 // ---------------------------------------------------------------------------------------------
 // Shared pieces
@@ -164,15 +164,16 @@ private const val INTERNAL_ROOT = "/storage/emulated/0"
 private data class FolderEntry(
     val path: String,
     val name: String,
-    val videos: List<VideoItem>,
-    val sizeMB: Double
+    val count: Int
 )
 
-/** One row per folder. Folders are told apart by their full path, so same-named folders don't merge. */
+/**
+ * One row per folder (official Material 3 list items). Folders are told apart by their full
+ * path, so same-named folders don't merge.
+ */
 @Composable
 fun FoldersLibraryView(
     videos: List<VideoItem>,
-    amoledBlack: Boolean,
     onSelectFolder: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -182,8 +183,7 @@ fun FoldersLibraryView(
                 FolderEntry(
                     path = path,
                     name = path.substringAfterLast('/').ifBlank { list.first().folder },
-                    videos = list,
-                    sizeMB = list.sumOf { it.sizeMB }
+                    count = list.size
                 )
             }
             .sortedWith(compareBy<FolderEntry> { it.name.lowercase() }.thenBy { it.path })
@@ -199,40 +199,42 @@ fun FoldersLibraryView(
         return
     }
 
+    val scheme = MaterialTheme.colorScheme
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .testTag("folders_library_view"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 128.dp),
-        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 16.dp)
     ) {
-        itemsIndexed(folders, key = { _, f -> f.path }) { idx, folder ->
-            SegmentedListItem(
+        items(folders, key = { it.path }) { folder ->
+            ListItem(
                 onClick = { onSelectFolder(folder.path) },
-                shapes = ListItemDefaults.segmentedShapes(index = idx, count = folders.size),
-                colors = videoRowColors(amoledBlack),
                 leadingContent = {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(MaterialShapes.Cookie9Sided.toShape())
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                            .size(56.dp)
+                            .clip(MaterialTheme.shapes.large)
+                            .background(scheme.secondaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Icon(Icons.Default.Folder, contentDescription = null, tint = scheme.onSecondaryContainer)
                     }
                 },
                 supportingContent = {
-                    val count = if (folder.videos.size == 1) "1 video" else "${folder.videos.size} videos"
+                    val count = if (folder.count == 1) "1 video" else "${folder.count} videos"
                     Text(
-                        text = "${friendlyFolderPath(folder.path)} · $count · ${formatSizeLabel(folder.sizeMB)}",
+                        text = "$count · ${friendlyFolderPath(folder.path)}",
+                        style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 },
-                trailingContent = {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-                },
+                shapes = ListItemDefaults.shapes(shape = MaterialTheme.shapes.large),
+                colors = ListItemDefaults.colors(
+                    containerColor = Color.Transparent,
+                    contentColor = scheme.onSurface,
+                    supportingContentColor = scheme.onSurfaceVariant
+                ),
                 modifier = Modifier.testTag("folder_row_${folder.path}")
             ) {
                 Text(folder.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -350,7 +352,6 @@ private fun flatten(roots: List<Pair<String, TreeNode>>, expanded: Set<String>):
 fun TreeHierarchyView(
     videos: List<VideoItem>,
     expandedNodes: Set<String>,
-    showResolutionTier: Boolean,
     onToggleNode: (String) -> Unit,
     onPlayVideo: (VideoItem) -> Unit,
     onOpenMenu: (VideoItem) -> Unit,
@@ -373,7 +374,7 @@ fun TreeHierarchyView(
         modifier = modifier
             .fillMaxSize()
             .testTag("tree_hierarchy_view"),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 128.dp)
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 16.dp)
     ) {
         items(rows, key = { it.key }) { row ->
             when (row) {
@@ -389,7 +390,6 @@ fun TreeHierarchyView(
                 is TreeRow.Video -> TreeVideoRow(
                     video = row.video,
                     depth = row.depth,
-                    showResolutionTier = showResolutionTier,
                     onClick = { onPlayVideo(row.video) },
                     onMenu = { onOpenMenu(row.video) },
                     menu = { menu(row.video) }
@@ -452,7 +452,6 @@ private fun TreeFolderRow(row: TreeRow.Folder, onToggle: () -> Unit) {
 private fun TreeVideoRow(
     video: VideoItem,
     depth: Int,
-    showResolutionTier: Boolean,
     onClick: () -> Unit,
     onMenu: () -> Unit,
     menu: @Composable () -> Unit
@@ -468,23 +467,21 @@ private fun TreeVideoRow(
         VideoThumbnailBox(
             video = video,
             modifier = Modifier
-                .width(76.dp)
+                .width(80.dp)
                 .aspectRatio(16f / 9f)
-                .clip(MaterialTheme.shapes.small)
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(video.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val badge: String? = null
+            Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                listOfNotNull(badge, formatSizeLabel(video.sizeMB)).joinToString(" · "),
-                style = MaterialTheme.typography.labelMedium,
+                formatCompactDate(video.dateStr),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Box {
             IconButton(onClick = onMenu, shapes = IconButtonDefaults.shapes()) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Video actions", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Default.MoreVert, contentDescription = "More options for ${video.title}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             menu()
         }
