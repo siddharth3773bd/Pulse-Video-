@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.RingVolume
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -72,7 +71,6 @@ fun SongActionsSheet(
     onGoToArtist: () -> Unit,
     onShare: () -> Unit,
     onSongInfo: () -> Unit,
-    onSetRingtone: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -105,7 +103,6 @@ fun SongActionsSheet(
         listOf(
             SongAction("Share", Icons.Default.Share, "song_action_share", onClick = act(onShare)),
             SongAction("Song info", Icons.Default.Info, "song_action_info", onClick = act(onSongInfo)),
-            SongAction("Set as ringtone", Icons.Default.RingVolume, "song_action_ringtone", onClick = act(onSetRingtone)),
             SongAction("Delete from device", Icons.Default.Delete, "song_action_delete", onClick = act(onDelete))
         )
     )

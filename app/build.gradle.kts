@@ -97,6 +97,8 @@ dependencies {
   // Album-art colours: Google's Material colour engine + AndroidX Palette
   implementation(libs.google.material)
   implementation(libs.androidx.palette.ktx)
+  // Drag-to-reorder (no official Compose component exists)
+  implementation(libs.reorderable)
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)

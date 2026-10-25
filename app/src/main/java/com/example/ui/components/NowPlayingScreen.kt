@@ -169,20 +169,27 @@ fun NowPlayingScreen(
     val palette = if (onImage) themePalette.copy(onPrimaryContainer = Color.White) else themePalette
     val scheme = MaterialTheme.colorScheme
 
-    // Button colours (Echo-style choice). Primary / Tertiary come from the current scheme, which
-    // is the album-art scheme when "Colours from: Album art" is on.
+    // Button colours. Primary / Tertiary come from the current scheme, which is the album-art
+    // scheme when "Colours from: Album art" is on.
+    // On image / black backgrounds (Gradient, Blur, AMOLED) Echo's rules apply. On "Follow theme"
+    // the background is the primary-container colour, so container colours would vanish into it;
+    // there only the strong accent colours are used (Pixel Player style).
     val (mainContainer, mainContent) = when (buttonColors) {
         NowPlayingButtonColors.DEFAULT ->
-            if (onImage) Color.White to Color.Black else palette.primary to palette.onPrimary
+            if (onImage) Color.White to Color.Black else scheme.tertiary to scheme.onTertiary
         NowPlayingButtonColors.PRIMARY -> scheme.primary to scheme.onPrimary
         NowPlayingButtonColors.TERTIARY -> scheme.tertiary to scheme.onTertiary
     }
     val (sideContainer, sideContent) = when (buttonColors) {
         NowPlayingButtonColors.DEFAULT ->
             if (onImage) Color.White.copy(alpha = 0.2f) to Color.White
-            else palette.secondaryContainer to palette.onSecondaryContainer
-        NowPlayingButtonColors.PRIMARY -> scheme.primaryContainer to scheme.onPrimaryContainer
-        NowPlayingButtonColors.TERTIARY -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+            else scheme.primary to scheme.onPrimary
+        NowPlayingButtonColors.PRIMARY ->
+            if (onImage) scheme.primaryContainer to scheme.onPrimaryContainer
+            else scheme.secondary to scheme.onSecondary
+        NowPlayingButtonColors.TERTIARY ->
+            if (onImage) scheme.tertiaryContainer to scheme.onTertiaryContainer
+            else scheme.secondary to scheme.onSecondary
     }
     val context = LocalContext.current
     val closeLatest by rememberUpdatedState(onClose)
@@ -617,7 +624,12 @@ fun NowPlayingScreen(
                                 if (action == NowPlayingAction.SLEEP && sleepActive) {
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = if (sleepAtEndOfSong) "End" else formatCountdown(sleepTimerRemainingMs),
+                                        text = if (sleepAtEndOfSong) {
+                                            // Time left in the current song.
+                                            formatCountdown((safeDuration - positionMs).coerceAtLeast(0L))
+                                        } else {
+                                            formatCountdown(sleepTimerRemainingMs)
+                                        },
                                         fontFamily = PlusJakartaSansFontFamily,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
@@ -766,6 +778,47 @@ private fun SleepTimerSheet(
                 Text("5 min", color = palette.onSurfaceVariant, fontFamily = PlusJakartaSansFontFamily, fontSize = 12.sp)
                 Spacer(modifier = Modifier.weight(1f))
                 Text("120 min", color = palette.onSurfaceVariant, fontFamily = PlusJakartaSansFontFamily, fontSize = 12.sp)
+            }
+
+            // Quick picks (official connected button group): tap to set the slider.
+            Spacer(modifier = Modifier.height(12.dp))
+            val presets = listOf(5, 15, 30, 45, 60)
+            ButtonGroup(
+                overflowIndicator = { menuState ->
+                    ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("sleep_timer_presets"),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+            ) {
+                presets.forEachIndexed { index, preset ->
+                    customItem(
+                        buttonGroupContent = {
+                            ToggleButton(
+                                checked = minutes.toInt() == preset,
+                                onCheckedChange = { minutes = preset.toFloat() },
+                                shapes = when (index) {
+                                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                    presets.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(text = "$preset", maxLines = 1)
+                            }
+                        },
+                        menuContent = { menuState ->
+                            DropdownMenuItem(
+                                text = { Text("$preset min") },
+                                onClick = {
+                                    minutes = preset.toFloat()
+                                    menuState.dismiss()
+                                }
+                            )
+                        }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))

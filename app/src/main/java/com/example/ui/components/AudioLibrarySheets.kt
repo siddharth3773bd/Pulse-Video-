@@ -2,6 +2,12 @@
 
 package com.example.ui.components
 
+import sh.calvin.reorderable.ReorderableColumn
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.key
 import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -120,10 +126,6 @@ private fun SheetTitle(title: String, subtitle: String? = null) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Library settings (gear)
-// ---------------------------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------------------------
 // Now Playing tray buttons
 // ---------------------------------------------------------------------------------------------
 
@@ -139,90 +141,17 @@ fun NowPlayingTraySheet(
     LibrarySheet(onDismiss = onDismiss) {
         SheetTitle(
             title = "Now Playing buttons",
-            subtitle = "Use the arrows to reorder. Switch buttons on or off. The tray holds up to 5 buttons."
+            subtitle = "Drag the handle to reorder. Switch buttons on or off. The tray holds up to 5 buttons."
         )
 
-        order.forEachIndexed { index, action ->
-            val isVisible = action !in hidden
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = palette.surfaceContainerHigh,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        IconButton(
-                            onClick = {
-                                if (index > 0) {
-                                    val next = order.toMutableList()
-                                    val moved = next.removeAt(index)
-                                    next.add(index - 1, moved)
-                                    onChange(next, hidden)
-                                }
-                            },
-                            enabled = index > 0,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Move ${action.label} up",
-                                tint = palette.onSurfaceVariant.copy(alpha = if (index > 0) 1f else 0.3f)
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                if (index < order.lastIndex) {
-                                    val next = order.toMutableList()
-                                    val moved = next.removeAt(index)
-                                    next.add(index + 1, moved)
-                                    onChange(next, hidden)
-                                }
-                            },
-                            enabled = index < order.lastIndex,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Move ${action.label} down",
-                                tint = palette.onSurfaceVariant.copy(alpha = if (index < order.lastIndex) 1f else 0.3f)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = nowPlayingActionIcon(action),
-                        contentDescription = null,
-                        tint = palette.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = action.label,
-                        color = palette.onSurface,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = isVisible,
-                        onCheckedChange = { checked ->
-                            val nextHidden = if (checked) hidden - action else hidden + action
-                            onChange(order, nextHidden)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = palette.primary,
-                            checkedThumbColor = palette.onPrimary
-                        )
-                    )
-                }
-            }
-        }
+        ReorderableToggleList(
+            items = order,
+            hidden = hidden,
+            label = { it.label },
+            icon = { nowPlayingActionIcon(it) },
+            canToggle = { _, _ -> true },
+            onChange = onChange
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -257,92 +186,18 @@ fun ManageTabsSheet(
     LibrarySheet(onDismiss = onDismiss) {
         SheetTitle(
             title = "Manage tabs",
-            subtitle = "Use the arrows to reorder. Switch tabs on or off. One tab always stays visible."
+            subtitle = "Drag the handle to reorder. Switch tabs on or off. One tab always stays visible."
         )
 
-        order.forEachIndexed { index, tab ->
-            val isVisible = tab !in hidden
-            val isLastVisible = isVisible && visibleCount == 1
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = palette.surfaceContainerHigh,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        IconButton(
-                            onClick = {
-                                if (index > 0) {
-                                    val next = order.toMutableList()
-                                    val moved = next.removeAt(index)
-                                    next.add(index - 1, moved)
-                                    onChange(next, hidden)
-                                }
-                            },
-                            enabled = index > 0,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = "Move ${tab.label} up",
-                                tint = palette.onSurfaceVariant.copy(alpha = if (index > 0) 1f else 0.3f)
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                if (index < order.lastIndex) {
-                                    val next = order.toMutableList()
-                                    val moved = next.removeAt(index)
-                                    next.add(index + 1, moved)
-                                    onChange(next, hidden)
-                                }
-                            },
-                            enabled = index < order.lastIndex,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Move ${tab.label} down",
-                                tint = palette.onSurfaceVariant.copy(alpha = if (index < order.lastIndex) 1f else 0.3f)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = null,
-                        tint = palette.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = tab.label,
-                        color = palette.onSurface,
-                        fontFamily = PlusJakartaSansFontFamily,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = isVisible,
-                        enabled = !isLastVisible,
-                        onCheckedChange = { checked ->
-                            val nextHidden = if (checked) hidden - tab else hidden + tab
-                            onChange(order, nextHidden)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = palette.primary,
-                            checkedThumbColor = palette.onPrimary
-                        )
-                    )
-                }
-            }
-        }
+        ReorderableToggleList(
+            items = order,
+            hidden = hidden,
+            label = { it.label },
+            icon = { it.icon },
+            // One tab always stays visible.
+            canToggle = { tab, isVisible -> !(isVisible && visibleCount == 1 && tab !in hidden) },
+            onChange = onChange
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -596,6 +451,100 @@ private fun InfoCard(label: String, value: String, bg: Color) {
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold
             )
+        }
+    }
+}
+
+/**
+ * Rows with an icon, a label, an on/off switch and a drag handle (≡). Press and drag the handle to
+ * reorder (Reorderable library); the new order is saved when the drag settles.
+ */
+@Composable
+private fun <T> ReorderableToggleList(
+    items: List<T>,
+    hidden: Set<T>,
+    label: (T) -> String,
+    icon: (T) -> androidx.compose.ui.graphics.vector.ImageVector,
+    canToggle: (item: T, isVisible: Boolean) -> Boolean,
+    onChange: (List<T>, Set<T>) -> Unit
+) {
+    val palette = LocalM3Palette.current
+    // Local copy so rows move live while dragging.
+    var rows by remember(items) { mutableStateOf(items) }
+    val haptic = LocalHapticFeedback.current
+
+    ReorderableColumn(
+        list = rows,
+        onSettle = { fromIndex, toIndex ->
+            val next = rows.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+            rows = next
+            onChange(next, hidden)
+        },
+        onMove = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) { _, item, isDragging ->
+        key(item) {
+            ReorderableItem {
+                val isVisible = item !in hidden
+                val elevation by animateDpAsState(
+                    targetValue = if (isDragging) 6.dp else 0.dp,
+                    label = "rowDragElevation"
+                )
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isDragging) palette.surfaceContainerHighest else palette.surfaceContainerHigh,
+                    shadowElevation = elevation,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = icon(item),
+                            contentDescription = null,
+                            tint = palette.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = label(item),
+                            color = palette.onSurface,
+                            fontFamily = PlusJakartaSansFontFamily,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = isVisible,
+                            enabled = canToggle(item, isVisible),
+                            onCheckedChange = { checked ->
+                                val nextHidden = if (checked) hidden - item else hidden + item
+                                onChange(rows, nextHidden)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = palette.primary,
+                                checkedThumbColor = palette.onPrimary
+                            )
+                        )
+                        IconButton(
+                            onClick = {},
+                            modifier = Modifier.draggableHandle(
+                                onDragStarted = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DragHandle,
+                                contentDescription = "Drag to reorder ${label(item)}",
+                                tint = palette.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

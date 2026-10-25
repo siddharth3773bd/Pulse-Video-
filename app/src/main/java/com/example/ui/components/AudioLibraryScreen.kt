@@ -9,7 +9,6 @@ package com.example.ui.components
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.media.RingtoneManager
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.Settings
@@ -640,7 +639,6 @@ fun AudioLibraryScreen(
             },
             onShare = { shareTrack(context, track) },
             onSongInfo = { infoTrack = track },
-            onSetRingtone = { setAsRingtone(context, track) },
             onDelete = {
                 runCatching {
                     val request = MediaStore.createDeleteRequest(context.contentResolver, listOf(track.contentUri))
@@ -667,29 +665,6 @@ private fun shareTrack(context: Context, track: AudioTrackItem) {
     }
     runCatching { context.startActivity(Intent.createChooser(send, "Share \u201C${track.title}\u201D")) }
         .onFailure { Toast.makeText(context, "No app available to share", Toast.LENGTH_SHORT).show() }
-}
-
-/**
- * Sets the phone ringtone. Android requires the "Modify system settings" permission for this;
- * if it isn't granted yet, open that settings page so the user can allow it.
- */
-private fun setAsRingtone(context: Context, track: AudioTrackItem) {
-    if (Settings.System.canWrite(context)) {
-        runCatching {
-            RingtoneManager.setActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE, track.contentUri)
-        }.onSuccess {
-            Toast.makeText(context, "\u201C${track.title}\u201D set as ringtone", Toast.LENGTH_SHORT).show()
-        }.onFailure {
-            Toast.makeText(context, "Couldn't set ringtone", Toast.LENGTH_SHORT).show()
-        }
-    } else {
-        Toast.makeText(context, "Allow Pulse to modify system settings, then try again", Toast.LENGTH_LONG).show()
-        runCatching {
-            context.startActivity(
-                Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
-            )
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------------------------
