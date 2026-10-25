@@ -61,7 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.VideoItem
 import com.example.model.formatSizeLabel
-import com.example.model.resolutionLabel
 
 // ---------------------------------------------------------------------------------------------
 // Shared pieces
@@ -476,7 +475,7 @@ private fun TreeVideoRow(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(video.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val badge = if (showResolutionTier) resolutionLabel(video.width, video.height) else null
+            val badge: String? = null
             Text(
                 listOfNotNull(badge, formatSizeLabel(video.sizeMB)).joinToString(" · "),
                 style = MaterialTheme.typography.labelMedium,

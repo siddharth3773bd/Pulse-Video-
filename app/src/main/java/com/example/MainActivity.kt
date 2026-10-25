@@ -96,6 +96,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialShapes
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material3.Tab
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -234,10 +238,16 @@ class MainActivity : ComponentActivity() {
                 customColorArgb = uiState.customColorArgb,
                 amoledBlack = uiState.amoledBlack
             ) {
-                Material3VideoPlayerScreen(
-                    uiState = uiState,
-                    viewModel = viewModel
-                )
+                // Text and icons default to the theme's on-surface colour everywhere (without this,
+                // text outside a Surface fell back to black and was unreadable on dark screens).
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface
+                ) {
+                    Material3VideoPlayerScreen(
+                        uiState = uiState,
+                        viewModel = viewModel
+                    )
+                }
             }
         }
     }
@@ -602,8 +612,34 @@ fun Material3VideoPlayerScreen(
                             )
                         }
                     } else null,
-                    scrollBehavior = if (onVideos) videosTopBarScroll else null
+                    scrollBehavior = if (onVideos) videosTopBarScroll else null,
+                    onToggleLayout = if (onVideos && (uiState.viewMode == ViewMode.VIDEOS || uiState.selectedFolderFilter != null)) {
+                        {
+                            viewModel.setLayoutMode(
+                                if (uiState.layoutMode == LayoutMode.GRID) LayoutMode.LIST else LayoutMode.GRID,
+                                context
+                            )
+                        }
+                    } else null
                 )
+                // Videos / Folders / Tree as tabs (like Music's Songs / Albums / …).
+                if (onVideos && uiState.selectedFolderFilter == null && uiState.selectedPlaylistFilter == null &&
+                    !uiState.isSelectionMode
+                ) {
+                    PrimaryTabRow(
+                        selectedTabIndex = uiState.viewMode.ordinal,
+                        containerColor = outerChromeBg
+                    ) {
+                        ViewMode.entries.forEach { mode ->
+                            Tab(
+                                selected = uiState.viewMode == mode,
+                                onClick = { viewModel.setViewMode(mode, context) },
+                                text = { Text(mode.label, maxLines = 1) },
+                                modifier = Modifier.testTag("view_mode_tab_${mode.id}")
+                            )
+                        }
+                    }
+                }
             }
 
             // 2. Main Content Area
@@ -992,13 +1028,9 @@ fun Material3VideoPlayerScreen(
         if (uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS) {
             SortAndViewBottomSheet(
                 smartGroups = uiState.smartGroups,
-                viewMode = uiState.viewMode,
-                layoutMode = uiState.layoutMode,
                 sortBy = uiState.sortBy,
                 sortDir = uiState.sortDir,
                 onToggleSmartGroups = { viewModel.toggleSmartGroups(context) },
-                onSelectViewMode = { viewModel.setViewMode(it, context) },
-                onSelectLayoutMode = { viewModel.setLayoutMode(it, context) },
                 onSelectSortField = { viewModel.setSortField(it, context) },
                 onSelectSortDir = { viewModel.setSortDir(it, context) },
                 onDismiss = { viewModel.clearAllOverlays() }
@@ -1008,11 +1040,6 @@ fun Material3VideoPlayerScreen(
         if (uiState.detailsVideo != null) {
             VideoDetailsSheet(
                 video = uiState.detailsVideo,
-                onCopy = { label, value ->
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                    clipboard?.setPrimaryClip(ClipData.newPlainText(label, value))
-                    viewModel.triggerToast("$label copied")
-                },
                 onDismiss = { viewModel.clearAllOverlays() }
             )
         }
@@ -1125,7 +1152,8 @@ private fun M3ExpressiveHeader(
     onOpenSortSheet: () -> Unit,
     onClearSubFilter: () -> Unit,
     searchButton: (@Composable () -> Unit)?,
-    scrollBehavior: TopAppBarScrollBehavior?
+    scrollBehavior: TopAppBarScrollBehavior?,
+    onToggleLayout: (() -> Unit)? = null
 ) {
     val scheme = MaterialTheme.colorScheme
     val outerChromeBg = if (effectiveAmoled) Color.Black else scheme.background
@@ -1194,6 +1222,19 @@ private fun M3ExpressiveHeader(
                     )
                 }
                 uiState.bottomTab == BottomTab.VIDEOS -> {
+                    if (onToggleLayout != null) {
+                        val grid = uiState.layoutMode == LayoutMode.GRID
+                        IconButton(
+                            onClick = onToggleLayout,
+                            shapes = IconButtonDefaults.shapes(),
+                            modifier = Modifier.testTag("header_layout_btn")
+                        ) {
+                            Icon(
+                                if (grid) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                                contentDescription = if (grid) "Show as list" else "Show as grid"
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = onOpenSortSheet,
                         shapes = IconButtonDefaults.shapes(),

@@ -55,7 +55,6 @@ import androidx.compose.ui.unit.dp
 import com.example.data.MediaStoreScanner
 import com.example.model.VideoItem
 import com.example.model.formatCompactDate
-import com.example.model.resolutionLabel
 
 /** Row colours shared by the video lists (one colour system: MaterialTheme.colorScheme). */
 @Composable
@@ -71,7 +70,7 @@ internal fun videoRowColors(amoledBlack: Boolean) = ListItemDefaults.segmentedCo
 /** "1080p · Oct 25, 2026" line under a video's title. */
 @Composable
 private fun VideoMetaLine(video: VideoItem, showResolutionTier: Boolean, small: Boolean = false) {
-    val badge = if (showResolutionTier) resolutionLabel(video.width, video.height) else null
+    val badge: String? = null
     Text(
         text = listOfNotNull(badge, formatCompactDate(video.dateStr)).joinToString(" · "),
         style = if (small) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,

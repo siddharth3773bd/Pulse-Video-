@@ -146,7 +146,6 @@ import com.example.model.ThemeMode
 import com.example.model.VideoHistoryEntry
 import com.example.model.VideoItem
 import com.example.model.formatLastWatchedDate
-import com.example.model.resolutionLabel
 import com.example.ui.theme.LocalM3Palette
 import com.example.ui.theme.PlusJakartaSansFontFamily
 import com.example.ui.theme.PresetAppearanceSwatches
@@ -736,7 +735,7 @@ private fun VideoHistorySubPage(
                     items = historyPairs,
                     key = { _, (entry, _) -> "hist_${entry.mediaUri}" }
                 ) { idx, (entry, video) ->
-                    val badge = if (showResolutionTier) resolutionLabel(video.width, video.height) else null
+                    val badge: String? = null
                     val watchedDate = formatLastWatchedDate(entry.lastPlayedTimestamp)
                     val rowBg = if (effectiveAmoled) palette.surfaceContainerLow else palette.surfaceContainer
 
@@ -1092,7 +1091,7 @@ private fun VideoPlaylistSubPage(
                                             )
                                         } else {
                                             resolvedVideos.forEachIndexed { vIdx, video ->
-                                                val badge = if (showResolutionTier) resolutionLabel(video.width, video.height) else null
+                                                val badge: String? = null
                                                 SegmentedListItem(
                                                     onClick = { onPlayVideo(video) },
                                                     shapes = ListItemDefaults.segmentedShapes(
@@ -1661,15 +1660,6 @@ private fun AppearanceSubPage(
                 testTag = "me_amoled_black_row"
             )
 
-            // Show resolution badges switch
-            ExpressiveSettingToggleCard(
-                title = "Show resolution badges",
-                subtitle = "Display 8K, 4K, 1440p, 1080p, 720p and SD tags on videos",
-                checked = uiState.showResolutionTier,
-                effectiveAmoled = effectiveAmoled,
-                onToggle = onToggleShowResolutionTier,
-                testTag = "me_resolution_badges_row"
-            )
         }
     }
 

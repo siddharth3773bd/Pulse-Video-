@@ -73,6 +73,9 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.ZoomOutMap
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -144,7 +147,6 @@ import com.example.model.SubtitleSize
 import com.example.model.VideoAspectMode
 import com.example.model.VideoItem
 import com.example.model.formatDurationMs
-import com.example.model.resolutionLabel
 import com.example.player.PlayerController
 import com.example.player.PlayerTrackOption
 import kotlin.math.abs
@@ -309,7 +311,7 @@ fun VideoPlayerModal(
     val rightTimeLabel = if (playbackSettings.showRemainingTime) {
         "-${formatDurationMs((effectiveDurationMs - displayedPositionMs).coerceAtLeast(0L))}"
     } else formatDurationMs(effectiveDurationMs)
-    val badge = if (showResolutionTier) resolutionLabel(video.width, video.height) else null
+    val badge: String? = null
     val skipMs = playbackSettings.skipDurationSec * 1000L
     val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
 
@@ -560,12 +562,6 @@ fun VideoPlayerModal(
                             poke()
                         },
                         onPlayPause = { playerController.togglePlayPause(); poke() },
-                        onRewind = {
-                            playerController.seekTo((currentPositionMs - skipMs).coerceAtLeast(0L)); poke()
-                        },
-                        onForward = {
-                            playerController.seekTo((currentPositionMs + skipMs).coerceAtMost(effectiveDurationMs)); poke()
-                        },
                         onPrevious = onPreviousVideo,
                         onNext = onNextVideo,
                         onLock = { controlsLocked = true; poke() },
@@ -615,11 +611,6 @@ fun VideoPlayerModal(
     if (showInfoSheet) {
         VideoDetailsSheet(
             video = video,
-            onCopy = { label, value ->
-                (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)
-                    ?.setPrimaryClip(ClipData.newPlainText(label, value))
-                Toast.makeText(context, "$label copied", Toast.LENGTH_SHORT).show()
-            },
             onDismiss = { showInfoSheet = false }
         )
     }
@@ -699,8 +690,6 @@ private fun PlayerBottomBar(
     onSeekPreview: (Float) -> Unit,
     onSeekFinished: (Float) -> Unit,
     onPlayPause: () -> Unit,
-    onRewind: () -> Unit,
-    onForward: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onLock: () -> Unit,
@@ -739,35 +728,76 @@ private fun PlayerBottomBar(
             IconButton(onClick = onLock, shapes = IconButtonDefaults.shapes(), colors = white) {
                 Icon(Icons.Default.LockOpen, contentDescription = "Lock controls")
             }
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = onPrevious, shapes = IconButtonDefaults.shapes(), colors = white) {
-                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous video")
-            }
-            FilledTonalIconButton(onClick = onRewind, shapes = IconButtonDefaults.shapes(), colors = tonal) {
-                Icon(Icons.Default.FastRewind, contentDescription = "Back $skipSeconds seconds")
-            }
-            Spacer(Modifier.width(8.dp))
-            // Expressive shape morph on press.
-            FilledIconButton(
-                onClick = onPlayPause,
-                shapes = IconButtonDefaults.shapes(),
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color.White, contentColor = Color.Black),
-                modifier = Modifier.size(64.dp).testTag("player_play_pause_btn")
+            // Official Expressive button group: the pressed button springs wider and squeezes
+            // its neighbours; the shapes morph on press.
+            val prevInteraction = remember { MutableInteractionSource() }
+            val playInteraction = remember { MutableInteractionSource() }
+            val nextInteraction = remember { MutableInteractionSource() }
+            ButtonGroup(
+                overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    modifier = Modifier.size(32.dp)
+                customItem(
+                    buttonGroupContent = {
+                        FilledTonalIconButton(
+                            onClick = onPrevious,
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = tonal,
+                            interactionSource = prevInteraction,
+                            modifier = Modifier
+                                .weight(1f)
+                                .animateWidth(prevInteraction)
+                                .height(56.dp)
+                        ) { Icon(Icons.Default.SkipPrevious, contentDescription = "Previous video", modifier = Modifier.size(28.dp)) }
+                    },
+                    menuContent = { menuState ->
+                        DropdownMenuItem(text = { Text("Previous") }, onClick = { onPrevious(); menuState.dismiss() })
+                    }
+                )
+                customItem(
+                    buttonGroupContent = {
+                        FilledIconButton(
+                            onClick = onPlayPause,
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color.White, contentColor = Color.Black),
+                            interactionSource = playInteraction,
+                            modifier = Modifier
+                                .weight(1.4f)
+                                .animateWidth(playInteraction)
+                                .height(64.dp)
+                                .testTag("player_play_pause_btn")
+                        ) {
+                            Icon(
+                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play",
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    },
+                    menuContent = { menuState ->
+                        DropdownMenuItem(text = { Text(if (isPlaying) "Pause" else "Play") }, onClick = { onPlayPause(); menuState.dismiss() })
+                    }
+                )
+                customItem(
+                    buttonGroupContent = {
+                        FilledTonalIconButton(
+                            onClick = onNext,
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = tonal,
+                            interactionSource = nextInteraction,
+                            modifier = Modifier
+                                .weight(1f)
+                                .animateWidth(nextInteraction)
+                                .height(56.dp)
+                        ) { Icon(Icons.Default.SkipNext, contentDescription = "Next video", modifier = Modifier.size(28.dp)) }
+                    },
+                    menuContent = { menuState ->
+                        DropdownMenuItem(text = { Text("Next") }, onClick = { onNext(); menuState.dismiss() })
+                    }
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            FilledTonalIconButton(onClick = onForward, shapes = IconButtonDefaults.shapes(), colors = tonal) {
-                Icon(Icons.Default.FastForward, contentDescription = "Forward $skipSeconds seconds")
-            }
-            IconButton(onClick = onNext, shapes = IconButtonDefaults.shapes(), colors = white) {
-                Icon(Icons.Default.SkipNext, contentDescription = "Next video")
-            }
-            Spacer(Modifier.weight(1f))
             IconButton(onClick = onAspect, shapes = IconButtonDefaults.shapes(), colors = white, modifier = Modifier.testTag("player_aspect_btn")) {
                 Icon(
                     if (aspectMode == VideoAspectMode.FIT) Icons.Default.AspectRatio else Icons.Default.ZoomOutMap,

@@ -204,25 +204,6 @@ data class PlaybackSettings(
     val subtitleBackground: Boolean = true
 )
 
-/**
- * Shared resolution badge function used everywhere across the app.
- * Orientation never matters. Never shows raw dimensions. Returns null if width or height is 0 or missing.
- */
-fun resolutionLabel(width: Int, height: Int): String? {
-    if (width <= 0 || height <= 0) return null
-    val shortest = min(width, height)
-    val longest = max(width, height)
-    val effective = max(shortest, longest * 9 / 16)
-    return when {
-        effective >= 4300 -> "8K"
-        effective >= 2100 -> "4K"
-        effective >= 1400 -> "1440p"
-        effective >= 1000 -> "1080p"
-        effective >= 700 -> "720p"
-        else -> "SD"
-    }
-}
-
 fun formatCompactDate(dateStr: String): String {
     if (dateStr.isEmpty()) return ""
     return dateStr

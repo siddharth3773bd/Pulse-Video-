@@ -87,7 +87,6 @@ import com.example.model.ViewMode
 import com.example.model.formatDurationMs
 import com.example.model.formatSizeLabel
 import com.example.model.naturalDir
-import com.example.model.resolutionLabel
 
 // ---------------------------------------------------------------------------------------------
 // Video ⋮ menu (anchored to the button that opened it)
@@ -134,20 +133,16 @@ private val SortBy.icon: ImageVector
     }
 
 /**
- * Show (Videos / Folders / Tree), Layout (List / Grid), Sort by (chips) and Order (plain words,
- * usual choice first), plus Smart groups. Same style as the Music sort panel.
+ * Sort panel: Sort by (chips), Order (plain words, usual choice first) and Smart groups.
+ * Videos / Folders / Tree are tabs and List / Grid is a header button, so this stays short.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SortAndViewBottomSheet(
     smartGroups: Boolean,
-    viewMode: ViewMode,
-    layoutMode: LayoutMode,
     sortBy: SortBy,
     sortDir: SortDir,
     onToggleSmartGroups: () -> Unit,
-    onSelectViewMode: (ViewMode) -> Unit,
-    onSelectLayoutMode: (LayoutMode) -> Unit,
     onSelectSortField: (SortBy) -> Unit,
     onSelectSortDir: (SortDir) -> Unit,
     onDismiss: () -> Unit
@@ -165,32 +160,7 @@ fun SortAndViewBottomSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
         ) {
-            Text("View & sort", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
-
-            SectionLabel("Show")
-            ConnectedChoice(
-                options = listOf(
-                    Triple(ViewMode.VIDEOS, "Videos", Icons.Default.Movie),
-                    Triple(ViewMode.FOLDERS, "Folders", Icons.Default.Folder),
-                    Triple(ViewMode.TREE, "Tree", Icons.Default.AccountTree)
-                ),
-                selected = viewMode,
-                onSelect = onSelectViewMode,
-                tag = { "view_mode_btn_${it.id}" }
-            )
-            Spacer(Modifier.height(20.dp))
-
-            SectionLabel("Layout")
-            ConnectedChoice(
-                options = listOf(
-                    Triple(LayoutMode.LIST, "List", Icons.AutoMirrored.Filled.ViewList),
-                    Triple(LayoutMode.GRID, "Grid", Icons.Default.GridView)
-                ),
-                selected = layoutMode,
-                onSelect = onSelectLayoutMode,
-                tag = { "layout_mode_btn_${it.id}" }
-            )
-            Spacer(Modifier.height(20.dp))
+            Text("Sort", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
 
             SectionLabel("Sort by")
             FlowRow(
@@ -311,22 +281,22 @@ private fun <T> ConnectedChoice(
 // Details
 // ---------------------------------------------------------------------------------------------
 
-/** Video details: a thumbnail header, the specs, then the file. Long-press a line to copy it. */
+/**
+ * Video details, kept small: the thumbnail and name with where it lives, then one card with the
+ * basics (length, size, format, dimensions).
+ */
 @Composable
 fun VideoDetailsSheet(
     video: VideoItem,
-    onCopy: (label: String, value: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = Modifier.testTag("video_details_sheet")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp)
         ) {
@@ -334,51 +304,58 @@ fun VideoDetailsSheet(
                 VideoThumbnailBox(
                     video = video,
                     modifier = Modifier
-                        .width(128.dp)
+                        .width(112.dp)
                         .aspectRatio(16f / 9f)
                         .clip(MaterialTheme.shapes.medium)
                 )
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    video.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        video.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        "${friendlyFolderPath(video.folderPath)} · ${video.dateStr}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             Spacer(Modifier.height(16.dp))
-            Column(
-                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+            androidx.compose.material3.Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                val rows = buildList {
-                    add("Format" to video.ext.uppercase())
-                    resolutionLabel(video.width, video.height)?.let {
-                        add("Resolution" to "$it · ${video.width}×${video.height}")
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                    Row {
+                        DetailCell("Length", video.durationLabel, Modifier.weight(1f))
+                        DetailCell("Size", formatSizeLabel(video.sizeMB), Modifier.weight(1f))
                     }
-                    add("Length" to video.durationLabel)
-                    add("Size" to formatSizeLabel(video.sizeMB))
-                    add("Added" to video.dateStr)
-                    add("Folder" to friendlyFolderPath(video.folderPath))
-                    add("File" to video.displayName)
-                }
-                rows.forEachIndexed { i, (label, value) ->
-                    SegmentedListItem(
-                        onClick = {},
-                        onLongClick = { onCopy(label, value) },
-                        shapes = ListItemDefaults.segmentedShapes(index = i, count = rows.size),
-                        overlineContent = { Text(label) },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-                    ) { Text(value, style = MaterialTheme.typography.bodyLarge) }
+                    Spacer(Modifier.height(14.dp))
+                    Row {
+                        DetailCell("Format", video.ext.uppercase(), Modifier.weight(1f))
+                        DetailCell(
+                            "Dimensions",
+                            if (video.width > 0 && video.height > 0) "${video.width} × ${video.height}" else "—",
+                            Modifier.weight(1f)
+                        )
+                    }
                 }
             }
-            Text(
-                "Long-press a line to copy it",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp, top = 10.dp)
-            )
         }
+    }
+}
+
+@Composable
+private fun DetailCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
