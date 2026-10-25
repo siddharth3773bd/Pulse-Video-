@@ -19,12 +19,10 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
-      - name: Create debug keystore (needed by the project's build file)
-        run: |
-          keytool -genkeypair -v -keystore debug.keystore \
-            -storepass android -keypass android -alias androiddebugkey \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+      # The debug key is kept in the repo so every build has the same signature
+      # (a new key per build makes Android refuse to install it over the old app).
+      - name: Check debug keystore
+        run: test -f debug.keystore
 
       - uses: gradle/actions/setup-gradle@v4
         with:
