@@ -12,6 +12,7 @@ import androidx.compose.ui.layout.ContentScale
 import com.example.model.NowPlayingBackground
 import com.example.model.NowPlayingButtonColors
 import com.example.ui.theme.LocalAlbumArtGradient
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -587,7 +588,13 @@ fun NowPlayingScreen(
                             NowPlayingAction.SHUFFLE -> onToggleShuffle()
                             NowPlayingAction.REPEAT -> onCycleRepeat()
                             NowPlayingAction.LYRICS -> onLyrics()
-                            NowPlayingAction.SLEEP -> showSleepSheet = true
+                            // Tap a running timer to turn it off; tap again to set a new one.
+                            NowPlayingAction.SLEEP -> if (sleepActive) {
+                                onCancelSleepTimer()
+                                Toast.makeText(context, "Sleep timer off", Toast.LENGTH_SHORT).show()
+                            } else {
+                                showSleepSheet = true
+                            }
                         }
                     }
                     customItem(
