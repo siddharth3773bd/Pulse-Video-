@@ -141,8 +141,6 @@ private fun gradientColors(bitmap: Bitmap, seed: Int): List<Color> {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(argb, hsl)
         hsl[2] = hsl[2].coerceAtMost(maxLightness)
-        // Muted swatches from dull covers would look muddy: give any real tint some colour.
-        if (hsl[1] > 0.06f) hsl[1] = hsl[1].coerceAtLeast(0.38f)
         return Color(ColorUtils.HSLToColor(hsl))
     }
     return when (picked.size) {
