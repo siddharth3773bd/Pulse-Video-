@@ -324,7 +324,7 @@ private fun SyncedLine(
     )
     // The line being sung grows in with a soft spring (Material 3 Expressive spatial motion).
     val scale by animateFloatAsState(
-        targetValue = if (isActive) 1f else 0.9f,
+        targetValue = if (isActive) 1f else if (distance <= 1) 0.93f else 0.88f,
         animationSpec = motion.slowSpatialSpec(),
         label = "lyricScale"
     )
