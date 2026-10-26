@@ -38,6 +38,8 @@ data class AmbientSettings(
     val showTitle: Boolean = true,
     val showArtist: Boolean = true,
     val showLyrics: Boolean = true,
+    /** Black background for the night, whatever Now Playing uses. */
+    val black: Boolean = false,
     /** Turning the phone sideways on Now Playing opens ambient mode. */
     val openOnRotate: Boolean = true
 )

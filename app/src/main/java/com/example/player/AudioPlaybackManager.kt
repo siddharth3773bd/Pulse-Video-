@@ -76,6 +76,11 @@ class AudioPlaybackManager private constructor(context: Context) {
     /** Songs that failed in a row; stops the skipping when every song in the queue fails. */
     private var failuresInARow = 0
 
+    // Last session (see saveSession / restoreSessionIfIdle).
+    private val sessionPrefs = appContext.getSharedPreferences("audio_session", Context.MODE_PRIVATE)
+    private var restoreChecked = false
+    private var lastSavedAt = 0L
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private var positionPollJob: Job? = null
@@ -106,15 +111,19 @@ class AudioPlaybackManager private constructor(context: Context) {
                 fireSleepTimer(seekToStart = true)
             }
             syncFromController()
+            saveSession()
         }
 
         override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
             rebuildQueueSnapshot()
             syncFromController()
+            saveSession()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             syncFromController()
+            // Pausing saves the exact spot.
+            saveSession()
         }
 
         // Say exactly why a song couldn't play, then move on to the next one like other music apps.
@@ -196,6 +205,67 @@ class AudioPlaybackManager private constructor(context: Context) {
     fun registerTracksCatalog(tracks: List<AudioTrackItem>) {
         tracks.forEach { tracksById[it.id] = it }
         syncFromController()
+        restoreSessionIfIdle()
+    }
+
+    // ---- Last session ------------------------------------------------------------------------
+    // The queue, song and spot are saved as they change, so after the app was closed (or Android
+    // ended it) Music shows the last song again, paused where it was. Without this it only came
+    // back while the app happened to still be in memory.
+
+    private fun saveSession() {
+        val controller = mediaController ?: return
+        val count = controller.mediaItemCount
+        if (count == 0 || isLoadingQueue) return // Stopped: keep the last session for next time.
+        val ids = ArrayList<String>(count)
+        for (i in 0 until count) {
+            val id = controller.getMediaItemAt(i).mediaId
+            val track = tracksById[id] ?: return
+            // A file opened from another app isn't part of the library: keep the library session.
+            if (track.mediaId == 0L) return
+            ids += id
+        }
+        sessionPrefs.edit()
+            .putString(SESSION_IDS, ids.joinToString("\n"))
+            .putInt(SESSION_INDEX, controller.currentMediaItemIndex.coerceAtLeast(0))
+            .putLong(SESSION_POSITION, controller.currentPosition.coerceAtLeast(0L))
+            .putBoolean(SESSION_SHUFFLE, controller.shuffleModeEnabled)
+            .putInt(SESSION_REPEAT, controller.repeatMode)
+            .apply()
+        lastSavedAt = SystemClock.elapsedRealtime()
+    }
+
+    /** Once per app start, when nothing is loaded: put the last session back, paused. */
+    private fun restoreSessionIfIdle() {
+        if (restoreChecked) return
+        restoreChecked = true
+        val ids = sessionPrefs.getString(SESSION_IDS, null)
+            ?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+        if (ids.isEmpty()) return
+        val savedId = ids.getOrNull(sessionPrefs.getInt(SESSION_INDEX, 0))
+        // Songs deleted since then are skipped.
+        val tracks = ids.mapNotNull { tracksById[it] }
+        if (tracks.isEmpty()) return
+        val index = tracks.indexOfFirst { it.id == savedId }
+        val startIndex = index.coerceAtLeast(0)
+        val startPosition = if (index >= 0) sessionPrefs.getLong(SESSION_POSITION, 0L) else 0L
+        withController { controller ->
+            if (controller.mediaItemCount > 0 || _state.value.currentTrack != null) return@withController
+            scope.launch {
+                val items = withContext(Dispatchers.IO) {
+                    tracks.mapIndexed { i, track ->
+                        buildMediaItem(track, if (abs(i - startIndex) <= 1) loadTrackArtworkBytes(track) else null)
+                    }
+                }
+                if (controller.mediaItemCount > 0) return@launch
+                controller.shuffleModeEnabled = sessionPrefs.getBoolean(SESSION_SHUFFLE, false)
+                controller.repeatMode = sessionPrefs.getInt(SESSION_REPEAT, Player.REPEAT_MODE_OFF)
+                // Not prepared on purpose: nothing plays and no notification appears until Play.
+                controller.setMediaItems(items, startIndex, startPosition)
+                rebuildQueueSnapshot()
+                syncFromController()
+            }
+        }
     }
 
     fun playQueue(
@@ -562,6 +632,8 @@ class AudioPlaybackManager private constructor(context: Context) {
             while (isActive) {
                 checkSleepTimer()
                 syncFromController()
+                // While playing, the spot is saved every 10 seconds too.
+                if (_state.value.isPlaying && SystemClock.elapsedRealtime() - lastSavedAt > 10_000L) saveSession()
                 delay(250L)
             }
         }
@@ -682,6 +754,12 @@ class AudioPlaybackManager private constructor(context: Context) {
     }
 
     companion object {
+        private const val SESSION_IDS = "ids"
+        private const val SESSION_INDEX = "index"
+        private const val SESSION_POSITION = "position"
+        private const val SESSION_SHUFFLE = "shuffle"
+        private const val SESSION_REPEAT = "repeat"
+
         @Volatile
         private var instance: AudioPlaybackManager? = null
 

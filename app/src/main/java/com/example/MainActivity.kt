@@ -162,8 +162,6 @@ import com.example.ui.components.VideoPlayerModal
 import com.example.ui.theme.AlbumArtTheme
 import com.example.model.NowPlayingBackground
 import com.example.model.NowPlayingColorSource
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -875,8 +873,7 @@ fun Material3VideoPlayerScreen(
                     activeTabs = uiState.activeTabs,
                     onSelectTab = { viewModel.setBottomTab(it, context) },
                     onLongPress = { showTabsSheet = true },
-                    musicLoaded = uiState.playingAudio != null,
-                    musicPlaying = uiState.isAudioPlaying
+                    musicPlaying = uiState.playingAudio != null && uiState.isAudioPlaying
                 )
             }
         }
@@ -1001,11 +998,13 @@ fun Material3VideoPlayerScreen(
         ) {
             val ambientTrack = miniTrack ?: lastNowPlayingTrack
             if (ambientTrack != null) {
+                // Ambient's own "Black background" (for the night) wins over the Now Playing one.
+                val ambientBackground = if (libraryPrefs.ambient.black) NowPlayingBackground.AMOLED
+                else libraryPrefs.nowPlayingBackground
                 AlbumArtTheme(
                     track = ambientTrack,
                     applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
-                    // Gradient, blurred cover and black are always dark: use the dark colours there.
-                    dark = libraryPrefs.nowPlayingBackground != NowPlayingBackground.FOLLOW_THEME
+                    dark = ambientBackground != NowPlayingBackground.FOLLOW_THEME
                 ) {
                 AmbientModeScreen(
                     track = ambientTrack,
@@ -1013,7 +1012,7 @@ fun Material3VideoPlayerScreen(
                     queue = audioState.queue,
                     queueIndex = audioState.queueIndex,
                     settings = libraryPrefs.ambient,
-                    background = libraryPrefs.nowPlayingBackground,
+                    background = ambientBackground,
                     // From the button it turns sideways; turned by hand it just follows the phone.
                     forceLandscape = ambientRequested,
                     onSettingsChange = { value ->
@@ -1504,7 +1503,6 @@ private fun MainNavigationBar(
     activeTabs: List<BottomTab>,
     onSelectTab: (BottomTab) -> Unit,
     onLongPress: () -> Unit,
-    musicLoaded: Boolean = false,
     musicPlaying: Boolean = false
 ) {
     val tabs = NavTabs.filter { it.first in activeTabs }.ifEmpty { NavTabs.filter { it.first == BottomTab.VIDEOS } }
@@ -1544,15 +1542,10 @@ private fun MainNavigationBar(
                 selected = bottomTab == tab,
                 onClick = { onSelectTab(tab) },
                 icon = {
-                    // Music tab: moving sound bars while a song plays, a small dot when it's paused.
-                    if (tab == BottomTab.AUDIO && musicLoaded) {
-                        BadgedBox(badge = { if (!musicPlaying) Badge(modifier = Modifier.testTag("music_paused_badge")) }) {
-                            if (musicPlaying) {
-                                PlayingBarsIcon(contentDescription = "Music is playing")
-                            } else {
-                                Icon(icon, contentDescription = "Music is paused")
-                            }
-                        }
+                    // From another tab, the Music icon turns into moving sound bars while a song
+                    // plays. Nothing when it's paused, and nothing on the Music tab itself.
+                    if (tab == BottomTab.AUDIO && musicPlaying && bottomTab != BottomTab.AUDIO) {
+                        PlayingBarsIcon(contentDescription = "Music is playing")
                     } else {
                         Icon(icon, contentDescription = null)
                     }

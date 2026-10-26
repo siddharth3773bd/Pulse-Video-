@@ -10,6 +10,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -712,10 +713,19 @@ internal fun NowPlayingBackgroundLayer(
     style: NowPlayingBackground,
     track: AudioTrackItem,
     modifier: Modifier = Modifier,
-    /** Lyrics: the gradient's colours drift very slowly, so the screen feels alive. */
+    /** Lyrics and ambient mode: the background drifts very slowly, so the screen feels alive. */
     drift: Boolean = false
 ) {
     val gradient = LocalAlbumArtGradient.current
+    // One slow sway (about half a minute each way). Read only while drawing: redraws, never recomposes.
+    val sway = if (drift) {
+        rememberInfiniteTransition(label = "backgroundDrift").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(28_000, easing = LinearEasing), RepeatMode.Reverse),
+            label = "backgroundSway"
+        )
+    } else null
     when (style) {
         NowPlayingBackground.FOLLOW_THEME -> Box(modifier.background(MaterialTheme.colorScheme.primaryContainer))
         NowPlayingBackground.AMOLED -> Box(modifier.background(Color.Black))
@@ -726,23 +736,17 @@ internal fun NowPlayingBackgroundLayer(
             val top by animateColorAsState(gradient.getOrElse(0) { Color(0xFF1C1C1C) }, spec, label = "gradientTop")
             val middle by animateColorAsState(gradient.getOrElse(1) { Color(0xFF111111) }, spec, label = "gradientMiddle")
             val bottom by animateColorAsState(gradient.getOrElse(2) { Color.Black }, spec, label = "gradientBottom")
-            if (drift) {
-                // One slow sway (about half a minute each way); only redraws, never recomposes.
-                val sway by rememberInfiniteTransition(label = "gradientDrift").animateFloat(
-                    initialValue = 0f,
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(tween(28_000, easing = LinearEasing), RepeatMode.Reverse),
-                    label = "gradientSway"
-                )
+            if (sway != null) {
                 Box(
                     modifier.drawBehind {
                         val w = size.width
                         val h = size.height
+                        val t = sway.value
                         drawRect(
                             Brush.linearGradient(
                                 0f to top, 0.5f to middle, 1f to bottom,
-                                start = Offset(w * (0.1f + 0.5f * sway), 0f),
-                                end = Offset(w * (0.9f - 0.5f * sway), h)
+                                start = Offset(w * (0.1f + 0.5f * t), 0f),
+                                end = Offset(w * (0.9f - 0.5f * t), h)
                             )
                         )
                         drawRect(Color.Black.copy(alpha = 0.2f))
@@ -773,6 +777,14 @@ internal fun NowPlayingBackgroundLayer(
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxSize()
+                                .graphicsLayer {
+                                    // Drift: the blurred cover slowly pans, slightly zoomed so no edge shows.
+                                    if (sway != null) {
+                                        scaleX = 1.15f
+                                        scaleY = 1.15f
+                                        translationX = (sway.value - 0.5f) * size.width * 0.1f
+                                    }
+                                }
                                 .blur(120.dp)
                         )
                     }

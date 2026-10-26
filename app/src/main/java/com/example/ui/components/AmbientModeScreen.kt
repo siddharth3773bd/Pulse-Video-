@@ -14,6 +14,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.CheckableDropdownMenuItem
+import androidx.compose.material3.DropdownMenuGroup
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenuPopup
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,22 +35,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -114,8 +113,15 @@ fun AmbientModeScreen(
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val colors = nowPlayingColors(background)
 
-    Box(modifier = modifier.fillMaxSize().testTag("ambient_mode")) {
-        NowPlayingBackgroundLayer(style = background, track = track, modifier = Modifier.matchParentSize())
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            // Taps on empty space stop here (they used to reach Now Playing underneath).
+            .clickable(interactionSource = null, indication = null, onClick = {})
+            .testTag("ambient_mode")
+    ) {
+        // The colours move very slowly, so the screen feels alive without drawing attention.
+        NowPlayingBackgroundLayer(style = background, track = track, drift = true, modifier = Modifier.matchParentSize())
 
         val showArt = settings.showArtwork
         val showTitle = showArt && settings.showTitle
@@ -256,22 +262,23 @@ fun AmbientModeScreen(
             }
         }
 
-        // The only thing on screen besides the song: ⋮ for the options.
-        IconButton(
-            onClick = { showOptions = true },
-            shapes = IconButtonDefaults.shapes(),
-            colors = IconButtonDefaults.iconButtonColors(contentColor = colors.content.copy(alpha = 0.6f)),
+        // The only thing on screen besides the song: ⋮ with a small menu of options.
+        Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.displayCutout)
                 .padding(8.dp)
-                .testTag("ambient_options_btn")
         ) {
-            Icon(Symbols.MoreVert, contentDescription = "Ambient mode options")
-        }
-
-        if (showOptions) {
-            AmbientOptionsSheet(
+            IconButton(
+                onClick = { showOptions = true },
+                shapes = IconButtonDefaults.shapes(),
+                colors = IconButtonDefaults.iconButtonColors(contentColor = colors.content.copy(alpha = 0.6f)),
+                modifier = Modifier.testTag("ambient_options_btn")
+            ) {
+                Icon(Symbols.MoreVert, contentDescription = "Ambient mode options")
+            }
+            AmbientMenu(
+                expanded = showOptions,
                 settings = settings,
                 onChange = onSettingsChange,
                 onExit = {
@@ -373,108 +380,86 @@ private fun LyricsOnlyGestures(
     }
 }
 
-/** Ambient mode options: what to show, AMOLED black, and Exit. */
+/**
+ * Ambient mode options as the official Expressive menu (small, next to ⋮, instead of a sheet that
+ * covered the whole screen sideways): what to show, a black background for the night, and Exit.
+ * Switching an option keeps the menu open so several can be changed in a row.
+ */
 @Composable
-private fun AmbientOptionsSheet(
+private fun AmbientMenu(
+    expanded: Boolean,
     settings: AmbientSettings,
     onChange: (AmbientSettings) -> Unit,
     onExit: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    ModalBottomSheet(
+    DropdownMenuPopup(
+        expanded = expanded,
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.testTag("ambient_options_sheet")
+        modifier = Modifier.testTag("ambient_options_menu")
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp)
-        ) {
-            Text(
-                text = "Ambient mode",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
-            )
-            // Artwork and lyrics can't both be off, or the screen would be empty.
-            val rows = listOf(
-                AmbientOption(
-                    "Show artwork", "The album art; swipe it to change song",
-                    Symbols.Image, settings.showArtwork,
-                    enabled = !settings.showArtwork || settings.showLyrics
-                ) { onChange(settings.copy(showArtwork = it)) },
-                AmbientOption(
-                    "Show song name", if (settings.showArtwork) "Next to the artwork" else "Needs the artwork",
-                    Symbols.MusicNote, settings.showTitle && settings.showArtwork,
-                    enabled = settings.showArtwork
-                ) { onChange(settings.copy(showTitle = it)) },
-                AmbientOption(
-                    "Show artist name", if (settings.showArtwork) "Under the song name" else "Needs the artwork",
-                    Symbols.Person, settings.showArtist && settings.showArtwork,
-                    enabled = settings.showArtwork
-                ) { onChange(settings.copy(showArtist = it)) },
-                AmbientOption(
-                    "Show lyrics", "Synced lyrics, when the song has them",
-                    Symbols.Lyrics, settings.showLyrics,
-                    enabled = !settings.showLyrics || settings.showArtwork
-                ) { onChange(settings.copy(showLyrics = it)) }
-            )
-            OptionGroup(rows)
-            Text(
-                text = "The background follows Now Playing (Me › Music › Background).",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 8.dp, top = 12.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SegmentedListItem(
-                onClick = onExit,
-                shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
-                leadingContent = { Icon(Symbols.ArrowBack, contentDescription = null) },
-                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                modifier = Modifier.testTag("ambient_exit")
-            ) {
-                Text("Exit ambient mode")
+        // Artwork and lyrics can't both be off, or the screen would be empty.
+        val show = listOf(
+            AmbientOption("Artwork", Symbols.Image, settings.showArtwork, enabled = !settings.showArtwork || settings.showLyrics) {
+                onChange(settings.copy(showArtwork = it))
+            },
+            AmbientOption("Song name", Symbols.MusicNote, settings.showTitle && settings.showArtwork, enabled = settings.showArtwork) {
+                onChange(settings.copy(showTitle = it))
+            },
+            AmbientOption("Artist name", Symbols.Person, settings.showArtist && settings.showArtwork, enabled = settings.showArtwork) {
+                onChange(settings.copy(showArtist = it))
+            },
+            AmbientOption("Lyrics", Symbols.Lyrics, settings.showLyrics, enabled = !settings.showLyrics || settings.showArtwork) {
+                onChange(settings.copy(showLyrics = it))
             }
+        )
+        DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = 0, count = 3)) {
+            show.forEachIndexed { index, option ->
+                CheckableDropdownMenuItem(
+                    checked = option.checked,
+                    onCheckedChange = option.onCheckedChange,
+                    enabled = option.enabled,
+                    text = { Text(option.title) },
+                    shapes = MenuDefaults.itemShape(index = index, count = show.size),
+                    leadingIcon = { Icon(option.icon, contentDescription = null) },
+                    checkedLeadingIcon = { Icon(Symbols.Check, contentDescription = null) },
+                    modifier = Modifier.testTag("ambient_show_${option.title.lowercase().replace(' ', '_')}")
+                )
+            }
+        }
+        Spacer(Modifier.height(MenuDefaults.GroupSpacing))
+        DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = 1, count = 3)) {
+            CheckableDropdownMenuItem(
+                checked = settings.black,
+                onCheckedChange = { onChange(settings.copy(black = it)) },
+                text = { Text("Black background") },
+                supportingText = { Text("For the night; off follows Now Playing") },
+                shapes = MenuDefaults.itemShape(index = 0, count = 1),
+                leadingIcon = { Icon(Symbols.DarkMode, contentDescription = null) },
+                checkedLeadingIcon = { Icon(Symbols.Check, contentDescription = null) },
+                modifier = Modifier.testTag("ambient_black")
+            )
+        }
+        Spacer(Modifier.height(MenuDefaults.GroupSpacing))
+        DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = 2, count = 3)) {
+            DropdownMenuItem(
+                onClick = onExit,
+                text = { Text("Exit ambient mode") },
+                shape = MenuDefaults.itemShape(index = 0, count = 1).shape,
+                leadingIcon = { Icon(Symbols.ArrowBack, contentDescription = null) },
+                modifier = Modifier.testTag("ambient_exit")
+            )
         }
     }
 }
 
 private class AmbientOption(
     val title: String,
-    val subtitle: String,
     val icon: ImageVector,
     val checked: Boolean,
     val enabled: Boolean = true,
     val onCheckedChange: (Boolean) -> Unit
 )
-
-@Composable
-private fun OptionGroup(options: List<AmbientOption>) {
-    Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-        options.forEachIndexed { index, option ->
-            SegmentedListItem(
-                checked = option.checked,
-                onCheckedChange = option.onCheckedChange,
-                enabled = option.enabled,
-                shapes = ListItemDefaults.segmentedShapes(index = index, count = options.size),
-                leadingContent = { Icon(option.icon, contentDescription = null) },
-                supportingContent = { Text(option.subtitle) },
-                trailingContent = {
-                    Switch(checked = option.checked, onCheckedChange = null, enabled = option.enabled)
-                },
-                colors = ListItemDefaults.colors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    selectedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                )
-            ) {
-                Text(option.title)
-            }
-        }
-    }
-}
 
 /** Keeps the screen awake and hides the status and navigation bars while shown. */
 @Composable

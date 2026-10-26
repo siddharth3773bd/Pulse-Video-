@@ -114,6 +114,7 @@ object AppPreferencesRepository {
     private val KEY_AMB_ARTIST = booleanPreferencesKey("ambient_show_artist")
     private val KEY_AMB_LYRICS = booleanPreferencesKey("ambient_show_lyrics")
     private val KEY_AMB_ROTATE = booleanPreferencesKey("ambient_open_on_rotate")
+    private val KEY_AMB_BLACK = booleanPreferencesKey("ambient_black")
     private val KEY_LIB_BLACKLIST_SONGS = stringPreferencesKey("lib_blacklist_songs_json")
     private val KEY_LIB_BLACKLIST_FOLDERS = stringSetPreferencesKey("lib_blacklist_folders")
     private val KEY_LIB_PLAYLISTS = stringPreferencesKey("lib_audio_playlists_json")
@@ -237,6 +238,7 @@ object AppPreferencesRepository {
                     showTitle = prefs[KEY_AMB_TITLE] ?: true,
                     showArtist = prefs[KEY_AMB_ARTIST] ?: true,
                     showLyrics = prefs[KEY_AMB_LYRICS] ?: true,
+                    black = prefs[KEY_AMB_BLACK] ?: false,
                     openOnRotate = prefs[KEY_AMB_ROTATE] ?: true
                 ),
                 lyrics = com.example.lyrics.LyricsSettings(
@@ -436,6 +438,7 @@ object AppPreferencesRepository {
             it[KEY_AMB_TITLE] = value.showTitle
             it[KEY_AMB_ARTIST] = value.showArtist
             it[KEY_AMB_LYRICS] = value.showLyrics
+            it[KEY_AMB_BLACK] = value.black
             it[KEY_AMB_ROTATE] = value.openOnRotate
         }
     }
