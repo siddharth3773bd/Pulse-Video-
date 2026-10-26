@@ -39,7 +39,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxDefaults
@@ -157,7 +156,7 @@ internal fun VideoPlaylistsPage(
     if (showCreate) {
         PlaylistNameDialog(
             title = "New playlist",
-            initial = "",
+            initialName = "",
             confirmLabel = "Create",
             onConfirm = { name ->
                 onCreatePlaylist(name)
@@ -169,7 +168,7 @@ internal fun VideoPlaylistsPage(
     renameTarget?.let { target ->
         PlaylistNameDialog(
             title = "Rename playlist",
-            initial = target.name,
+            initialName = target.name,
             confirmLabel = "Save",
             onConfirm = { name ->
                 onRenamePlaylist(target.id, name)
@@ -355,43 +354,6 @@ private fun PlaylistCard(
             }
         }
     }
-}
-
-/** Name a new playlist or rename one. */
-@Composable
-private fun PlaylistNameDialog(
-    title: String,
-    initial: String,
-    confirmLabel: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var name by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                singleLine = true,
-                label = { Text("Name") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("playlist_name_field")
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = { name.trim().takeIf { it.isNotEmpty() }?.let(onConfirm) },
-                enabled = name.isNotBlank(),
-                shapes = ButtonDefaults.shapes()
-            ) { Text(confirmLabel) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, shapes = ButtonDefaults.shapes()) { Text("Cancel") }
-        }
-    )
 }
 
 /** Pick several videos to add to a playlist, then Add. */
