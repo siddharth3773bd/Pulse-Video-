@@ -35,6 +35,7 @@ import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
 import com.google.android.material.color.utilities.QuantizerCelebi
+import com.google.android.material.color.utilities.SchemeMonochrome
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.Score
 import kotlinx.coroutines.Dispatchers
@@ -116,7 +117,14 @@ private fun extractAlbumArtColors(source: Bitmap): AlbumArtColors {
     small.getPixels(pixels, 0, width, 0, 0, width, height)
 
     val quantized = QuantizerCelebi.quantize(pixels, 128)
-    val seed = Score.score(quantized).firstOrNull() ?: 0xFF4285F4.toInt()
+    // Safety net for dull or low-quality covers: Material's score skips greyish colours and falls
+    // back to Google blue. Then take the cover's most common colour that still has some tint, so
+    // the colours stay true to the cover; Tonal Spot gives it proper colourfulness either way.
+    val scored = Score.score(quantized, 4, NO_SEED, true).firstOrNull { it != NO_SEED }
+    val seed = scored
+        ?: quantized.entries.filter { Hct.fromInt(it.key).chroma >= 6.0 }.maxByOrNull { it.value }?.key
+        ?: quantized.maxByOrNull { it.value }?.key
+        ?: 0xFF4285F4.toInt()
     val hct = Hct.fromInt(seed)
 
     val light = SchemeTonalSpot(hct, false, 0.0).toComposeColorScheme(isDark = false)
@@ -124,6 +132,8 @@ private fun extractAlbumArtColors(source: Bitmap): AlbumArtColors {
 
     return AlbumArtColors(light = light, dark = dark, gradient = gradientColors(small, seed))
 }
+
+private const val NO_SEED = 0x00000000
 
 /** Echo-style gradient: the strongest swatches of the cover, darkened for white text. */
 private fun gradientColors(bitmap: Bitmap, seed: Int): List<Color> {
@@ -140,6 +150,8 @@ private fun gradientColors(bitmap: Bitmap, seed: Int): List<Color> {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(argb, hsl)
         hsl[2] = hsl[2].coerceAtMost(maxLightness)
+        // Muted swatches from dull covers would look muddy: give any real tint some colour.
+        if (hsl[1] > 0.06f) hsl[1] = hsl[1].coerceAtLeast(0.38f)
         return Color(ColorUtils.HSLToColor(hsl))
     }
     return when (picked.size) {
@@ -224,19 +236,17 @@ private fun animateColorScheme(target: ColorScheme): ColorScheme {
 
 
 /**
- * Colours for the Now Playing screens.
+ * Colours for the Now Playing screens (and lyrics, ambient, mini player): always the song's cover.
  *
- * @param applyScheme true for "Colours from: Album art" (the whole Material 3 scheme comes from
- *   the cover); false keeps the app's wallpaper / theme colours.
+ * @param monochrome the Black background: Material's official Monochrome scheme (black, white
+ *   and greys), the neutral look.
  * @param dark force the dark version of the colours, for backgrounds that are always dark
  *   (gradient, blurred cover, black); otherwise they follow the app's light / dark mode.
- *
- * The Gradient background follows the same choice: the cover's colours, or the app's.
  */
 @Composable
 fun AlbumArtTheme(
     track: AudioTrackItem?,
-    applyScheme: Boolean,
+    monochrome: Boolean = false,
     dark: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -247,17 +257,21 @@ fun AlbumArtTheme(
 
     // Keep the previous song's colours until the next ones are ready, so nothing flashes. Colours
     // worked out before are used from the first frame, so Now Playing opens in its own colours.
-    var colors by remember { mutableStateOf(if (applyScheme) cachedAlbumArtColors(track) else null) }
-    LaunchedEffect(track?.id, applyScheme) {
-        colors = if (applyScheme && track != null) albumArtColorsFor(context, track) else null
+    var colors by remember { mutableStateOf(cachedAlbumArtColors(track)) }
+    LaunchedEffect(track?.id) {
+        if (track != null) colors = albumArtColorsFor(context, track)
     }
 
     val albumScheme = colors?.let { if (isDark) it.dark else it.light }
-    val useAlbum = applyScheme && albumScheme != null
-    val scheme = animateColorScheme(if (useAlbum) albumScheme!! else base)
-    // Gradient: the cover's own colours, or (app colours / no cover) the app's dark colours.
+    val target = when {
+        monochrome -> remember(isDark) { monochromeScheme(isDark) }
+        albumScheme != null -> albumScheme
+        else -> base
+    }
+    val scheme = animateColorScheme(target)
+    // Gradient: the cover's own colours, or (no cover) the app's dark colours.
     val themeDark = LocalDarkColorScheme.current ?: base
-    val gradient = colors?.gradient?.takeIf { useAlbum }
+    val gradient = colors?.gradient
         ?: listOf(themeDark.primaryContainer, themeDark.secondaryContainer, themeDark.surfaceContainerLowest)
     CompositionLocalProvider(LocalAlbumArtGradient provides gradient) {
         MaterialExpressiveTheme(
@@ -269,3 +283,6 @@ fun AlbumArtTheme(
         )
     }
 }
+
+private fun monochromeScheme(dark: Boolean): ColorScheme =
+    SchemeMonochrome(Hct.fromInt(0xFF808080.toInt()), dark, 0.0).toComposeColorScheme(isDark = dark)

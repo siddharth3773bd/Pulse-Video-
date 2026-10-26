@@ -102,18 +102,12 @@ data class AudioPlaylist(
     val trackIds: List<String>
 )
 
-/** Where the Now Playing screen and mini player take their colours from. */
-enum class NowPlayingColorSource(val id: String, val label: String, val description: String) {
-    ALBUM_ART("album_art", "Album art", "Colours picked from the song's cover"),
-    WALLPAPER("wallpaper", "Wallpaper & app theme", "Your wallpaper colours or the app's theme")
-}
-
 /** Background of the Now Playing screen. */
 enum class NowPlayingBackground(val id: String, val label: String, val description: String) {
-    FOLLOW_THEME("follow_theme", "Colour", "One solid colour from the current colours"),
-    GRADIENT("gradient", "Gradient", "A soft gradient of the current colours"),
+    FOLLOW_THEME("follow_theme", "Colour", "One solid colour from the cover"),
+    GRADIENT("gradient", "Gradient", "A soft gradient of the cover's colours"),
     BLUR("blur", "Blur", "The album art, softly blurred"),
-    AMOLED("amoled", "Black", "Pure black, saves battery on OLED screens")
+    AMOLED("amoled", "Black", "Black and white, saves battery on OLED screens")
 }
 
 /** Persisted settings of the Library screen. */
@@ -130,7 +124,6 @@ data class LibraryPreferences(
     val hideShortAudio: Boolean = true,
     /** Hide voice and call recordings. */
     val hideRecordings: Boolean = true,
-    val nowPlayingColorSource: NowPlayingColorSource = NowPlayingColorSource.ALBUM_ART,
     val nowPlayingBackground: NowPlayingBackground = NowPlayingBackground.GRADIENT,
     /** Songs the user blacklisted (hidden from the library, still on the device). */
     val blacklistedSongs: List<BlacklistedSong> = emptyList(),

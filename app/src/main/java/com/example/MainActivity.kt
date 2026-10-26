@@ -185,7 +185,6 @@ import com.example.ui.components.VideoListItem
 import com.example.ui.components.VideoPlayerModal
 import com.example.ui.theme.AlbumArtTheme
 import com.example.model.NowPlayingBackground
-import com.example.model.NowPlayingColorSource
 import com.example.model.SidewaysMode
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -1107,8 +1106,8 @@ fun Material3VideoPlayerScreen(
             val nowTrack = miniTrack ?: lastNowPlayingTrack
             // The songs before and after get their colours ready, so Next/Previous change colour
             // together with the cover.
-            LaunchedEffect(audioState.queueIndex, audioState.queue.size, libraryPrefs.nowPlayingColorSource) {
-                if (libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART) {
+            LaunchedEffect(audioState.queueIndex, audioState.queue.size) {
+                run {
                     val queue = audioState.queue
                     val index = audioState.queueIndex
                     com.example.ui.theme.prefetchAlbumArtColors(
@@ -1120,7 +1119,7 @@ fun Material3VideoPlayerScreen(
             if (nowTrack != null) {
                 AlbumArtTheme(
                     track = nowTrack,
-                    applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
+                    monochrome = libraryPrefs.nowPlayingBackground == NowPlayingBackground.AMOLED,
                     // Gradient, blurred cover and black are always dark: use the dark colours there.
                     dark = libraryPrefs.nowPlayingBackground != NowPlayingBackground.FOLLOW_THEME
                 ) {
@@ -1202,7 +1201,7 @@ fun Material3VideoPlayerScreen(
                 // Same colours and background as Now Playing.
                 AlbumArtTheme(
                     track = lyricsTrack,
-                    applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
+                    monochrome = libraryPrefs.nowPlayingBackground == NowPlayingBackground.AMOLED,
                     // Gradient, blurred cover and black are always dark: use the dark colours there.
                     dark = libraryPrefs.nowPlayingBackground != NowPlayingBackground.FOLLOW_THEME
                 ) {
@@ -1239,7 +1238,7 @@ fun Material3VideoPlayerScreen(
                 else libraryPrefs.nowPlayingBackground
                 AlbumArtTheme(
                     track = ambientTrack,
-                    applyScheme = libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART,
+                    monochrome = ambientBackground == NowPlayingBackground.AMOLED,
                     dark = ambientBackground != NowPlayingBackground.FOLLOW_THEME
                 ) {
                 AmbientModeScreen(

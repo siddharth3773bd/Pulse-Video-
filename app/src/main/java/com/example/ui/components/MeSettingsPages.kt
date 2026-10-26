@@ -63,7 +63,6 @@ import com.example.model.LibraryPreferences
 import com.example.model.LibraryTab
 import com.example.model.NowPlayingAction
 import com.example.model.NowPlayingBackground
-import com.example.model.NowPlayingColorSource
 import com.example.model.PlaybackSettings
 import com.example.model.ScreenOrientationMode
 import com.example.model.SidewaysMode
@@ -701,13 +700,6 @@ internal fun MusicSettingsPage(audioTracks: List<AudioTrackItem>, onBack: () -> 
             title = "Now Playing",
             rows = listOf(
                 SettingRow.Choice(
-                    key = "colours_from",
-                    icon = Symbols.ColorLens,
-                    title = "Colours from",
-                    value = prefs.nowPlayingColorSource.label,
-                    onClick = { lookChoice = "colors" }
-                ),
-                SettingRow.Choice(
                     key = "background",
                     icon = Symbols.Gradient,
                     title = "Background",
@@ -803,16 +795,6 @@ internal fun MusicSettingsPage(audioTracks: List<AudioTrackItem>, onBack: () -> 
         )
     }
     when (lookChoice) {
-        "colors" -> ChoiceSheet(
-            title = "Colours from",
-            options = NowPlayingColorSource.entries.map { ChoiceOption(it, it.label, it.description) },
-            selected = prefs.nowPlayingColorSource,
-            onSelect = { value ->
-                scope.launch { AppPreferencesRepository.setNowPlayingColorSource(context, value) }
-                lookChoice = null
-            },
-            onDismiss = { lookChoice = null }
-        )
         "sideways" -> ChoiceSheet(
             title = "When the phone turns sideways",
             options = SidewaysMode.entries.map { ChoiceOption(it, it.label, it.description) },
