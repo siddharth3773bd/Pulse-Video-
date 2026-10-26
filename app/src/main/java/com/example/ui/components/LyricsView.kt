@@ -505,7 +505,9 @@ private fun sweepReveal(layout: TextLayoutResult, upTo: Float, feather: Float): 
             path.addRect(Rect(left, top, right, bottom))
             continue
         }
-        if (index < start) return null
+        // On the space between two wrapped lines: earlier lines are lit, this one not yet.
+        // (This used to return null, which lit the whole lyric for a frame: the flicker.)
+        if (index < start) return SweepReveal(path, left - feather, top, bottom, rtl = false)
         val rtl = layout.getBidiRunDirection(index.coerceAtMost(length - 1)) == ResolvedTextDirection.Rtl
         val x0 = layout.getHorizontalPosition(index, usePrimaryDirection = true)
         val x1 = if (index + 1 <= end) layout.getHorizontalPosition(index + 1, usePrimaryDirection = true) else x0
