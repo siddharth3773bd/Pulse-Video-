@@ -31,12 +31,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -176,8 +177,8 @@ fun LyricsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(interactionSource = null, indication = null, onClick = {})
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .windowInsetsPadding(WindowInsets.navigationBars)
+                // Also clear of the camera cut-out when the phone is sideways.
+                .windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
             Box(Modifier.padding(horizontal = 24.dp)) {
                 NowPlayingTopBar(
@@ -271,7 +272,9 @@ fun LyricsScreen(
                 slideOutVertically(MaterialTheme.motionScheme.slowSpatialSpec()) { it / 2 },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.navigationBars)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+                // Sideways the buttons keep a sensible size instead of stretching across.
+                .widthIn(max = 560.dp)
         ) {
             NowPlayingControls(
                 isPlaying = isPlaying,
