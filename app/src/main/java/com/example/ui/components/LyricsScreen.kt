@@ -8,6 +8,17 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.delay
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -127,8 +138,39 @@ fun LyricsScreen(
     val loadFile: () -> Unit = { filePicker.launch(arrayOf("*/*")) }
 
     val colors = nowPlayingColors(background)
-    Box(modifier = Modifier.fillMaxSize().testTag("lyrics_screen")) {
-        NowPlayingBackgroundLayer(style = background, track = track, modifier = Modifier.matchParentSize())
+    // The controls step aside while the lyrics play; any touch brings them back.
+    var controlsShown by remember { mutableStateOf(true) }
+    var lastTouch by remember { mutableLongStateOf(0L) }
+    val showingLyrics = handle.state is LyricsState.Loaded
+    LaunchedEffect(lastTouch, isPlaying, showingLyrics) {
+        controlsShown = true
+        if (isPlaying && showingLyrics) {
+            delay(4_000L)
+            controlsShown = false
+        }
+    }
+    val controlsInset by animateDpAsState(
+        targetValue = if (controlsShown) 88.dp else 0.dp,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "lyricsControlsInset"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    lastTouch = System.currentTimeMillis()
+                }
+            }
+            .testTag("lyrics_screen")
+    ) {
+        NowPlayingBackgroundLayer(
+            style = background,
+            track = track,
+            drift = true,
+            modifier = Modifier.matchParentSize()
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -178,6 +220,7 @@ fun LyricsScreen(
                         settings = settings,
                         onSeekTo = onSeekTo,
                         contentColor = colors.content,
+                        bottomInset = controlsInset,
                         modifier = Modifier.fillMaxSize()
                     )
                     // "Always search online" is off and the song has none: offer both ways.
@@ -216,6 +259,19 @@ fun LyricsScreen(
                 }
             }
 
+        }
+
+        // Controls float over the bottom of the lyrics (the lyrics leave room there anyway).
+        AnimatedVisibility(
+            visible = controlsShown,
+            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it / 2 },
+            exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()) +
+                slideOutVertically(MaterialTheme.motionScheme.slowSpatialSpec()) { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
             NowPlayingControls(
                 isPlaying = isPlaying,
                 colors = colors,
@@ -223,7 +279,9 @@ fun LyricsScreen(
                 onPlayPause = onTogglePlayPause,
                 onNext = onSkipNext,
                 compact = true,
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 16.dp)
+                modifier = Modifier
+                    .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 16.dp)
+                    .testTag("lyrics_controls")
             )
         }
     }
@@ -363,7 +421,7 @@ private fun LyricsSettingsSheet(
             Text("Lyrics", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
             if (loaded != null) {
                 Text(
-                    text = "From: ${loaded.source.label}" + if (loaded.lyrics.synced) " · Synced" else " · Not synced",
+                    text = "From ${loaded.source.label}" + if (loaded.lyrics.synced) " · Synced" else " · Not synced",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp, top = 2.dp)
@@ -405,43 +463,68 @@ private fun LyricsSettingsSheet(
                 songRows.forEachIndexed { i, row -> row(i, songRows.size) }
             }
 
-            SheetSectionTitle("All songs")
+            SheetSectionTitle("Look")
             Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-                SegmentedListItem(
-                    checked = settings.autoSearch,
-                    onCheckedChange = { onSettingsChange(settings.copy(autoSearch = it)) },
-                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 4),
-                    leadingContent = { Icon(Symbols.Sync, contentDescription = null) },
-                    supportingContent = { Text("Find lyrics automatically when a song has none") },
-                    trailingContent = { Switch(checked = settings.autoSearch, onCheckedChange = null) },
-                    colors = sheetRowColors()
-                ) { Text("Always search online") }
                 ChoiceRow(
-                    index = 1, count = 4, icon = Symbols.TextFields, title = "Text size",
+                    index = 0, count = 4, icon = Symbols.TextFields, title = "Text size",
                     options = LyricsTextSize.entries.map { it.label },
                     selected = settings.textSize.ordinal,
                     onSelect = { onSettingsChange(settings.copy(textSize = LyricsTextSize.entries[it])) }
                 )
                 ChoiceRow(
-                    index = 2, count = 4,
+                    index = 1, count = 4,
                     icon = if (settings.alignCenter) Symbols.FormatAlignCenter else Symbols.FormatAlignLeft,
                     title = "Alignment",
                     options = listOf("Left", "Centre"),
                     selected = if (settings.alignCenter) 1 else 0,
                     onSelect = { onSettingsChange(settings.copy(alignCenter = it == 1)) }
                 )
-                SegmentedListItem(
+                SwitchRow(
+                    index = 2, count = 4, icon = Symbols.BlurOn, title = "Blur",
+                    subtitle = "Soften lines far from the one being sung",
                     checked = settings.blur,
-                    onCheckedChange = { onSettingsChange(settings.copy(blur = it)) },
-                    shapes = ListItemDefaults.segmentedShapes(index = 3, count = 4),
-                    leadingContent = { Icon(Symbols.BlurOn, contentDescription = null) },
-                    supportingContent = { Text("Soften lines far from the one being sung") },
-                    trailingContent = { Switch(checked = settings.blur, onCheckedChange = null) },
-                    colors = sheetRowColors()
-                ) { Text("Blur") }
+                    onCheckedChange = { onSettingsChange(settings.copy(blur = it)) }
+                )
+                SwitchRow(
+                    index = 3, count = 4, icon = Symbols.Translate, title = "Show in English letters",
+                    subtitle = "Hindi, Urdu, Punjabi and other scripts, under each line",
+                    checked = settings.romanize,
+                    onCheckedChange = { onSettingsChange(settings.copy(romanize = it)) }
+                )
             }
+
+            SheetSectionTitle("Online")
+            SwitchRow(
+                index = 0, count = 1, icon = Symbols.Cloud, title = "Always search online",
+                subtitle = "Find lyrics on LRCLIB when a song has none of its own",
+                checked = settings.autoSearch,
+                onCheckedChange = { onSettingsChange(settings.copy(autoSearch = it)) }
+            )
         }
     }
+}
+
+/** A grouped row with an on/off switch; the whole row toggles it. */
+@Composable
+private fun SwitchRow(
+    index: Int,
+    count: Int,
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    SegmentedListItem(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+        leadingContent = { Icon(icon, contentDescription = null) },
+        supportingContent = { Text(subtitle) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        colors = sheetRowColors(),
+        modifier = Modifier.testTag("lyrics_switch_${title.lowercase().replace(' ', '_')}")
+    ) { Text(title) }
 }
 
 @Composable

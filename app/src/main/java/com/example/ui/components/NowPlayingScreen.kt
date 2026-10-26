@@ -4,6 +4,14 @@ package com.example.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -88,10 +96,13 @@ fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) 
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Colours of the Now Playing screens, from one rule so nothing clashes:
- * - "Colour" background: the main colour of the current colours (album art or app theme) for
- *   Play, the seek bar and switched-on buttons; a soft tint of the text colour for the others.
- * - Gradient, Blur and Black backgrounds are dark: everything is white (Play is solid white).
+ * Colours of the Now Playing screens, following Material 3 colour roles so nothing clashes.
+ * The colours come from "Colours from" (album art or the app's wallpaper / theme colours):
+ * - Play, the seek bar and switched-on buttons use the primary colour (the most important action).
+ * - Previous / Next and switched-off buttons use the tonal secondary container.
+ * - Gradient, Blur and Black backgrounds are dark, so the dark version of the colours is used
+ *   there (light, soft accents) and the text is white. On the "Colour" background (the primary
+ *   container) the text uses its matching on-colour and the other buttons a tint of the primary.
  */
 @Immutable
 data class NowPlayingColors(
@@ -118,7 +129,7 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             contentVariant = scheme.onPrimaryContainer.copy(alpha = 0.72f),
             main = scheme.primary,
             onMain = scheme.onPrimary,
-            soft = scheme.onPrimaryContainer.copy(alpha = 0.12f),
+            soft = scheme.primary.copy(alpha = 0.18f),
             onSoft = scheme.onPrimaryContainer
         )
     } else {
@@ -126,10 +137,10 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             background = background,
             content = Color.White,
             contentVariant = Color.White.copy(alpha = 0.72f),
-            main = Color.White,
-            onMain = Color.Black,
-            soft = Color.White.copy(alpha = 0.16f),
-            onSoft = Color.White
+            main = scheme.primary,
+            onMain = scheme.onPrimary,
+            soft = scheme.secondaryContainer,
+            onSoft = scheme.onSecondaryContainer
         )
     }
 }
@@ -239,7 +250,7 @@ fun NowPlayingScreen(
             ) {
                 NowPlayingTopBar(
                     colors = colors,
-                    title = track.album.takeIf { it.isNotBlank() && !it.equals("Unknown album", ignoreCase = true) },
+                    title = track.realAlbum,
                     subtitle = null,
                     onClose = onClose,
                     closeLabel = "Close Now Playing",
@@ -700,28 +711,47 @@ private fun formatCountdown(ms: Long): String {
 internal fun NowPlayingBackgroundLayer(
     style: NowPlayingBackground,
     track: AudioTrackItem,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Lyrics: the gradient's colours drift very slowly, so the screen feels alive. */
+    drift: Boolean = false
 ) {
     val gradient = LocalAlbumArtGradient.current
     when (style) {
         NowPlayingBackground.FOLLOW_THEME -> Box(modifier.background(MaterialTheme.colorScheme.primaryContainer))
         NowPlayingBackground.AMOLED -> Box(modifier.background(Color.Black))
         NowPlayingBackground.GRADIENT -> {
-            Crossfade(
-                targetState = gradient,
-                animationSpec = tween(800),
-                label = "nowPlayingGradient",
-                modifier = modifier
-            ) { stops ->
-                val brush = if (stops.size >= 3) {
-                    Brush.verticalGradient(0f to stops[0], 0.5f to stops[1], 1f to stops[2])
-                } else {
-                    Brush.verticalGradient(listOf(Color(0xFF1C1C1C), Color.Black))
-                }
+            // The colours glide to the next song's; the layer itself never fades, so the screen
+            // behind can't show through while songs change.
+            val spec = tween<Color>(durationMillis = 800)
+            val top by animateColorAsState(gradient.getOrElse(0) { Color(0xFF1C1C1C) }, spec, label = "gradientTop")
+            val middle by animateColorAsState(gradient.getOrElse(1) { Color(0xFF111111) }, spec, label = "gradientMiddle")
+            val bottom by animateColorAsState(gradient.getOrElse(2) { Color.Black }, spec, label = "gradientBottom")
+            if (drift) {
+                // One slow sway (about half a minute each way); only redraws, never recomposes.
+                val sway by rememberInfiniteTransition(label = "gradientDrift").animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(tween(28_000, easing = LinearEasing), RepeatMode.Reverse),
+                    label = "gradientSway"
+                )
                 Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(brush)
+                    modifier.drawBehind {
+                        val w = size.width
+                        val h = size.height
+                        drawRect(
+                            Brush.linearGradient(
+                                0f to top, 0.5f to middle, 1f to bottom,
+                                start = Offset(w * (0.1f + 0.5f * sway), 0f),
+                                end = Offset(w * (0.9f - 0.5f * sway), h)
+                            )
+                        )
+                        drawRect(Color.Black.copy(alpha = 0.2f))
+                    }
+                )
+            } else {
+                Box(
+                    modifier
+                        .background(Brush.verticalGradient(0f to top, 0.5f to middle, 1f to bottom))
                         .background(Color.Black.copy(alpha = 0.2f))
                 )
             }
@@ -732,6 +762,7 @@ internal fun NowPlayingBackgroundLayer(
                 targetState = bitmap,
                 animationSpec = tween(800),
                 label = "nowPlayingBlur",
+                // Solid black underneath, so nothing shows through while two covers cross-fade.
                 modifier = modifier.background(Color.Black)
             ) { bmp ->
                 Box(Modifier.fillMaxSize()) {

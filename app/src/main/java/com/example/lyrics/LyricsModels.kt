@@ -72,5 +72,7 @@ data class LyricsSettings(
     val autoSearch: Boolean = true,
     val textSize: LyricsTextSize = LyricsTextSize.MEDIUM,
     val alignCenter: Boolean = false,
-    val blur: Boolean = true
+    val blur: Boolean = true,
+    /** Show each line in English letters too (e.g. Hindi written in Devanagari). */
+    val romanize: Boolean = false
 )

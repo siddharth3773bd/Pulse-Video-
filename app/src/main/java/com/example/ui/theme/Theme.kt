@@ -9,6 +9,8 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.toArgb
@@ -38,14 +40,21 @@ fun DopplerTheme(
     // is the wallpaper scheme; otherwise the chosen preset (or custom colour) is the seed for
     // Google's own Material You algorithm (SchemeTonalSpot), so every role, tertiary included,
     // is a real Material colour.
+    val seed = when (paletteId) {
+        "custom" -> customColorArgb
+        else -> (M3PalettesById[paletteId] ?: IndigoDarkPalette).primary.toArgb()
+    }
     val rawScheme: ColorScheme = if (dynamicColor) {
         if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
-        val seed = when (paletteId) {
-            "custom" -> customColorArgb
-            else -> (M3PalettesById[paletteId] ?: IndigoDarkPalette).primary.toArgb()
-        }
         SchemeTonalSpot(Hct.fromInt(seed), isDark, 0.0).toComposeColorScheme(isDark)
+    }
+    // The dark version of the same colours, for screens that are always dark (Now Playing on a
+    // gradient, blurred cover or black background) even when the app itself is light.
+    val darkScheme: ColorScheme = when {
+        isDark -> rawScheme
+        dynamicColor -> dynamicDarkColorScheme(context)
+        else -> SchemeTonalSpot(Hct.fromInt(seed), true, 0.0).toComposeColorScheme(true)
     }
     val baseScheme = if (applyAmoled) {
         rawScheme.copy(
@@ -56,14 +65,19 @@ fun DopplerTheme(
             surfaceContainerLow = Color.Black
         )
     } else rawScheme
-    MaterialExpressiveTheme(
-        colorScheme = baseScheme,
-        motionScheme = MotionScheme.expressive(),
-        shapes = Shapes(),
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalDarkColorScheme provides darkScheme) {
+        MaterialExpressiveTheme(
+            colorScheme = baseScheme,
+            motionScheme = MotionScheme.expressive(),
+            shapes = Shapes(),
+            typography = Typography,
+            content = content
+        )
+    }
 }
+
+/** The app's colours in their dark version (wallpaper or chosen theme), whatever the app's mode. */
+val LocalDarkColorScheme = staticCompositionLocalOf<ColorScheme?> { null }
 
 @Composable
 fun MyApplicationTheme(

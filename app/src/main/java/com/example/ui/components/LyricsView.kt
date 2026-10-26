@@ -5,6 +5,17 @@ package com.example.ui.components
 import com.example.ui.icons.Symbols
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -130,14 +141,24 @@ fun LyricsView(
     onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier,
     contentColor: Color = Color.White,
-    horizontalPadding: Int = 24
+    horizontalPadding: Int = 24,
+    /** Room kept free at the bottom (e.g. for player controls) for the "Back to current line" button. */
+    bottomInset: Dp = 0.dp
 ) {
     if (!lyrics.synced) {
         PlainLyrics(lyrics, settings, contentColor, horizontalPadding, modifier)
         return
     }
     val live = rememberLivePosition(positionMs, isPlaying)
-    val lines = lyrics.lines
+    // A long intro gets its own "music only" row with breathing dots before the first line.
+    val lines = remember(lyrics) {
+        val first = lyrics.lines.firstOrNull()
+        if (first != null && first.timeMs >= IntroGapMs && first.text.isNotBlank()) {
+            listOf(LyricLine(timeMs = 0L, text = "")) + lyrics.lines
+        } else {
+            lyrics.lines
+        }
+    }
     val currentIndex by remember(lines, offsetMs) {
         derivedStateOf {
             val pos = live.value - offsetMs
@@ -204,6 +225,7 @@ fun LyricsView(
                     align = align,
                     origin = origin,
                     color = contentColor,
+                    isPlaying = isPlaying,
                     onClick = {
                         onSeekTo((line.timeMs + offsetMs).coerceAtLeast(0L))
                         following = true
@@ -218,7 +240,7 @@ fun LyricsView(
             exit = fadeOut() + slideOutVertically { it / 2 },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
+                .padding(bottom = 16.dp + bottomInset)
         ) {
             FilledTonalButton(
                 onClick = {
@@ -229,8 +251,8 @@ fun LyricsView(
                 },
                 shapes = ButtonDefaults.shapes(),
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = Color.White.copy(alpha = 0.18f),
-                    contentColor = Color.White
+                    containerColor = contentColor.copy(alpha = 0.18f),
+                    contentColor = contentColor
                 ),
                 modifier = Modifier.testTag("lyrics_back_to_current")
             ) {
@@ -253,6 +275,7 @@ private fun SyncedLine(
     align: TextAlign,
     origin: TransformOrigin,
     color: Color,
+    isPlaying: Boolean,
     onClick: () -> Unit
 ) {
     val alpha by animateFloatAsState(
@@ -292,7 +315,8 @@ private fun SyncedLine(
         color = color,
         shadow = if (isActive) Shadow(color = color.copy(alpha = 0.35f), blurRadius = 28f) else null
     )
-    val text = line.text.ifBlank { "♪" }
+    // Lines in another script (Hindi, Urdu, Punjabi…) can also be shown in English letters.
+    val romanized = if (settings.romanize && line.text.isNotBlank()) remember(line.text) { toEnglishLetters(line.text) } else null
 
     Box(
         modifier = Modifier
@@ -308,7 +332,10 @@ private fun SyncedLine(
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 10.dp)
     ) {
-        if (isActive && line.words.isNotEmpty()) {
+        if (line.text.isBlank()) {
+            // A music-only part (intro, solo): three dots that breathe while it plays.
+            BreathingDots(color = color, active = isActive && isPlaying, size = size)
+        } else if (isActive && line.words.isNotEmpty()) {
             // Karaoke: words light up as they are sung (only when the lyrics have word timings).
             val pos = live.value - offsetMs
             val annotated = buildAnnotatedString {
@@ -319,11 +346,89 @@ private fun SyncedLine(
                     }
                 }
             }
-            Text(text = annotated, style = style, modifier = Modifier.fillMaxWidth())
+            Column {
+                Text(text = annotated, style = style, modifier = Modifier.fillMaxWidth())
+                if (romanized != null) RomanizedLine(romanized, style)
+            }
         } else {
-            Text(text = text, style = style, modifier = Modifier.fillMaxWidth())
+            Column {
+                Text(text = line.text, style = style, modifier = Modifier.fillMaxWidth())
+                if (romanized != null) RomanizedLine(romanized, style)
+            }
         }
     }
+}
+
+/** A gap longer than this before the first line gets a "music only" row. */
+private const val IntroGapMs = 4_000L
+
+/** The line again in English letters, smaller and quieter, under the original. */
+@Composable
+private fun RomanizedLine(text: String, style: TextStyle) {
+    Text(
+        text = text,
+        style = style.copy(
+            fontSize = style.fontSize * 0.56f,
+            fontWeight = FontWeight.SemiBold,
+            color = style.color.copy(alpha = 0.72f),
+            shadow = null
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp)
+    )
+}
+
+/** Three dots for a music-only part; they swell one after another while the music plays. */
+@Composable
+private fun BreathingDots(color: Color, active: Boolean, size: Int) {
+    val dot = (size * 0.36f).dp
+    val transition = rememberInfiniteTransition(label = "lyricDots")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 1_800, easing = LinearEasing)),
+        label = "lyricDotsPhase"
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(dot * 0.7f),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height((size * 1.22f).dp)
+            .testTag("lyrics_music_dots")
+    ) {
+        repeat(3) { i ->
+            Box(
+                Modifier
+                    .size(dot)
+                    .graphicsLayer {
+                        // Each dot peaks a third of a cycle after the one before.
+                        val wave = if (active) {
+                            (kotlin.math.sin((phase - i / 3f) * 2f * Math.PI.toFloat()) + 1f) / 2f
+                        } else 0.4f
+                        scaleX = 0.7f + 0.3f * wave
+                        scaleY = 0.7f + 0.3f * wave
+                        alpha = 0.45f + 0.55f * wave
+                    }
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
+    }
+}
+
+/** Android's own transliteration (ICU, offline): any script to plain English letters. */
+private val englishLetters: android.icu.text.Transliterator? by lazy {
+    runCatching { android.icu.text.Transliterator.getInstance("Any-Latin; Latin-ASCII") }.getOrNull()
+}
+
+/** The line in English letters, or null when it already is (or can't be converted). */
+internal fun toEnglishLetters(text: String): String? {
+    val needs = text.any { ch ->
+        ch.isLetter() && Character.UnicodeScript.of(ch.code) != Character.UnicodeScript.LATIN
+    }
+    if (!needs) return null
+    return englishLetters?.transliterate(text)?.takeIf { it.isNotBlank() && it != text }
 }
 
 /** Lyrics without timing: just clean, readable text. */
@@ -341,8 +446,9 @@ private fun PlainLyrics(
         modifier = modifier.testTag("lyrics_plain")
     ) {
         itemsIndexed(lyrics.lines) { _, line ->
+            val romanized = if (settings.romanize) remember(line.text) { toEnglishLetters(line.text) } else null
             Text(
-                text = line.text,
+                text = if (romanized != null) "${line.text}\n$romanized" else line.text,
                 style = TextStyle(
                     fontSize = settings.textSize.plainSp.sp,
                     lineHeight = 1.35.em,

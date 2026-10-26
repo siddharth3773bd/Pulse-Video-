@@ -1,20 +1,14 @@
 package com.example.ui.components
 
 import com.example.ui.icons.Symbols
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -52,7 +46,7 @@ import kotlinx.coroutines.launch
  * swipe left/right to change song, double-tap to play or pause.
  *
  * Feedback: a double-tap flashes a play/pause icon over the art (with a haptic tick), and while
- * the music is paused the art stays slightly dimmed with a small pause badge in the corner.
+ * the music is paused the art stays slightly dimmed.
  */
 @Composable
 fun ArtworkPager(
@@ -139,7 +133,7 @@ fun ArtworkPager(
                         shape = shape,
                         iconSize = (side.value * 0.25f).dp
                     )
-                    // Paused: dim the art a little and show a small pause badge.
+                    // Paused: dim the art a little (the big Play button already says it's paused).
                     val paused = isCurrent && !isPlaying
                     val dim by animateFloatAsState(
                         targetValue = if (paused) 0.3f else 0f,
@@ -152,28 +146,6 @@ fun ArtworkPager(
                             .clip(shape)
                             .background(Color.Black.copy(alpha = dim))
                     )
-                    AnimatedVisibility(
-                        visible = paused,
-                        enter = fadeIn() + scaleIn(initialScale = 0.6f),
-                        exit = fadeOut() + scaleOut(targetScale = 0.6f),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(14.dp)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.55f),
-                            contentColor = Color.White
-                        ) {
-                            Icon(
-                                imageVector = Symbols.Pause,
-                                contentDescription = "Paused",
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .size(20.dp)
-                            )
-                        }
-                    }
                     // Double-tap flash.
                     val icon = flashIcon
                     if (isCurrent && icon != null) {

@@ -108,6 +108,7 @@ object AppPreferencesRepository {
     private val KEY_LYR_SIZE = stringPreferencesKey("lyrics_text_size")
     private val KEY_LYR_CENTER = booleanPreferencesKey("lyrics_align_center")
     private val KEY_LYR_BLUR = booleanPreferencesKey("lyrics_blur")
+    private val KEY_LYR_ROMAN = booleanPreferencesKey("lyrics_romanize")
     private val KEY_AMB_ART = booleanPreferencesKey("ambient_show_art")
     private val KEY_AMB_TITLE = booleanPreferencesKey("ambient_show_title")
     private val KEY_AMB_ARTIST = booleanPreferencesKey("ambient_show_artist")
@@ -243,7 +244,8 @@ object AppPreferencesRepository {
                     textSize = com.example.lyrics.LyricsTextSize.entries.find { it.id == prefs[KEY_LYR_SIZE] }
                         ?: com.example.lyrics.LyricsTextSize.MEDIUM,
                     alignCenter = prefs[KEY_LYR_CENTER] ?: false,
-                    blur = prefs[KEY_LYR_BLUR] ?: true
+                    blur = prefs[KEY_LYR_BLUR] ?: true,
+                    romanize = prefs[KEY_LYR_ROMAN] ?: false
                 )
             )
         }
@@ -424,6 +426,7 @@ object AppPreferencesRepository {
             it[KEY_LYR_SIZE] = value.textSize.id
             it[KEY_LYR_CENTER] = value.alignCenter
             it[KEY_LYR_BLUR] = value.blur
+            it[KEY_LYR_ROMAN] = value.romanize
         }
     }
 

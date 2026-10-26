@@ -196,34 +196,41 @@ private fun animateColorScheme(target: ColorScheme): ColorScheme {
 
 
 /**
- * Themes its [content] (the Now Playing screen and the mini player) from [track]'s album art.
+ * Colours for the Now Playing screens.
  *
- * @param applyScheme when true the whole Material 3 scheme comes from the cover (Pixel Player
- *   style); when false the app's wallpaper / theme colours stay.
- * @param extractColors also run extraction when only the gradient colours are needed.
+ * @param applyScheme true for "Colours from: Album art" (the whole Material 3 scheme comes from
+ *   the cover); false keeps the app's wallpaper / theme colours.
+ * @param dark force the dark version of the colours, for backgrounds that are always dark
+ *   (gradient, blurred cover, black); otherwise they follow the app's light / dark mode.
+ *
+ * The Gradient background follows the same choice: the cover's colours, or the app's.
  */
 @Composable
 fun AlbumArtTheme(
     track: AudioTrackItem?,
     applyScheme: Boolean,
-    extractColors: Boolean,
+    dark: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val base = MaterialTheme.colorScheme
-    val isDark = base.surface.luminance() < 0.5f
-    val needColors = applyScheme || extractColors
+    val appScheme = MaterialTheme.colorScheme
+    val base = if (dark) LocalDarkColorScheme.current ?: appScheme else appScheme
+    val isDark = dark || appScheme.surface.luminance() < 0.5f
 
     // Keep the previous song's colours until the next ones are ready, so nothing flashes.
     var colors by remember { mutableStateOf<AlbumArtColors?>(null) }
-    LaunchedEffect(track?.id, needColors) {
-        colors = if (needColors && track != null) albumArtColorsFor(context, track) else null
+    LaunchedEffect(track?.id, applyScheme) {
+        colors = if (applyScheme && track != null) albumArtColorsFor(context, track) else null
     }
 
     val albumScheme = colors?.let { if (isDark) it.dark else it.light }
     val useAlbum = applyScheme && albumScheme != null
     val scheme = animateColorScheme(if (useAlbum) albumScheme!! else base)
-    CompositionLocalProvider(LocalAlbumArtGradient provides colors?.gradient.orEmpty()) {
+    // Gradient: the cover's own colours, or (app colours / no cover) the app's dark colours.
+    val themeDark = LocalDarkColorScheme.current ?: base
+    val gradient = colors?.gradient?.takeIf { useAlbum }
+        ?: listOf(themeDark.primaryContainer, themeDark.secondaryContainer, themeDark.surfaceContainerLowest)
+    CompositionLocalProvider(LocalAlbumArtGradient provides gradient) {
         MaterialExpressiveTheme(
             colorScheme = scheme,
             motionScheme = MotionScheme.expressive(),

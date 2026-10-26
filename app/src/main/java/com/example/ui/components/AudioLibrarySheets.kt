@@ -265,9 +265,7 @@ fun SongInfoSheet(
             t.sampleRateHz?.let { String.format(Locale.US, "%.1f kHz", it / 1000.0) }
         ).joinToString(" · ").ifBlank { "Unknown" }
     } ?: "…"
-    val album = track.album.takeIf {
-        it.isNotBlank() && !it.equals("Unknown album", ignoreCase = true) && !it.equals(track.title, ignoreCase = true)
-    }
+    val album = track.realAlbum?.takeIf { !it.equals(track.title, ignoreCase = true) }
     val rows = listOfNotNull(
         Triple(Symbols.Timer, "Length", formatDurationMs(track.durationMs)),
         Triple(Symbols.Description, "Format", track.ext.uppercase(Locale.US).ifBlank { "Unknown" }),

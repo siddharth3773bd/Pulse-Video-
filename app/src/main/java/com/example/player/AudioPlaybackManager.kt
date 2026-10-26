@@ -516,6 +516,26 @@ class AudioPlaybackManager private constructor(context: Context) {
         }
     }
 
+    /**
+     * Swaps the song that's playing for [track] (the same song, from the library) at the same
+     * spot. Used when the pop-up player hands a file from another app over to Doppler: that app's
+     * permission to read the file ends with the pop-up, the library copy keeps working.
+     */
+    fun continueWith(track: AudioTrackItem) {
+        tracksById[track.id] = track
+        withController { controller ->
+            val position = controller.currentPosition
+            val keepPlaying = controller.playWhenReady
+            scope.launch {
+                val art = withContext(Dispatchers.IO) { loadTrackArtworkBytes(track) }
+                controller.setMediaItems(listOf(buildMediaItem(track, art)), 0, position)
+                controller.prepare()
+                controller.playWhenReady = keepPlaying
+                syncFromController()
+            }
+        }
+    }
+
     /** Hides the error dialog. */
     fun clearError() {
         _lastError.value = null

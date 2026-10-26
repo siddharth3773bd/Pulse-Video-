@@ -64,6 +64,19 @@ data class AudioTrackItem(
     val folderPath: String
         get() = path.substringBeforeLast('/', "").trimEnd('/')
 
+    /**
+     * The album name, or null when there isn't a real one. Android fills in the folder name
+     * ("My Documents", "Download") for songs without an album tag; that isn't an album.
+     */
+    val realAlbum: String?
+        get() = album.trim().takeIf { name ->
+            name.isNotEmpty() &&
+                !name.equals("Unknown album", ignoreCase = true) &&
+                !name.equals("<unknown>", ignoreCase = true) &&
+                !name.equals(folder, ignoreCase = true) &&
+                !name.equals(folderPath.substringAfterLast('/'), ignoreCase = true)
+        }
+
     /** Voice/call recordings: flagged by MediaStore or stored in a Recordings folder. */
     val looksLikeRecording: Boolean
         get() {

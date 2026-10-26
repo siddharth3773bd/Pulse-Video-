@@ -105,7 +105,7 @@ enum class NowPlayingColorSource(val id: String, val label: String, val descript
 /** Background of the Now Playing screen. */
 enum class NowPlayingBackground(val id: String, val label: String, val description: String) {
     FOLLOW_THEME("follow_theme", "Colour", "One solid colour from the current colours"),
-    GRADIENT("gradient", "Gradient", "A gradient made from the album art"),
+    GRADIENT("gradient", "Gradient", "A soft gradient of the current colours"),
     BLUR("blur", "Blur", "The album art, softly blurred"),
     AMOLED("amoled", "Black", "Pure black, saves battery on OLED screens")
 }

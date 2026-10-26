@@ -2,6 +2,8 @@ package com.example.ui.components
 
 import com.example.ui.icons.Symbols
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.LruCache
 import android.util.Size
@@ -58,15 +60,37 @@ suspend fun loadAudioArtBitmap(context: android.content.Context, uri: Uri): Bitm
     val key = uri.toString()
     AudioArtCache.get(key)?.let { return it }
     if (AudioArtCache.isMissing(key)) return null
-    val loaded = withContext(Dispatchers.IO) {
-        try {
-            context.contentResolver.loadThumbnail(uri, Size(512, 512), null)
-        } catch (_: Exception) {
-            null
-        }
-    }
+    val loaded = withContext(Dispatchers.IO) { readArt(context, uri) }
     if (loaded != null) AudioArtCache.put(key, loaded) else AudioArtCache.markMissing(key)
     return loaded
+}
+
+/**
+ * Android's ready-made thumbnail for library songs; for a file shared by another app (a file
+ * manager), which has no thumbnail, the picture stored inside the file itself.
+ */
+private fun readArt(context: android.content.Context, uri: Uri): Bitmap? {
+    try {
+        return context.contentResolver.loadThumbnail(uri, Size(512, 512), null)
+    } catch (_: Exception) {
+    }
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(context, uri)
+        val bytes = retriever.embeddedPicture ?: return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= 512 && bounds.outHeight / (sample * 2) >= 512) sample *= 2
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+    } catch (_: Exception) {
+        null
+    } finally {
+        try {
+            retriever.release()
+        } catch (_: Exception) {
+        }
+    }
 }
 
 /** The album art bitmap for [uri] as Compose state (null while loading or when missing). */
@@ -98,21 +122,7 @@ fun AudioArt(
     var bitmap by remember(key) { mutableStateOf(AudioArtCache.get(key)) }
 
     LaunchedEffect(key) {
-        if (bitmap == null && !AudioArtCache.isMissing(key)) {
-            val loaded = withContext(Dispatchers.IO) {
-                try {
-                    context.contentResolver.loadThumbnail(uri, Size(512, 512), null)
-                } catch (_: Exception) {
-                    null
-                }
-            }
-            if (loaded != null) {
-                AudioArtCache.put(key, loaded)
-                bitmap = loaded
-            } else {
-                AudioArtCache.markMissing(key)
-            }
-        }
+        if (bitmap == null && !AudioArtCache.isMissing(key)) bitmap = loadAudioArtBitmap(context, uri)
     }
 
     Box(
