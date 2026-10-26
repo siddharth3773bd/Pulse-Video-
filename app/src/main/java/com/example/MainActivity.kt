@@ -569,6 +569,23 @@ fun Material3VideoPlayerScreen(
                 SidewaysMode.AMBIENT_WHEN_IDLE -> idleAmbient
             })
         )
+    // One View and sort menu, under whichever header is on top (a folder's or the list's).
+    val videoSortMenu: @Composable (forFolder: Boolean) -> Unit = { forFolder ->
+        VideoSortMenu(
+            expanded = uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS && inVideoFolder == forFolder,
+            onDismiss = { viewModel.clearAllOverlays() },
+            viewMode = uiState.viewMode,
+            layoutMode = uiState.layoutMode,
+            sortBy = uiState.sortBy,
+            sortDir = uiState.sortDir,
+            smartGroups = uiState.smartGroups,
+            onSelectViewMode = { viewModel.setViewMode(it, context) },
+            onSelectLayoutMode = { viewModel.setLayoutMode(it, context) },
+            onSelectSortField = { viewModel.setSortField(it, context) },
+            onSelectSortDir = { viewModel.setSortDir(it, context) },
+            onToggleSmartGroups = { viewModel.toggleSmartGroups(context) }
+        )
+    }
     // Long-press selection in the Music tab: its own toolbar replaces the nav pill and mini player.
     var audioSelectionActive by remember { mutableStateOf(false) }
     val nowPlayingVisible = showNowPlaying && miniTrack != null
@@ -755,23 +772,6 @@ fun Material3VideoPlayerScreen(
             ) {
             Column(Modifier.fillMaxSize()) {
             // 1. Header (the Me tab and the Music library draw their own)
-            // One View and sort menu, under whichever header is on top (a folder's or the list's).
-            val videoSortMenu: @Composable (forFolder: Boolean) -> Unit = { forFolder ->
-                VideoSortMenu(
-                    expanded = uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS && inVideoFolder == forFolder,
-                    onDismiss = { viewModel.clearAllOverlays() },
-                    viewMode = uiState.viewMode,
-                    layoutMode = uiState.layoutMode,
-                    sortBy = uiState.sortBy,
-                    sortDir = uiState.sortDir,
-                    smartGroups = uiState.smartGroups,
-                    onSelectViewMode = { viewModel.setViewMode(it, context) },
-                    onSelectLayoutMode = { viewModel.setLayoutMode(it, context) },
-                    onSelectSortField = { viewModel.setSortField(it, context) },
-                    onSelectSortDir = { viewModel.setSortDir(it, context) },
-                    onToggleSmartGroups = { viewModel.toggleSmartGroups(context) }
-                )
-            }
             val hideMainHeader = uiState.bottomTab == BottomTab.ME ||
                 (uiState.bottomTab == BottomTab.AUDIO && uiState.hasAudioPermission)
             if (!hideMainHeader) {
