@@ -549,6 +549,25 @@ fun Material3VideoPlayerScreen(
     }
     // "Open in Doppler" from the pop-up player: Music tab with Now Playing open, once the song is here.
     val miniTrackLatest by rememberUpdatedState(miniTrack)
+    val libraryTracksLatest by rememberUpdatedState(uiState.audioTracks)
+    val libraryPrefsLatest by rememberUpdatedState(libraryPrefs)
+    val audioQueueLatest by rememberUpdatedState(audioState.queue)
+    // App start: a remembered one-song queue (from the pop-up player) gets the Songs list around
+    // it too, so Next and Previous aren't stuck on that one song.
+    LaunchedEffect(Unit) {
+        val library = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+            androidx.compose.runtime.snapshotFlow { libraryTracksLatest }.first { it.isNotEmpty() }
+        } ?: return@LaunchedEffect
+        val queue = kotlinx.coroutines.withTimeoutOrNull(5_000L) {
+            androidx.compose.runtime.snapshotFlow { audioQueueLatest }.first { it.isNotEmpty() }
+        } ?: return@LaunchedEffect
+        if (queue.size == 1) {
+            val prefs = libraryPrefsLatest
+            audioManager.surroundSingleSongWith(
+                com.example.ui.components.sortSongs(prefs.filterTracks(library), prefs.songSort, prefs.songAscending)
+            )
+        }
+    }
     LaunchedEffect(openNowPlayingSignal) {
         if (openNowPlayingSignal == 0) return@LaunchedEffect
         val ready = kotlinx.coroutines.withTimeoutOrNull(3_000L) {
@@ -557,6 +576,18 @@ fun Material3VideoPlayerScreen(
         if (ready != null) {
             viewModel.setBottomTab(BottomTab.AUDIO, context)
             showNowPlaying = true
+            // The pop-up played just this one song: put the Songs list around it (same order as
+            // the Songs tab), so Next and Previous work like for any song started in the app.
+            // On a fresh start the library may still be loading, so wait a moment for it.
+            val library = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+                androidx.compose.runtime.snapshotFlow { libraryTracksLatest }.first { it.isNotEmpty() }
+            }
+            if (library != null) {
+                val prefs = libraryPrefsLatest
+                audioManager.surroundSingleSongWith(
+                    com.example.ui.components.sortSongs(prefs.filterTracks(library), prefs.songSort, prefs.songAscending)
+                )
+            }
         }
     }
 

@@ -597,19 +597,47 @@ class AudioPlaybackManager private constructor(context: Context) {
      * spot. Used when the pop-up player hands a file from another app over to Doppler: that app's
      * permission to read the file ends with the pop-up, the library copy keeps working.
      */
-    fun continueWith(track: AudioTrackItem) {
+    suspend fun continueWith(track: AudioTrackItem) {
         tracksById[track.id] = track
         rememberSession = true
-        withController { controller ->
-            val position = controller.currentPosition
-            val keepPlaying = controller.playWhenReady
-            scope.launch {
-                val art = withContext(Dispatchers.IO) { loadTrackArtworkBytes(track) }
-                controller.setMediaItems(listOf(buildMediaItem(track, art)), 0, position)
-                controller.prepare()
-                controller.playWhenReady = keepPlaying
-                syncFromController()
+        val controller = mediaController ?: return
+        val position = controller.currentPosition
+        val keepPlaying = controller.playWhenReady
+        val art = withContext(Dispatchers.IO) { loadTrackArtworkBytes(track) }
+        controller.setMediaItems(listOf(buildMediaItem(track, art)), 0, position)
+        controller.prepare()
+        controller.playWhenReady = keepPlaying
+        syncFromController()
+    }
+
+    /**
+     * When only one song is loaded (it came from the pop-up player), puts the library songs around
+     * it without interrupting it, so Next and Previous move through the library like a song
+     * started from the Songs tab. A song that isn't in [library] gets the library after it.
+     */
+    fun surroundSingleSongWith(library: List<AudioTrackItem>) {
+        if (library.isEmpty()) return
+        val controller = mediaController ?: return
+        if (controller.mediaItemCount != 1) return
+        val currentId = controller.currentMediaItem?.mediaId ?: return
+        val index = library.indexOfFirst { it.id == currentId }
+        val before = if (index > 0) library.subList(0, index) else emptyList()
+        val after = if (index >= 0) library.subList(index + 1, library.size) else library
+        library.forEach { tracksById[it.id] = it }
+        scope.launch {
+            // Covers for the songs right next to it now; the notification fills in the rest later.
+            val beforeItems = withContext(Dispatchers.IO) {
+                before.mapIndexed { i, t -> buildMediaItem(t, if (i == before.lastIndex) loadTrackArtworkBytes(t) else null) }
             }
+            val afterItems = withContext(Dispatchers.IO) {
+                after.mapIndexed { i, t -> buildMediaItem(t, if (i == 0) loadTrackArtworkBytes(t) else null) }
+            }
+            if (controller.mediaItemCount != 1 || controller.currentMediaItem?.mediaId != currentId) return@launch
+            if (beforeItems.isNotEmpty()) controller.addMediaItems(0, beforeItems)
+            if (afterItems.isNotEmpty()) controller.addMediaItems(controller.mediaItemCount, afterItems)
+            rebuildQueueSnapshot()
+            syncFromController()
+            saveSession()
         }
     }
 

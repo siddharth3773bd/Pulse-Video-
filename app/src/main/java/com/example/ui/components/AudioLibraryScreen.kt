@@ -182,7 +182,7 @@ private data class DetailInfo(
     val playlist: AudioPlaylist? = null
 )
 
-private fun sortSongs(
+internal fun sortSongs(
     tracks: List<AudioTrackItem>,
     sort: LibrarySongSort,
     ascending: Boolean
