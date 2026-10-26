@@ -129,7 +129,7 @@ fun NowPlayingTraySheet(
     LibrarySheet(onDismiss = onDismiss) {
         SheetTitle(
             title = "Now Playing buttons",
-            subtitle = "Drag the handle to reorder. Switch buttons on or off. The tray holds up to 5 buttons."
+            subtitle = "Drag the handle to reorder. Switch buttons on or off."
         )
 
         ReorderableToggleList(

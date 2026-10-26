@@ -546,7 +546,7 @@ class AudioPlaybackManager private constructor(context: Context) {
      * Off: the songs go back to the order they had before, carrying on from the current song.
      * The current song keeps playing either way.
      */
-    private fun setShuffle(on: Boolean) {
+    fun setShuffle(on: Boolean) {
         withController { controller ->
             if (controller.shuffleModeEnabled) controller.shuffleModeEnabled = false
             val count = controller.mediaItemCount

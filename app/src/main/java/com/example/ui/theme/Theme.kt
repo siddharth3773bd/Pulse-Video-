@@ -13,9 +13,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.toArgb
-import com.google.android.material.color.utilities.Hct
-import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.example.model.ThemeMode
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -40,21 +37,18 @@ fun DopplerTheme(
     // is the wallpaper scheme; otherwise the chosen preset (or custom colour) is the seed for
     // Google's own Material You algorithm (SchemeTonalSpot), so every role, tertiary included,
     // is a real Material colour.
-    val seed = when (paletteId) {
-        "custom" -> customColorArgb
-        else -> (M3PalettesById[paletteId] ?: IndigoDarkPalette).primary.toArgb()
-    }
+    val seed = seedFor(paletteId, customColorArgb)
     val rawScheme: ColorScheme = if (dynamicColor) {
         if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
-        SchemeTonalSpot(Hct.fromInt(seed), isDark, 0.0).toComposeColorScheme(isDark)
+        schemeFromSeed(seed, isDark)
     }
     // The dark version of the same colours, for screens that are always dark (Now Playing on a
     // gradient, blurred cover or black background) even when the app itself is light.
     val darkScheme: ColorScheme = when {
         isDark -> rawScheme
         dynamicColor -> dynamicDarkColorScheme(context)
-        else -> SchemeTonalSpot(Hct.fromInt(seed), true, 0.0).toComposeColorScheme(true)
+        else -> schemeFromSeed(seed, dark = true)
     }
     val baseScheme = if (applyAmoled) {
         rawScheme.copy(
@@ -78,16 +72,3 @@ fun DopplerTheme(
 
 /** The app's colours in their dark version (wallpaper or chosen theme), whatever the app's mode. */
 val LocalDarkColorScheme = staticCompositionLocalOf<ColorScheme?> { null }
-
-@Composable
-fun MyApplicationTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    DopplerTheme(
-        themeMode = if (darkTheme) ThemeMode.DARK else ThemeMode.LIGHT,
-        dynamicColor = dynamicColor,
-        content = content
-    )
-}

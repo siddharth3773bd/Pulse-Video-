@@ -60,6 +60,23 @@ private object AlbumArtColorCache {
     fun markMissing(key: String) = synchronized(missing) { missing.add(key) }
 }
 
+/**
+ * The Material 3 colour scheme Google's Material You method (Tonal Spot, as for wallpaper colours)
+ * makes from [seedArgb]. Only the seed's hue counts: Tonal Spot sets its own colourfulness.
+ */
+fun schemeFromSeed(seedArgb: Int, dark: Boolean): ColorScheme =
+    SchemeTonalSpot(Hct.fromInt(seedArgb), dark, 0.0).toComposeColorScheme(isDark = dark)
+
+/** Hue (0–360, Material's HCT hue) of a colour: the only part of a seed Tonal Spot uses. */
+fun hueOf(argb: Int): Float = Hct.fromInt(argb).hue.toFloat()
+
+/** A seed colour for [hue]: medium colourful and bright, so it looks like the hue it stands for. */
+fun seedForHue(hue: Float): Int = Hct.from(hue.toDouble().coerceIn(0.0, 360.0), 48.0, 60.0).toInt()
+
+/** [steps] colours around the hue circle (for a rainbow track or ring), in Material's HCT hues. */
+fun hueRainbow(steps: Int = 13, tone: Double = 65.0): List<Color> =
+    (0 until steps).map { i -> Color(Hct.from(360.0 * i / (steps - 1), 60.0, tone).toInt()) }
+
 /** Colours already worked out for [track], without waiting; null if not ready yet. */
 fun cachedAlbumArtColors(track: AudioTrackItem?): AlbumArtColors? = track?.let { AlbumArtColorCache.get(it.id) }
 

@@ -93,7 +93,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExpandedFullScreenContainedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -266,7 +267,11 @@ fun AudioLibraryScreen(
     onLibraryChanged: () -> Unit = {},
     onSelectionModeChange: (Boolean) -> Unit = {},
     openRequest: LibraryOpenRequest? = null,
-    onOpenRequestHandled: () -> Unit = {}
+    onOpenRequestHandled: () -> Unit = {},
+    /** Shuffle state of the player, and what is queued, so the Shuffle buttons can show on/off. */
+    shuffleEnabled: Boolean = false,
+    queue: List<AudioTrackItem> = emptyList(),
+    onSetShuffle: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -451,8 +456,22 @@ fun AudioLibraryScreen(
             if (playingAudio?.id == target.id) onTogglePlayPause() else onPlayQueue(list, index, false)
         }
     }
-    val shuffle: (List<AudioTrackItem>) -> Unit = { pool ->
-        if (pool.isNotEmpty()) onPlayQueue(pool, pool.indices.random(), true)
+    // Shuffle is an on/off switch. When the list is what's playing, it turns shuffle on or off for
+    // the queue (the song keeps playing); for another list it starts that list shuffled.
+    val queueIds = remember(queue) { queue.mapTo(HashSet()) { it.id } }
+    val shuffleFor: (List<AudioTrackItem>) -> ShuffleControl? = { pool ->
+        if (pool.isEmpty()) {
+            null
+        } else {
+            val playingThisList = queue.size == pool.size && pool.all { it.id in queueIds }
+            ShuffleControl(
+                checked = shuffleEnabled && playingThisList,
+                onClick = {
+                    if (playingThisList) onSetShuffle(!shuffleEnabled)
+                    else onPlayQueue(pool, pool.indices.random(), true)
+                }
+            )
+        }
     }
     val toggleSelected: (AudioTrackItem) -> Unit = { track ->
         selectedIds = if (track.id in selectedIds) selectedIds - track.id else selectedIds + track.id
@@ -670,8 +689,7 @@ fun AudioLibraryScreen(
                                         info = pageDetail,
                                         onPlay = { onPlayQueue(pageDetail.tracks, 0, false) }
                                             .takeIf { pageDetail.tracks.isNotEmpty() },
-                                        onShuffle = { shuffle(pageDetail.tracks) }
-                                            .takeIf { pageDetail.tracks.isNotEmpty() }
+                                        shuffle = shuffleFor(pageDetail.tracks)
                                     )
                                 }
                             )
@@ -689,7 +707,7 @@ fun AudioLibraryScreen(
                                         header = {
                                             LibraryActionRow(
                                                 label = songCountLabel(sortedSongs.size),
-                                                onShuffle = { shuffle(sortedSongs) }
+                                                shuffle = shuffleFor(sortedSongs)
                                             )
                                         }
                                     )
@@ -991,9 +1009,15 @@ private fun MusicHeader(
 // Action row
 // ---------------------------------------------------------------------------------------------
 
-/** Official Expressive button group: Play (filled) and Shuffle (tonal). */
+/** Shuffle button state for a list: on/off, and what a tap does. */
+private class ShuffleControl(val checked: Boolean, val onClick: () -> Unit)
+
+/**
+ * Official Expressive button group: Play (filled) and Shuffle. Shuffle is an official toggle
+ * button, so you can see whether it's on: filled with "Shuffle on" when on, quiet when off.
+ */
 @Composable
-private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) {
+private fun PlayShuffleButtons(onPlay: (() -> Unit)?, shuffle: ShuffleControl?) {
     val playInteraction = remember { MutableInteractionSource() }
     val shuffleInteraction = remember { MutableInteractionSource() }
     ButtonGroup(
@@ -1034,35 +1058,34 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
                 }
             )
         }
-        if (onShuffle != null) {
+        if (shuffle != null) {
             customItem(
                 buttonGroupContent = {
                     val shuffleContent: @Composable RowScope.() -> Unit = {
                         Icon(
-                            imageVector = Symbols.Shuffle,
+                            imageVector = if (shuffle.checked) Symbols.ShuffleOn else Symbols.Shuffle,
                             contentDescription = null,
                             modifier = Modifier.size(ButtonDefaults.IconSize)
                         )
                         Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
-                        Text("Shuffle")
+                        Text(if (shuffle.checked) "Shuffle on" else "Shuffle")
                     }
                     val shuffleModifier = Modifier
                         .animateWidth(shuffleInteraction)
                         .testTag("library_shuffle_button")
                     if (onPlay == null) {
-                        // Shuffle on its own is the main action, so it is the filled button.
-                        Button(
-                            onClick = onShuffle,
-                            shapes = ButtonDefaults.shapes(),
+                        ToggleButton(
+                            checked = shuffle.checked,
+                            onCheckedChange = { shuffle.onClick() },
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                             interactionSource = shuffleInteraction,
                             modifier = shuffleModifier,
                             content = shuffleContent
                         )
                     } else {
-                        FilledTonalButton(
-                            onClick = onShuffle,
-                            shapes = ButtonDefaults.shapes(),
+                        FilledTonalToggleButton(
+                            checked = shuffle.checked,
+                            onCheckedChange = { shuffle.onClick() },
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                             interactionSource = shuffleInteraction,
                             modifier = shuffleModifier,
@@ -1072,9 +1095,9 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
                 },
                 menuContent = { menuState ->
                     DropdownMenuItem(
-                        text = { Text("Shuffle") },
+                        text = { Text(if (shuffle.checked) "Turn shuffle off" else "Shuffle") },
                         onClick = {
-                            onShuffle()
+                            shuffle.onClick()
                             menuState.dismiss()
                         }
                     )
@@ -1091,7 +1114,7 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, onShuffle: (() -> Unit)?) 
 @Composable
 private fun LibraryActionRow(
     label: String,
-    onShuffle: (() -> Unit)? = null,
+    shuffle: ShuffleControl? = null,
     leading: (@Composable () -> Unit)? = null,
     // Lists sit 8 dp from the edge (rows bring their own padding); this lines the row up at 16 dp.
     horizontalPadding: Dp = 8.dp
@@ -1104,11 +1127,11 @@ private fun LibraryActionRow(
             .padding(bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val hasButton = leading != null || onShuffle != null
+        val hasButton = leading != null || shuffle != null
         if (leading != null) {
             leading()
-        } else if (onShuffle != null) {
-            PlayShuffleButtons(onPlay = null, onShuffle = onShuffle)
+        } else if (shuffle != null) {
+            PlayShuffleButtons(onPlay = null, shuffle = shuffle)
         }
         if (hasButton) Spacer(modifier = Modifier.weight(1f))
         Text(
@@ -1130,7 +1153,7 @@ private fun LibraryActionRow(
 private fun DetailHero(
     info: DetailInfo,
     onPlay: (() -> Unit)?,
-    onShuffle: (() -> Unit)?
+    shuffle: ShuffleControl?
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(
@@ -1180,9 +1203,9 @@ private fun DetailHero(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
-        if (onPlay != null || onShuffle != null) {
+        if (onPlay != null || shuffle != null) {
             Spacer(modifier = Modifier.height(16.dp))
-            PlayShuffleButtons(onPlay = onPlay, onShuffle = onShuffle)
+            PlayShuffleButtons(onPlay = onPlay, shuffle = shuffle)
         }
     }
 }

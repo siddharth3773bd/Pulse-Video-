@@ -168,8 +168,7 @@ enum class MeSubPage(val id: String, val title: String) {
     HISTORY("history", "Video History"),
     APPEARANCE("appearance", "Appearance"),
     VIDEO_SETTINGS("video_settings", "Video"),
-    MUSIC_SETTINGS("music_settings", "Music"),
-    NAVIGATION("navigation", "Navigation")
+    MUSIC_SETTINGS("music_settings", "Music")
 }
 
 enum class ThemeMode(val id: String, val label: String) {

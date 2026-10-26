@@ -467,28 +467,19 @@ fun Material3VideoPlayerScreen(
         )
     }
 
-    val defaultHomeTab = if (BottomTab.VIDEOS in uiState.activeTabs) {
-        BottomTab.VIDEOS
-    } else {
-        uiState.activeTabs.firstOrNull() ?: BottomTab.VIDEOS
-    }
-
-    // Back navigation handler
+    // Back steps out of whatever is open (selection, search, a sub-page, a folder). On a tab's main
+    // screen it leaves the app like any Android app, instead of jumping to another tab first.
     BackHandler(
         enabled = uiState.isSelectionMode ||
             uiState.searchOpen ||
-            uiState.meSubPage != MeSubPage.NONE ||
             uiState.selectedFolderFilter != null ||
-            uiState.selectedPlaylistFilter != null ||
-            uiState.bottomTab != defaultHomeTab
+            uiState.selectedPlaylistFilter != null
     ) {
         when {
             uiState.isSelectionMode -> viewModel.clearSelection()
             uiState.searchOpen -> viewModel.setSearchOpen(false)
-            uiState.meSubPage != MeSubPage.NONE -> viewModel.setMeSubPage(MeSubPage.NONE)
             uiState.selectedFolderFilter != null -> viewModel.selectFolderFilter(null)
             uiState.selectedPlaylistFilter != null -> viewModel.selectPlaylistFilter(null)
-            uiState.bottomTab != defaultHomeTab -> viewModel.setBottomTab(defaultHomeTab, context)
         }
     }
 
@@ -642,8 +633,8 @@ fun Material3VideoPlayerScreen(
                 .widthIn(max = 600.dp)
                 .align(Alignment.TopCenter)
         ) {
-            // 1. Header (Me sub-pages and the Music library draw their own)
-            val hideMainHeader = (uiState.bottomTab == BottomTab.ME && uiState.meSubPage != MeSubPage.NONE) ||
+            // 1. Header (the Me tab and the Music library draw their own)
+            val hideMainHeader = uiState.bottomTab == BottomTab.ME ||
                 (uiState.bottomTab == BottomTab.AUDIO && uiState.hasAudioPermission)
             if (!hideMainHeader) {
                 MainHeader(
@@ -672,11 +663,12 @@ fun Material3VideoPlayerScreen(
             if (uiState.bottomTab == BottomTab.ME) {
                 MeTabScreen(
                     uiState = uiState,
-                    effectiveAmoled = effectiveAmoled,
                     onOpenSubPage = { subPage -> viewModel.setMeSubPage(subPage) },
                     onCloseSubPage = { viewModel.setMeSubPage(MeSubPage.NONE) },
+                    onOpenTabsSheet = { showTabsSheet = true },
                     onPlayVideo = { video -> viewModel.playVideo(video, context) },
                     onClearHistory = { viewModel.clearVideoHistory(context) },
+                    onRemoveFromHistory = { videoId -> viewModel.removeFromHistory(videoId, context) },
                     onCreatePlaylist = { name -> viewModel.createPlaylist(name, context) },
                     onRenamePlaylist = { plId, newName -> viewModel.renamePlaylist(plId, newName, context) },
                     onDeletePlaylist = { plId -> viewModel.deletePlaylist(plId, context) },
@@ -693,9 +685,6 @@ fun Material3VideoPlayerScreen(
                     onToggleAmoledBlack = { viewModel.toggleAmoledBlack(context) },
                     onUpdatePlaybackSettings = { transform ->
                         viewModel.updatePlaybackSettings(context, transform)
-                    },
-                    onSetTabActive = { tab, active ->
-                        viewModel.setTabActive(tab, active, context)
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -738,6 +727,9 @@ fun Material3VideoPlayerScreen(
                                 )
                             } else {
                                 AudioLibraryScreen(
+                                    shuffleEnabled = audioState.shuffleEnabled,
+                                    queue = audioState.queue,
+                                    onSetShuffle = { on -> audioManager.setShuffle(on) },
                                     tracks = uiState.audioTracks,
                                     playingAudio = uiState.playingAudio,
                                     isAudioPlaying = uiState.isAudioPlaying,
@@ -1656,7 +1648,7 @@ private fun PlayingBarsIcon(contentDescription: String) {
 /** Long-press on the navigation bar opens this: a switch per tab (at least one stays on). */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun ChooseTabsSheet(
+internal fun ChooseTabsSheet(
     activeTabs: List<BottomTab>,
     onSetTabActive: (BottomTab, Boolean) -> Unit,
     onDismiss: () -> Unit
@@ -1675,7 +1667,7 @@ private fun ChooseTabsSheet(
         ) {
             Text("Tabs", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp))
             Text(
-                "Choose what shows in the bar. Long-press the bar again to change it.",
+                "Choose what shows in the bar. You can also long-press the bar to get here.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 12.dp)
@@ -1683,17 +1675,21 @@ private fun ChooseTabsSheet(
             Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                 NavTabs.forEachIndexed { i, (tab, label, icon) ->
                     val on = tab in activeTabs
+                    // Me holds the settings, so it always stays; one other tab must stay on too.
+                    val locked = tab == BottomTab.ME
                     val isLast = on && activeTabs.size <= 1
                     SegmentedListItem(
                         checked = on,
                         onCheckedChange = { checked -> onSetTabActive(tab, checked) },
-                        enabled = !isLast,
+                        enabled = !isLast && !locked,
                         shapes = ListItemDefaults.segmentedShapes(index = i, count = NavTabs.size),
                         leadingContent = { Icon(icon, contentDescription = null) },
-                        supportingContent = if (isLast) {
-                            { Text("At least one tab stays on") }
-                        } else null,
-                        trailingContent = { Switch(checked = on, onCheckedChange = null, enabled = !isLast) },
+                        supportingContent = when {
+                            locked -> { { Text("Always shown: settings live here") } }
+                            isLast -> { { Text("At least one tab stays on") } }
+                            else -> null
+                        },
+                        trailingContent = { Switch(checked = on, onCheckedChange = null, enabled = !isLast && !locked) },
                         colors = ListItemDefaults.segmentedColors(containerColor = scheme.surfaceContainerHigh),
                         modifier = Modifier.testTag("tab_switch_${tab.id}")
                     ) { Text(label) }

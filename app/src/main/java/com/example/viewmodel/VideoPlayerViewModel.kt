@@ -13,7 +13,6 @@ import com.example.data.MediaStoreScanner
 import com.example.model.AudioTrackItem
 import com.example.model.naturalDir
 import com.example.model.BottomTab
-import com.example.model.DecoderMode
 import com.example.model.LayoutMode
 import com.example.model.MAX_HISTORY_ITEMS
 import com.example.model.MeSubPage
@@ -240,7 +239,9 @@ class VideoPlayerViewModel : ViewModel() {
                 val stored = AppPreferencesRepository.observePreferences(appContext).first()
                 val cappedHistory = stored.historyEntries.take(MAX_HISTORY_ITEMS)
                 val progressMap = cappedHistory.associate { it.mediaUri to it.progress }
-                val validTabs = stored.activeTabs.ifEmpty { BottomTab.entries }
+                // Me always shows: the settings live there.
+                val storedTabs = stored.activeTabs.ifEmpty { BottomTab.entries }
+                val validTabs = BottomTab.entries.filter { it in storedTabs || it == BottomTab.ME }
                 val startTab = if (stored.lastBottomTab in validTabs) stored.lastBottomTab else validTabs.first()
 
                 _uiState.update { state ->
@@ -477,6 +478,8 @@ class VideoPlayerViewModel : ViewModel() {
         var changed = false
         _uiState.update { state ->
             val currentSet = state.activeTabs.toSet()
+            // Me holds the settings, so it can't be hidden.
+            if (!active && tab == BottomTab.ME) return@update state
             if (!active && currentSet.size <= 1 && tab in currentSet) {
                 // Minimum one tab rule: cannot remove the last active tab
                 return@update state
@@ -1045,6 +1048,23 @@ class VideoPlayerViewModel : ViewModel() {
             viewModelScope.launch {
                 AppPreferencesRepository.updateHistory(appCtx, nextEntries)
             }
+        }
+    }
+
+    /** Removes one video from the watch history (swipe it away). */
+    fun removeFromHistory(videoId: String, context: Context? = null) {
+        var nextEntries: List<VideoHistoryEntry> = emptyList()
+        _uiState.update { state ->
+            val entries = state.historyEntries.filterNot { it.mediaUri == videoId }
+            nextEntries = entries
+            state.copy(
+                historyEntries = entries,
+                progressHistory = entries.associate { it.mediaUri to it.progress }
+            )
+        }
+        if (context != null) {
+            val appCtx = context.applicationContext
+            viewModelScope.launch { AppPreferencesRepository.updateHistory(appCtx, nextEntries) }
         }
     }
 

@@ -4,7 +4,6 @@ package com.example.ui.components
 
 import com.example.ui.icons.Symbols
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -115,7 +114,8 @@ fun LyricsScreen(
     onSkipPrevious: () -> Unit,
     onClose: () -> Unit
 ) {
-    BackHandler(onBack = onClose)
+    // Predictive back: Lyrics shrinks and follows the finger, showing Now Playing behind it.
+    val back = rememberPredictiveBack(onBack = onClose)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val handle = rememberLyricsState(track, settings)
@@ -157,6 +157,7 @@ fun LyricsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .predictiveBackPreview(back)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)

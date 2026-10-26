@@ -2,12 +2,9 @@
 
 package com.example.ui.components
 
-import androidx.activity.BackEventCompat
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,12 +14,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.IntOffset
-import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.launch
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -216,29 +209,9 @@ fun NowPlayingScreen(
     val flingClosePx = with(density) { 900.dp.toPx() }
     val motion = MaterialTheme.motionScheme
     val settleSpec = motion.defaultSpatialSpec<Float>()
-    val scope = rememberCoroutineScope()
 
-    // Predictive back (Google's guidance for in-app surfaces): while the back gesture is held the
-    // screen shrinks to 90%, moves a little with the finger and rounds its corners. Let go and it
-    // shrinks into the mini player; change your mind and it springs back.
-    val backProgress = remember { Animatable(0f) }
-    var backFromLeft by remember { mutableStateOf(true) }
-    var backPull by remember { mutableFloatStateOf(0f) }
-    PredictiveBackHandler { events ->
-        var startY = Float.NaN
-        try {
-            events.collect { event ->
-                if (startY.isNaN()) startY = event.touchY
-                backFromLeft = event.swipeEdge != BackEventCompat.EDGE_RIGHT
-                backPull = event.touchY - startY
-                backProgress.snapTo(event.progress)
-            }
-            closeLatest()
-        } catch (cancelled: CancellationException) {
-            scope.launch { backProgress.animateTo(0f, settleSpec) }
-            throw cancelled
-        }
-    }
+    // Predictive back: the screen shrinks and follows the finger, then goes into the mini player.
+    val back = rememberPredictiveBack(onBack = { closeLatest() })
     // Swipe down: the screen follows the finger, then closes or springs back.
     var dragOffset by remember { mutableFloatStateOf(0f) }
 
@@ -282,24 +255,14 @@ fun NowPlayingScreen(
                 }
             )
             .graphicsLayer {
-                val back = PredictiveBackEasing.transform(backProgress.value)
                 val pull = (dragOffset / size.height).coerceIn(0f, 1f)
-                val scale = (1f - 0.1f * back) * (1f - 0.1f * pull)
-                scaleX = scale
-                scaleY = scale
-                val margin = 8.dp.toPx()
-                val maxShiftX = (size.width / 20f - margin).coerceAtLeast(0f)
-                val maxShiftY = (size.height / 20f - margin).coerceAtLeast(0f)
-                translationX = (if (backFromLeft) 1f else -1f) * maxShiftX * back
-                translationY = dragOffset +
-                    (backPull / (size.height / 2f)).coerceIn(-1f, 1f) * maxShiftY * back
-                val corner = (MiniPlayerHeight / 2).toPx() * maxOf(back, (pull * 6f).coerceAtMost(1f))
-                if (corner > 0f) {
-                    shape = RoundedCornerShape(corner)
-                    clip = true
-                } else {
-                    clip = false
-                }
+                applyPredictiveBack(
+                    state = back,
+                    cornerRadius = MiniPlayerHeight / 2,
+                    extraScale = 1f - 0.1f * pull,
+                    extraTranslationY = dragOffset,
+                    extraCornerFraction = pull * 6f
+                )
             }
     ) {
         NowPlayingBackgroundLayer(

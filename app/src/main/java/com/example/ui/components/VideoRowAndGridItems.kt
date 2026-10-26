@@ -259,7 +259,9 @@ fun VideoThumbnailBox(
     video: VideoItem,
     modifier: Modifier = Modifier,
     episodeLabel: String? = null,
-    selection: ThumbSelection = ThumbSelection.NONE
+    selection: ThumbSelection = ThumbSelection.NONE,
+    /** How much was watched (0–1); shows as a thin bar along the bottom, like video apps do. */
+    watchedFraction: Float = 0f
 ) {
     val context = LocalContext.current
     val cacheKey = video.id
@@ -326,6 +328,15 @@ fun VideoThumbnailBox(
                 ThumbPill(episodeLabel, Modifier.align(Alignment.BottomStart))
             }
             ThumbPill(video.durationLabel, Modifier.align(Alignment.BottomEnd))
+            if (watchedFraction > 0.01f) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(watchedFraction.coerceIn(0f, 1f))
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
         }
 
         // Selection check (top-start), only while selecting.
