@@ -205,8 +205,9 @@ fun LyricsView(
             if (delta == 0f) return@LaunchedEffect
             // The list moves at once; each line then glides from where it was to its new place.
             val now = withFrameNanos { it }
-            waves.start(delta, target, now)
-            listState.scrollBy(delta)
+            val moved = listState.scrollBy(delta)
+            if (moved == 0f) return@LaunchedEffect
+            waves.start(moved, target, now)
             if (!waves.running) {
                 waves.running = true
                 scope.launch {
