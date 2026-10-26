@@ -43,6 +43,7 @@ class VideoAudioService : MediaSessionService() {
         ): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(ACTION_STOP, Bundle.EMPTY))
+                .add(SessionCommand(ACTION_BACK_10, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -55,6 +56,11 @@ class VideoAudioService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == ACTION_BACK_10) {
+                val p = session.player
+                p.seekTo((p.currentPosition - 10_000L).coerceAtLeast(0L))
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             if (customCommand.customAction == ACTION_STOP) {
                 session.player.pause()
                 stopSelf()
@@ -132,16 +138,23 @@ class VideoAudioService : MediaSessionService() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val stopButton = CommandButton.Builder()
+        // Extra buttons in the system media player: "back 10 s" first, then ✕. Phones put the first
+        // extra button before ⏮ and the second after ⏭, so ✕ sits on the right.
+        val backButton = CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
+            .setDisplayName("Back 10 seconds")
+            .setSessionCommand(SessionCommand(ACTION_BACK_10, Bundle.EMPTY))
+            .setSlots(CommandButton.SLOT_OVERFLOW)
+            .build()
+        val stopButton = CommandButton.Builder(CommandButton.ICON_UNDEFINED)
             .setDisplayName("Stop")
-            .setIconResId(R.drawable.ic_stop_playback)
+            .setCustomIconResId(R.drawable.ic_stop_playback)
             .setSessionCommand(SessionCommand(ACTION_STOP, Bundle.EMPTY))
             .build()
         val s = MediaSession.Builder(this, p)
             .setId(SESSION_ID)
             .setSessionActivity(openApp)
             .setCallback(callback)
-            .setCustomLayout(ImmutableList.of(stopButton))
+            .setMediaButtonPreferences(ImmutableList.of(backButton, stopButton))
             .build()
         session = s
         addSession(s)
@@ -168,6 +181,7 @@ class VideoAudioService : MediaSessionService() {
 
     companion object {
         private const val ACTION_STOP = "app.doppler.player.VIDEO_AUDIO_STOP"
+        private const val ACTION_BACK_10 = "com.example.player.VIDEO_BACK_10"
         private const val SESSION_ID = "doppler_video_audio"
         private const val CHANNEL_ID = "doppler_video_audio_stop"
         private const val STOP_NOTIFICATION_ID = 7341

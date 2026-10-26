@@ -2,7 +2,6 @@ package com.example.model
 
 import android.net.Uri
 import androidx.compose.runtime.Immutable
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -233,11 +232,6 @@ fun formatCompactDate(dateStr: String): String {
         .replace("December", "Dec")
 }
 
-fun formatLastWatchedDate(timestampMs: Long): String {
-    if (timestampMs <= 0L) return ""
-    val formatter = SimpleDateFormat("MMM d, yyyy", Locale.US)
-    return formatter.format(Date(timestampMs))
-}
 
 fun formatSizeLabel(sizeMB: Double): String {
     return if (sizeMB >= 1024.0) {

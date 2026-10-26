@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -791,9 +792,18 @@ class AudioPlaybackManager private constructor(context: Context) {
             while (isActive) {
                 checkSleepTimer()
                 syncFromController()
+                val playing = _state.value.isPlaying
                 // While playing, the spot is saved every 10 seconds too.
-                if (_state.value.isPlaying && SystemClock.elapsedRealtime() - lastSavedAt > 10_000L) saveSession()
-                delay(250L)
+                if (playing && SystemClock.elapsedRealtime() - lastSavedAt > 10_000L) saveSession()
+                // Battery: the position is read 4 times a second only while a screen shows it.
+                // Playing in the background, once a second is plenty (sleep timer, saving).
+                // Paused, nothing moves: wait until it plays again or a sleep timer starts
+                // (player events keep the state up to date meanwhile).
+                when {
+                    playing && _state.subscriptionCount.value > 0 -> delay(250L)
+                    playing || sleepTimerEndAtMs > 0L -> delay(1_000L)
+                    else -> _state.first { it.isPlaying || sleepTimerEndAtMs > 0L }
+                }
             }
         }
     }
@@ -924,6 +934,9 @@ class AudioPlaybackManager private constructor(context: Context) {
 
         @Volatile
         private var instance: AudioPlaybackManager? = null
+
+        /** The manager if the app has already made it (never creates one). */
+        fun existingInstance(): AudioPlaybackManager? = instance
 
         fun getInstance(context: Context): AudioPlaybackManager {
             return instance ?: synchronized(this) {

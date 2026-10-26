@@ -245,13 +245,6 @@ internal fun LazyListScope.settingsGroup(key: String, title: String?, rows: List
     item(key = "$key:end") { Spacer(Modifier.animateItem().height(12.dp)) }
 }
 
-/** The same group outside a lazy list (a sheet, a dialog). */
-@Composable
-internal fun SettingsGroup(rows: List<SettingRow>, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-        rows.forEachIndexed { index, row -> SettingRowItem(row = row, index = index, count = rows.size) }
-    }
-}
 
 @Composable
 private fun SettingRowItem(row: SettingRow, index: Int, count: Int, modifier: Modifier = Modifier) {

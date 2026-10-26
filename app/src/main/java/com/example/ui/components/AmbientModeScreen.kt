@@ -138,7 +138,7 @@ fun AmbientModeScreen(
             .testTag("ambient_mode")
     ) {
         // The colours move very slowly, so the screen feels alive without drawing attention.
-        NowPlayingBackgroundLayer(style = background, track = track, drift = true, modifier = Modifier.matchParentSize())
+        NowPlayingBackgroundLayer(style = background, track = track, drift = true, moving = isPlaying, modifier = Modifier.matchParentSize())
 
         val showArt = settings.showArtwork
         val showTitle = showArt && settings.showTitle

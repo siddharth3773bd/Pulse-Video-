@@ -37,7 +37,9 @@ data class PlayerState(
     val isEnded: Boolean = false,
     val activeSubtitleText: String = "",
     /** Current subtitle cues with their styling and position, for Media3's SubtitleView. */
-    val cues: List<Cue> = emptyList()
+    val cues: List<Cue> = emptyList(),
+    /** Goes up each time a new picture is first shown (a new video, or after a seek). */
+    val firstFrameCount: Int = 0
 )
 
 /**

@@ -486,27 +486,6 @@ class VideoPlayerViewModel : ViewModel() {
         }
     }
 
-    fun handleSortOptionClick(clickedSort: SortBy, context: Context? = null) {
-        var nextSortBy = clickedSort
-        var nextSortDir = SortDir.DESC
-        _uiState.update { state ->
-            if (state.sortBy == clickedSort) {
-                val toggledDir = if (state.sortDir == SortDir.ASC) SortDir.DESC else SortDir.ASC
-                nextSortBy = state.sortBy
-                nextSortDir = toggledDir
-                state.copy(sortDir = toggledDir)
-            } else {
-                val defaultDir = if (clickedSort == SortBy.NAME) SortDir.ASC else SortDir.DESC
-                nextSortBy = clickedSort
-                nextSortDir = defaultDir
-                state.copy(sortBy = clickedSort, sortDir = defaultDir)
-            }
-        }
-        if (context != null) {
-            val appCtx = context.applicationContext
-            viewModelScope.launch { AppPreferencesRepository.updateSort(appCtx, nextSortBy, nextSortDir) }
-        }
-    }
 
     fun setThemeMode(mode: ThemeMode, context: Context? = null) {
         _uiState.update { it.copy(themeMode = mode) }
@@ -635,9 +614,6 @@ class VideoPlayerViewModel : ViewModel() {
         }
     }
 
-    fun setSearchQuery(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
-    }
 
     fun toggleSelectId(id: String) {
         _uiState.update { state ->
@@ -850,10 +826,6 @@ class VideoPlayerViewModel : ViewModel() {
         pendingDeleteUris = emptyList()
     }
 
-    fun selectSingleFromMenu(video: VideoItem) {
-        clearAllOverlays()
-        _uiState.update { it.copy(selectedIds = listOf(video.id)) }
-    }
 
     fun openPlaylistSheetForIds(ids: List<String>) {
         _uiState.update {
@@ -1277,20 +1249,6 @@ class VideoPlayerViewModel : ViewModel() {
         return true
     }
 
-    fun playAudioTrack(context: Context, track: AudioTrackItem) {
-        if (_uiState.value.playingAudio?.id == track.id) {
-            toggleAudioPlayPause()
-            return
-        }
-        val visibleTracks = _uiState.value.audioTracks.ifEmpty { listOf(track) }
-        val startIndex = visibleTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-        playAudioQueue(
-            context = context,
-            tracks = visibleTracks,
-            startIndex = startIndex,
-            shuffle = false
-        )
-    }
 
     fun playAudioQueue(
         context: Context,

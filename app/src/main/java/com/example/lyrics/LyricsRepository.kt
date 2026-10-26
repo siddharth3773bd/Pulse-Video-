@@ -16,7 +16,6 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -247,10 +246,6 @@ object LyricsRepository {
         writeRecord(context, track, readRecord(context, track).copy(offsetMs = offsetMs))
     }
 
-    /** Forget a failed search so the next try really asks LRCLIB again. */
-    suspend fun clearNotFound(context: Context, track: AudioTrackItem) {
-        writeRecord(context, track, readRecord(context, track).copy(notFound = false, instrumental = false))
-    }
 
     /** Reads a picked .lrc / .txt file as text. */
     suspend fun readTextFile(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {

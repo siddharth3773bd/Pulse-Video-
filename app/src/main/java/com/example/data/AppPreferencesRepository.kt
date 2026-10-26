@@ -280,19 +280,7 @@ object AppPreferencesRepository {
         }
     }
 
-    suspend fun setTrackLiked(context: Context, trackId: String, liked: Boolean) {
-        context.appDataStore.edit {
-            val current = it[KEY_LIB_LIKED_IDS] ?: emptySet()
-            it[KEY_LIB_LIKED_IDS] = if (liked) current + trackId else current - trackId
-        }
-    }
 
-    suspend fun setTracksLiked(context: Context, trackIds: Collection<String>, liked: Boolean) {
-        context.appDataStore.edit {
-            val current = it[KEY_LIB_LIKED_IDS] ?: emptySet()
-            it[KEY_LIB_LIKED_IDS] = if (liked) current + trackIds else current - trackIds.toSet()
-        }
-    }
 
     // ---- Blacklist -------------------------------------------------------------------------
 

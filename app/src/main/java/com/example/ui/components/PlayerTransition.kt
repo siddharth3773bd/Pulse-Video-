@@ -145,12 +145,15 @@ private val VideoMorphShape = androidx.compose.foundation.shape.RoundedCornerSha
 fun Modifier.videoPlayerContainer(
     shared: SharedTransitionScope,
     visibility: AnimatedVisibilityScope,
-    videoId: String
+    /** The video whose thumbnail it's linked to; null while just playing (linked to none). */
+    videoId: String?
 ): Modifier {
     val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Rect>()
     return with(shared) {
         this@videoPlayerContainer.sharedBounds(
-            sharedContentState = rememberSharedContentState(videoTransitionKey(videoId)),
+            sharedContentState = rememberSharedContentState(
+                if (videoId != null) videoTransitionKey(videoId) else "video_player_unlinked"
+            ),
             animatedVisibilityScope = visibility,
             // The fades come from the player's own enter/exit animation.
             enter = androidx.compose.animation.EnterTransition.None,

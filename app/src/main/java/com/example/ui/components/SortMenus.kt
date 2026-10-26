@@ -2,21 +2,33 @@
 
 package com.example.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CheckableDropdownMenuItem
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import com.example.model.LayoutMode
 import com.example.model.LibrarySongSort
 import com.example.model.SortBy
@@ -25,11 +37,13 @@ import com.example.model.ViewMode
 import com.example.ui.icons.Symbols
 
 /*
- * Sort menus: the official Material 3 Expressive grouped menu, opened right under the sort button.
- * Each part is its own rounded group with a small label. Picking a sort field selects it in its
- * usual order (newest, longest, A to Z); picking the selected field again flips the order, which
- * its second line spells out. Changes apply straight away and the menu stays open until tapped
- * outside, so a couple of things can be changed in one go.
+ * Sorting, the Material 3 Expressive way:
+ * - At the top of a list, a chip shows how it's sorted ("Date added ▾") with an arrow beside it
+ *   for the order. The chip opens the grouped menu of sort fields; the arrow flips the order.
+ * - Picking a new field starts it in its usual order (newest, longest, A to Z); picking the
+ *   selected field again flips the order, which its second line spells out.
+ * - Videos' header button keeps the view options (what to show, list or grid, series groups).
+ * Changes apply straight away.
  */
 
 private class MenuChoice<T>(val value: T, val label: String, val icon: ImageVector)
@@ -71,20 +85,62 @@ private fun <T> ChoiceGroup(
     }
 }
 
-/** Videos: what to show, list or grid, the order, and series grouping. */
+/**
+ * The sort controls at the top of a list: the field chip (opens [menu]) and the order arrow.
+ * Without a field (albums, artists) only the arrow is shown.
+ */
 @Composable
-fun VideoSortMenu(
+internal fun SortControls(
+    fieldLabel: String?,
+    orderLabel: String,
+    ascending: Boolean,
+    onFlipOrder: () -> Unit,
+    menu: (@Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        if (fieldLabel != null && menu != null) {
+            var open by remember { mutableStateOf(false) }
+            Box {
+                FilterChip(
+                    selected = true,
+                    onClick = { open = true },
+                    label = { Text(fieldLabel) },
+                    trailingIcon = {
+                        Icon(
+                            Symbols.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                        )
+                    },
+                    modifier = Modifier.testTag("sort_chip")
+                )
+                menu(open) { open = false }
+            }
+        }
+        TooltipIconButton(
+            label = orderLabel,
+            icon = if (ascending) Symbols.ArrowUpward else Symbols.ArrowDownward,
+            onClick = onFlipOrder,
+            modifier = Modifier.testTag("sort_order_button")
+        )
+    }
+}
+
+/** Videos' header menu: what to show, list or grid, and series grouping. */
+@Composable
+fun VideoViewMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     viewMode: ViewMode,
     layoutMode: LayoutMode,
-    sortBy: SortBy,
-    sortDir: SortDir,
     smartGroups: Boolean,
     onSelectViewMode: (ViewMode) -> Unit,
     onSelectLayoutMode: (LayoutMode) -> Unit,
-    onSelectSortField: (SortBy) -> Unit,
-    onSelectSortDir: (SortDir) -> Unit,
     onToggleSmartGroups: () -> Unit
 ) {
     DropdownMenuPopup(
@@ -95,7 +151,7 @@ fun VideoSortMenu(
         ChoiceGroup(
             label = "Show",
             index = 0,
-            count = 4,
+            count = 3,
             choices = listOf(
                 MenuChoice(ViewMode.VIDEOS, "Videos", Symbols.VideoLibrary),
                 MenuChoice(ViewMode.FOLDERS, "Folders", Symbols.Folder),
@@ -108,7 +164,7 @@ fun VideoSortMenu(
         ChoiceGroup(
             label = "Layout",
             index = 1,
-            count = 4,
+            count = 3,
             choices = listOf(
                 MenuChoice(LayoutMode.LIST, "List", Symbols.ViewAgenda),
                 MenuChoice(LayoutMode.GRID, "Grid", Symbols.GridView)
@@ -117,22 +173,8 @@ fun VideoSortMenu(
             onSelect = onSelectLayoutMode,
             tag = { "layout_mode_btn_${it.id}" }
         )
-        ChoiceGroup(
-            label = "Sort by",
-            index = 2,
-            count = 4,
-            choices = SortBy.entries.map { MenuChoice(it, it.label, it.icon) },
-            selected = sortBy,
-            onSelect = { field ->
-                if (field == sortBy) onSelectSortDir(if (sortDir == SortDir.ASC) SortDir.DESC else SortDir.ASC)
-                else onSelectSortField(field)
-            },
-            tag = { "sort_option_btn_${it.id}" },
-            selectedLine = if (sortDir == SortDir.ASC) sortBy.ascFull else sortBy.descFull,
-            flippable = true
-        )
         Spacer(Modifier.height(MenuDefaults.GroupSpacing))
-        DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = 3, count = 4)) {
+        DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = 2, count = 3)) {
             CheckableDropdownMenuItem(
                 checked = smartGroups,
                 onCheckedChange = { onToggleSmartGroups() },
@@ -146,6 +188,44 @@ fun VideoSortMenu(
     }
 }
 
+/** Videos: the sort chip and arrow at the top of the list, with its menu of fields. */
+@Composable
+fun VideoSortControls(
+    sortBy: SortBy,
+    sortDir: SortDir,
+    onSelectSortField: (SortBy) -> Unit,
+    onSelectSortDir: (SortDir) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val flip = { onSelectSortDir(if (sortDir == SortDir.ASC) SortDir.DESC else SortDir.ASC) }
+    SortControls(
+        fieldLabel = sortBy.label,
+        orderLabel = if (sortDir == SortDir.ASC) sortBy.ascFull else sortBy.descFull,
+        ascending = sortDir == SortDir.ASC,
+        onFlipOrder = flip,
+        menu = { expanded, onDismiss ->
+            DropdownMenuPopup(
+                expanded = expanded,
+                onDismissRequest = onDismiss,
+                modifier = Modifier.testTag("video_sort_menu")
+            ) {
+                ChoiceGroup(
+                    label = "Sort by",
+                    index = 0,
+                    count = 1,
+                    choices = SortBy.entries.map { MenuChoice(it, it.label, it.icon) },
+                    selected = sortBy,
+                    onSelect = { field -> if (field == sortBy) flip() else onSelectSortField(field) },
+                    tag = { "sort_option_btn_${it.id}" },
+                    selectedLine = if (sortDir == SortDir.ASC) sortBy.ascFull else sortBy.descFull,
+                    flippable = true
+                )
+            }
+        },
+        modifier = modifier
+    )
+}
+
 private val SortBy.icon: ImageVector
     get() = when (this) {
         SortBy.NAME -> Symbols.SortByAlpha
@@ -155,52 +235,53 @@ private val SortBy.icon: ImageVector
     }
 
 /**
- * Music: songs sort by a field (pick it again to flip the order); albums and artists only go
- * A to Z or Z to A. [field] is null for those.
+ * Music: songs get the field chip and the arrow; albums and artists ([field] null) only go
+ * A to Z or Z to A, so they get just the arrow.
  */
 @Composable
-fun LibrarySortMenu(
-    expanded: Boolean,
-    onDismiss: () -> Unit,
+fun LibrarySortControls(
     field: LibrarySongSort?,
     ascending: Boolean,
     onSelectField: (LibrarySongSort) -> Unit,
-    onSelectAscending: (Boolean) -> Unit
+    onSelectAscending: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    DropdownMenuPopup(
-        expanded = expanded,
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag("library_sort_menu")
-    ) {
+    val orderLabel = when {
+        field == null -> if (ascending) "A to Z" else "Z to A"
+        ascending -> field.ascendingLabel
+        else -> field.descendingLabel
+    }
+    val fieldMenu: @Composable (Boolean, () -> Unit) -> Unit = { expanded, onDismiss ->
         if (field != null) {
-            ChoiceGroup(
-                label = "Sort by",
-                index = 0,
-                count = 1,
-                choices = LibrarySongSort.entries.map { MenuChoice(it, it.label, it.icon) },
-                selected = field,
-                onSelect = { picked ->
-                    if (picked == field) onSelectAscending(!ascending) else onSelectField(picked)
-                },
-                tag = { "sort_field_${it.id}" },
-                selectedLine = if (ascending) field.ascendingLabel else field.descendingLabel,
-                flippable = true
-            )
-        } else {
-            ChoiceGroup(
-                label = "Order",
-                index = 0,
-                count = 1,
-                choices = listOf(
-                    MenuChoice(true, "A to Z", Symbols.ArrowDownward),
-                    MenuChoice(false, "Z to A", Symbols.ArrowUpward)
-                ),
-                selected = ascending,
-                onSelect = onSelectAscending,
-                tag = { if (it) "sort_order_asc" else "sort_order_desc" }
-            )
+            DropdownMenuPopup(
+                expanded = expanded,
+                onDismissRequest = onDismiss,
+                modifier = Modifier.testTag("library_sort_menu")
+            ) {
+                ChoiceGroup(
+                    label = "Sort by",
+                    index = 0,
+                    count = 1,
+                    choices = LibrarySongSort.entries.map { MenuChoice(it, it.label, it.icon) },
+                    selected = field,
+                    onSelect = { picked ->
+                        if (picked == field) onSelectAscending(!ascending) else onSelectField(picked)
+                    },
+                    tag = { "sort_field_${it.id}" },
+                    selectedLine = orderLabel,
+                    flippable = true
+                )
+            }
         }
     }
+    SortControls(
+        fieldLabel = field?.label,
+        orderLabel = orderLabel,
+        ascending = ascending,
+        onFlipOrder = { onSelectAscending(!ascending) },
+        menu = if (field == null) null else fieldMenu,
+        modifier = modifier
+    )
 }
 
 private val LibrarySongSort.icon: ImageVector

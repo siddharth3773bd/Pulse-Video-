@@ -119,6 +119,10 @@ class ExoPlayerController(
             _autoAdvanced.tryEmit(mediaItem.mediaId)
         }
 
+        override fun onRenderedFirstFrame() {
+            _state.update { it.copy(firstFrameCount = it.firstFrameCount + 1) }
+        }
+
         override fun onCues(cueGroup: CueGroup) {
             val text = cueGroup.cues
                 .mapNotNull { it.text?.toString()?.trim() }
@@ -590,7 +594,8 @@ class ExoPlayerController(
         positionPollJob = scope.launch {
             while (isActive) {
                 syncStateFromPlayer()
-                delay(250L)
+                // Paused, the position only moves by seeking (which updates it straight away).
+                delay(if (_state.value.isPlaying) 250L else 1_000L)
             }
         }
     }

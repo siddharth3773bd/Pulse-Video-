@@ -81,10 +81,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -165,6 +167,8 @@ import com.example.model.MeSubPage
 import com.example.model.ThemeMode
 import com.example.model.VideoItem
 import com.example.model.ViewMode
+import com.example.model.SortBy
+import com.example.model.SortDir
 import com.example.ui.components.AddVideosToPlaylistSheet
 import com.example.ui.components.AudioLibraryScreen
 import com.example.ui.components.VideoDetailsSheet
@@ -173,7 +177,8 @@ import com.example.ui.components.RenameVideoDialog
 import com.example.ui.components.FoldersLibraryView
 import com.example.ui.components.MeTabScreen
 import com.example.ui.components.MediaPermissionPromptCard
-import com.example.ui.components.VideoSortMenu
+import com.example.ui.components.VideoViewMenu
+import com.example.ui.components.VideoSortControls
 import com.example.ui.components.TreeHierarchyView
 import com.example.ui.components.VideoGridItem
 import com.example.ui.components.VideoListItem
@@ -569,20 +574,16 @@ fun Material3VideoPlayerScreen(
                 SidewaysMode.AMBIENT_WHEN_IDLE -> idleAmbient
             })
         )
-    // One View and sort menu, under whichever header is on top (a folder's or the list's).
+    // One View menu, under whichever header is on top (a folder's or the list's).
     val videoSortMenu: @Composable (forFolder: Boolean) -> Unit = { forFolder ->
-        VideoSortMenu(
+        VideoViewMenu(
             expanded = uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS && inVideoFolder == forFolder,
             onDismiss = { viewModel.clearAllOverlays() },
             viewMode = uiState.viewMode,
             layoutMode = uiState.layoutMode,
-            sortBy = uiState.sortBy,
-            sortDir = uiState.sortDir,
             smartGroups = uiState.smartGroups,
             onSelectViewMode = { viewModel.setViewMode(it, context) },
             onSelectLayoutMode = { viewModel.setLayoutMode(it, context) },
-            onSelectSortField = { viewModel.setSortField(it, context) },
-            onSelectSortDir = { viewModel.setSortDir(it, context) },
             onToggleSmartGroups = { viewModel.toggleSmartGroups(context) }
         )
     }
@@ -721,7 +722,9 @@ fun Material3VideoPlayerScreen(
                 viewModel.openVideoMenu(video)
             },
             menu = videoMenu,
-            onRescan = { viewModel.pullToRefresh(context) }
+            onRescan = { viewModel.pullToRefresh(context) },
+            onSelectSortField = { viewModel.setSortField(it, context) },
+            onSelectSortDir = { viewModel.setSortDir(it, context) }
         )
     }
 
@@ -1403,7 +1406,14 @@ fun Material3VideoPlayerScreen(
                 onUpdatePlaybackSettings = { transform -> viewModel.updatePlaybackSettings(context, transform) },
                 onClose = { if (uiState.playingVideo != null) viewModel.closeVideoPlayer(context) },
                 closing = uiState.playingVideo == null,
-                modifier = Modifier.videoPlayerContainer(playerSharedScope, this, activePlaying.id)
+                // Linked to a thumbnail only while opening or closing. Switching videos inside the
+                // player used to link it to the next video's thumbnail, which flashed that
+                // thumbnail over the picture.
+                modifier = Modifier.videoPlayerContainer(
+                    playerSharedScope,
+                    this,
+                    if (uiState.playingVideo == null || transition.isRunning) activePlaying.id else null
+                )
             )
         }
     }
@@ -1434,10 +1444,10 @@ private fun MainHeader(
 ) {
     val scheme = MaterialTheme.colorScheme
     val sortButton: @Composable () -> Unit = {
-        // The View and sort menu opens right under its button.
+        // The View menu opens right under its button.
         Box {
             TooltipIconButton(
-                label = "View and sort",
+                label = "View options",
                 icon = Symbols.Tune,
                 onClick = onOpenSortSheet,
                 modifier = Modifier.testTag("header_sort_btn")
@@ -1534,7 +1544,9 @@ private fun VideosContentListOrGrid(
     onVideoLongClick: (VideoItem) -> Unit,
     onVideoMenuClick: (VideoItem) -> Unit,
     menu: @Composable (VideoItem) -> Unit,
-    onRescan: () -> Unit
+    onRescan: () -> Unit,
+    onSelectSortField: (SortBy) -> Unit,
+    onSelectSortDir: (SortDir) -> Unit
 ) {
     val videos = uiState.filteredAndSortedVideos
 
@@ -1597,9 +1609,20 @@ private fun VideosContentListOrGrid(
         96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     } else 16.dp
 
+    // A new order starts at the top. (The list otherwise follows the video that was at the top to
+    // its new place, which drops you somewhere in the middle.)
+    val gridState = rememberLazyGridState()
+    val orderKey = Triple(uiState.sortBy, uiState.sortDir, grouped)
+    val lastOrder = remember { arrayOf(orderKey) }
+    if (lastOrder[0] != orderKey) {
+        lastOrder[0] = orderKey
+        gridState.requestScrollToItem(0)
+    }
+
     if (uiState.layoutMode == LayoutMode.GRID) {
         // Adaptive: two columns on a phone held upright, more when there's room.
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Adaptive(minSize = 160.dp),
             modifier = Modifier
                 .fillMaxSize()
@@ -1608,6 +1631,9 @@ private fun VideosContentListOrGrid(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "sort_row", contentType = "sort_row") {
+                VideoSortRow(uiState, videos.size, onSelectSortField, onSelectSortDir, Modifier.padding(horizontal = 4.dp))
+            }
             fun gridItems(list: List<VideoItem>, episodes: Boolean) {
                 items(list, key = { it.id }, contentType = { "video" }) { v ->
                     VideoGridItem(
@@ -1643,6 +1669,7 @@ private fun VideosContentListOrGrid(
         // One column on a phone held upright; sideways (or on a bigger screen) the rows sit in two
         // columns, so the screen isn't one long stretch of mostly empty rows.
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Adaptive(minSize = 340.dp),
             modifier = Modifier
                 .fillMaxSize()
@@ -1652,6 +1679,9 @@ private fun VideosContentListOrGrid(
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "sort_row", contentType = "sort_row") {
+                VideoSortRow(uiState, videos.size, onSelectSortField, onSelectSortDir, Modifier.padding(horizontal = 8.dp))
+            }
             fun listItems(list: List<VideoItem>, episodes: Boolean) {
                 items(list, key = { it.id }, contentType = { "video" }) { v ->
                     VideoListItem(
@@ -1687,6 +1717,40 @@ private fun VideosContentListOrGrid(
                 listItems(videos, episodes = false)
             }
         }
+    }
+}
+
+/** First row of the videos list (it scrolls away with it): the count, and how it's sorted. */
+@Composable
+private fun VideoSortRow(
+    uiState: VideoUiState,
+    count: Int,
+    onSelectSortField: (SortBy) -> Unit,
+    onSelectSortDir: (SortDir) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 40.dp)
+            .padding(bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = if (count == 1) "1 video" else "$count videos",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier
+                .weight(1f)
+                .testTag("videos_count_label")
+        )
+        VideoSortControls(
+            sortBy = uiState.sortBy,
+            sortDir = uiState.sortDir,
+            onSelectSortField = onSelectSortField,
+            onSelectSortDir = onSelectSortDir
+        )
     }
 }
 

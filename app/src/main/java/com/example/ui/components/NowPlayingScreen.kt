@@ -17,10 +17,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
@@ -925,18 +922,26 @@ internal fun NowPlayingBackgroundLayer(
     track: AudioTrackItem,
     modifier: Modifier = Modifier,
     /** Lyrics and ambient mode: the background drifts very slowly, so the screen feels alive. */
-    drift: Boolean = false
+    drift: Boolean = false,
+    /** Drifting only while the music plays; paused, it holds still (and the screen stops redrawing). */
+    moving: Boolean = true
 ) {
     val gradient = LocalAlbumArtGradient.current
     // One slow sway (about half a minute each way). Read only while drawing: redraws, never recomposes.
-    val sway = if (drift) {
-        rememberInfiniteTransition(label = "backgroundDrift").animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(28_000, easing = LinearEasing), RepeatMode.Reverse),
-            label = "backgroundSway"
-        )
-    } else null
+    val sway = if (drift) remember { Animatable(0f) } else null
+    if (sway != null) {
+        val forward = remember { booleanArrayOf(true) }
+        LaunchedEffect(moving) {
+            if (!moving) return@LaunchedEffect
+            while (true) {
+                // Carries on from where it stopped, in the same direction.
+                val target = if (forward[0]) 1f else 0f
+                val remaining = (kotlin.math.abs(target - sway.value) * 28_000).toInt().coerceAtLeast(1)
+                sway.animateTo(target, tween(remaining, easing = LinearEasing))
+                forward[0] = !forward[0]
+            }
+        }
+    }
     when (style) {
         NowPlayingBackground.FOLLOW_THEME -> Box(modifier.background(MaterialTheme.colorScheme.primaryContainer))
         NowPlayingBackground.AMOLED -> Box(modifier.background(Color.Black))

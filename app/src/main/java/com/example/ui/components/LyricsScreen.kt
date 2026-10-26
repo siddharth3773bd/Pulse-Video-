@@ -2,6 +2,12 @@
 
 package com.example.ui.components
 
+import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FilledIconToggleButton
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.mutableIntStateOf
 import com.example.ui.icons.Symbols
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -154,10 +160,19 @@ fun LyricsScreen(
             controlsShown = false
         }
     }
+    // The lyrics stay between the top bar and the controls while those are shown (upright and
+    // sideways), and get the whole screen when they step aside.
     val controlsInset by animateDpAsState(
         targetValue = if (controlsShown) 88.dp else 0.dp,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "lyricsControlsInset"
+    )
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    val topBarHeight = with(LocalDensity.current) { topBarHeightPx.toDp() }
+    val topInset by animateDpAsState(
+        targetValue = if (controlsShown) topBarHeight else 0.dp,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "lyricsTopInset"
     )
     Box(
         modifier = Modifier
@@ -175,6 +190,7 @@ fun LyricsScreen(
             style = background,
             track = track,
             drift = true,
+            moving = isPlaying,
             modifier = Modifier.matchParentSize()
         )
         Box(
@@ -197,7 +213,9 @@ fun LyricsScreen(
                     .zIndex(1f)
             ) {
             Column(
-                modifier = Modifier.padding(horizontal = 24.dp),
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .onSizeChanged { topBarHeightPx = it.height },
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 NowPlayingTopBar(
@@ -261,8 +279,9 @@ fun LyricsScreen(
                         settings = settings,
                         onSeekTo = onSeekTo,
                         contentColor = colors.content,
-                        bottomInset = controlsInset,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = topInset, bottom = controlsInset)
                     )
                     // "Always search online" is off and the song has none: offer both ways.
                     LyricsState.NeedsChoice -> MessagePanel(
@@ -310,7 +329,7 @@ fun LyricsScreen(
 
         }
 
-        // Controls float over the bottom of the lyrics (the lyrics leave room there anyway).
+        // Play controls: a small Material 3 Expressive floating toolbar under the lyrics.
         AnimatedVisibility(
             visible = controlsShown,
             enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
@@ -320,18 +339,15 @@ fun LyricsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
-                // Sideways the buttons keep a sensible size instead of stretching across.
-                .widthIn(max = 560.dp)
         ) {
-            NowPlayingControls(
+            LyricsTransportBar(
                 isPlaying = isPlaying,
                 colors = colors,
                 onPrevious = onSkipPrevious,
                 onPlayPause = onTogglePlayPause,
                 onNext = onSkipNext,
-                compact = true,
                 modifier = Modifier
-                    .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 16.dp)
+                    .padding(top = 8.dp, bottom = 16.dp)
                     .testTag("lyrics_controls")
             )
         }
@@ -806,7 +822,7 @@ private fun LyricsSearchSheet(
                                 else -> "Instrumental"
                             },
                             style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Medium,
                             color = if (r.hasSynced) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -817,3 +833,55 @@ private fun LyricsSearchSheet(
         }
     }
 }
+
+/** ⏮ ⏯ ⏭ in the official floating toolbar, in the Now Playing colours. */
+@Composable
+private fun LyricsTransportBar(
+    isPlaying: Boolean,
+    colors: NowPlayingColors,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    HorizontalFloatingToolbar(
+        expanded = true,
+        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+            toolbarContainerColor = colors.soft,
+            toolbarContentColor = colors.onSoft
+        ),
+        modifier = modifier
+    ) {
+        IconButton(
+            onClick = onPrevious,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.testTag("lyrics_previous")
+        ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous") }
+        FilledIconToggleButton(
+            checked = !isPlaying,
+            onCheckedChange = { onPlayPause() },
+            shapes = IconButtonDefaults.toggleableShapes(),
+            colors = IconButtonDefaults.filledIconToggleButtonColors(
+                containerColor = colors.main,
+                contentColor = colors.onMain,
+                checkedContainerColor = colors.main,
+                checkedContentColor = colors.onMain
+            ),
+            modifier = Modifier
+                .padding(horizontal = 8.dp)
+                .size(width = 64.dp, height = 48.dp)
+                .testTag("lyrics_play_pause")
+        ) {
+            Icon(
+                imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
+                contentDescription = if (isPlaying) "Pause" else "Play"
+            )
+        }
+        IconButton(
+            onClick = onNext,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.testTag("lyrics_next")
+        ) { Icon(Symbols.SkipNext, contentDescription = "Next") }
+    }
+}
+

@@ -2,6 +2,11 @@
 
 package com.example.ui.components
 
+import androidx.compose.animation.core.Animatable
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
+import androidx.compose.ui.platform.LocalDensity
 import com.example.ui.icons.Symbols
 import android.app.Activity
 import android.app.PendingIntent
@@ -209,6 +214,55 @@ fun VideoPlayerModal(
     var sleepEndOfVideo by remember { mutableStateOf(false) }
     var sleepRemainingMs by remember { mutableLongStateOf(0L) }
 
+    // ---- Next / previous: Material's shared-axis motion ----
+    // The picture slides a little the way you're going and fades out; the new video slides in
+    // and fades up once its first picture is really there (no thumbnail, no stretched frame).
+    // A video that follows on by itself (autoplay) just carries on.
+    var switchDirection by remember { mutableIntStateOf(0) }
+    var switchFrameCount by remember { mutableIntStateOf(0) }
+    val goPrevious: () -> Unit = {
+        switchDirection = -1
+        switchFrameCount = playerController.state.value.firstFrameCount
+        onPreviousVideo()
+    }
+    val goNext: () -> Unit = {
+        switchDirection = 1
+        switchFrameCount = playerController.state.value.firstFrameCount
+        onNextVideo()
+    }
+    val surfaceAlpha = remember { Animatable(1f) }
+    val surfaceShift = remember { Animatable(0f) }
+    val shiftPx = with(LocalDensity.current) { 48.dp.toPx() }
+    val motion = MaterialTheme.motionScheme
+    val fadeOutSpec = motion.fastEffectsSpec<Float>()
+    val fadeInSpec = motion.defaultEffectsSpec<Float>()
+    val moveOutSpec = motion.fastSpatialSpec<Float>()
+    val moveInSpec = motion.defaultSpatialSpec<Float>()
+    var shownVideoId by remember { mutableStateOf(video.id) }
+    LaunchedEffect(video.id) {
+        if (video.id == shownVideoId) return@LaunchedEffect
+        shownVideoId = video.id
+        val direction = switchDirection
+        switchDirection = 0
+        if (direction == 0 || audioOnly) {
+            surfaceAlpha.snapTo(1f)
+            surfaceShift.snapTo(0f)
+            return@LaunchedEffect
+        }
+        coroutineScope {
+            launch { surfaceAlpha.animateTo(0f, fadeOutSpec) }
+            launch { surfaceShift.animateTo(-direction * shiftPx, moveOutSpec) }
+        }
+        withTimeoutOrNull(1_500L) {
+            playerController.state.first { it.firstFrameCount > switchFrameCount }
+        }
+        surfaceShift.snapTo(direction * shiftPx)
+        coroutineScope {
+            launch { surfaceAlpha.animateTo(1f, fadeInSpec) }
+            launch { surfaceShift.animateTo(0f, moveInSpec) }
+        }
+    }
+
     // "Resumed from 0:10 · Start over" pill, shown for a few seconds after resuming.
     var showResumedPill by remember(video.id) { mutableStateOf(resumedFromMs > 0L) }
     LaunchedEffect(video.id, showResumedPill) {
@@ -290,7 +344,8 @@ fun VideoPlayerModal(
             delay(5_000L)
             val st = playerController.state.value
             val dur = st.durationMs.takeIf { it > 0L } ?: video.durationMs
-            if (st.positionMs > 0L && dur > 0L) saveLatest(st.positionMs, dur, false)
+            // Paused, nothing changes (closing the player saves the spot anyway).
+            if (st.isPlaying && st.positionMs > 0L && dur > 0L) saveLatest(st.positionMs, dur, false)
         }
     }
 
@@ -355,8 +410,8 @@ fun VideoPlayerModal(
         videoWidth = video.width,
         videoHeight = video.height,
         onPlayPause = { playerController.togglePlayPause() },
-        onNext = onNextVideo,
-        onPrevious = onPreviousVideo
+        onNext = goNext,
+        onPrevious = goPrevious
     )
     // Leaving the app without PiP (or closing the PiP window) pauses the video.
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -571,7 +626,13 @@ fun VideoPlayerModal(
     ) {
         // 1. Video (official Media3 Compose ContentFrame)
         playerController.RenderVideoSurface(
-            modifier = Modifier.align(Alignment.Center).fillMaxSize(),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxSize()
+                .graphicsLayer {
+                    alpha = surfaceAlpha.value
+                    translationX = surfaceShift.value
+                },
             contentScale = when (aspectMode) {
                 VideoAspectMode.FIT -> ContentScale.Fit
                 VideoAspectMode.CROP -> ContentScale.Crop
@@ -604,9 +665,9 @@ fun VideoPlayerModal(
                             isPlaying = playerState.isPlaying,
                             buffering = false,
                             colorful = playbackSettings.colorfulControls,
-                            onPrevious = { onPreviousVideo(); poke() },
+                            onPrevious = { goPrevious(); poke() },
                             onPlayPause = { playerController.togglePlayPause(); poke() },
-                            onNext = { onNextVideo(); poke() }
+                            onNext = { goNext(); poke() }
                         )
                     }
                 } else null,
@@ -777,8 +838,8 @@ fun VideoPlayerModal(
                             poke()
                         },
                         onPlayPause = { playerController.togglePlayPause(); poke() },
-                        onPrevious = onPreviousVideo,
-                        onNext = onNextVideo,
+                        onPrevious = goPrevious,
+                        onNext = goNext,
                         onRotate = {
                             val landscapeNow = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
                             rotationOverride = if (landscapeNow) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
@@ -827,9 +888,9 @@ fun VideoPlayerModal(
                             isPlaying = playerState.isPlaying,
                             buffering = showBuffering && !audioOnly,
                             colorful = playbackSettings.colorfulControls,
-                            onPrevious = { onPreviousVideo(); poke() },
+                            onPrevious = { goPrevious(); poke() },
                             onPlayPause = { playerController.togglePlayPause(); poke() },
-                            onNext = { onNextVideo(); poke() },
+                            onNext = { goNext(); poke() },
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }

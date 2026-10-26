@@ -99,8 +99,7 @@ private fun SheetTitle(title: String, subtitle: String? = null) {
     Text(
         text = title,
         color = scheme.onSurface,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold
+        style = MaterialTheme.typography.titleLarge
     )
     if (subtitle != null) {
         Spacer(modifier = Modifier.height(4.dp))
@@ -147,7 +146,7 @@ fun NowPlayingTraySheet(
                 Text(
                     text = "Reset to default",
                     color = scheme.primary,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -192,7 +191,7 @@ fun ManageTabsSheet(
                 Text(
                     text = "Reset to default",
                     color = scheme.primary,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -354,7 +353,7 @@ private fun <T> ReorderableToggleList(
                             text = label(item),
                             color = scheme.onSurface,
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Medium,
                             modifier = Modifier.weight(1f)
                         )
                         Switch(

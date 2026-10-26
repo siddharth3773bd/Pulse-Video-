@@ -20,6 +20,11 @@ import com.example.R
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class AudioPlaybackService : MediaSessionService() {
@@ -34,6 +39,7 @@ class AudioPlaybackService : MediaSessionService() {
         ): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(ACTION_STOP_PLAYBACK, Bundle.EMPTY))
+                .add(SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -48,6 +54,10 @@ class AudioPlaybackService : MediaSessionService() {
         ): ListenableFuture<SessionResult> {
             if (customCommand.customAction == ACTION_STOP_PLAYBACK) {
                 stopPlaybackAndService()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            if (customCommand.customAction == ACTION_TOGGLE_SHUFFLE) {
+                AudioPlaybackManager.getInstance(this@AudioPlaybackService).toggleShuffle()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
             return super.onCustomCommand(session, controller, customCommand, args)
@@ -86,19 +96,45 @@ class AudioPlaybackService : MediaSessionService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // "X" button shown in the media notification / quick-settings media card / live alert.
-        val stopButton = CommandButton.Builder()
-            .setDisplayName("Stop")
-            .setIconResId(R.drawable.ic_stop_playback)
-            .setSessionCommand(SessionCommand(ACTION_STOP_PLAYBACK, Bundle.EMPTY))
-            .build()
-
         player = exoPlayer
+        val shuffleNow = AudioPlaybackManager.existingInstance()?.state?.value?.shuffleEnabled == true
         mediaSession = MediaSession.Builder(this, exoPlayer)
             .setSessionActivity(sessionActivityPendingIntent)
             .setCallback(sessionCallback)
-            .setCustomLayout(ImmutableList.of(stopButton))
+            .setMediaButtonPreferences(extraButtons(shuffleNow))
             .build()
+        // The shuffle button follows the app's shuffle (on/off icon).
+        val manager = AudioPlaybackManager.existingInstance()
+        if (manager != null) {
+            serviceScope.launch {
+                manager.state
+                    .map { it.shuffleEnabled }
+                    .distinctUntilChanged()
+                    .collect { on -> mediaSession?.setMediaButtonPreferences(extraButtons(on)) }
+            }
+        }
+    }
+
+    private val serviceScope = MainScope()
+
+    /**
+     * The two extra buttons in the system media player and notification, in this order: Shuffle,
+     * then ✕ (stop). Phones put the first extra button before ⏮ and the second after ⏭, so ✕
+     * ends up on the right.
+     */
+    private fun extraButtons(shuffleOn: Boolean): ImmutableList<CommandButton> {
+        val shuffle = CommandButton.Builder(
+            if (shuffleOn) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF
+        )
+            .setDisplayName(if (shuffleOn) "Shuffle on" else "Shuffle off")
+            .setSessionCommand(SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY))
+            .build()
+        val stop = CommandButton.Builder(CommandButton.ICON_UNDEFINED)
+            .setDisplayName("Stop")
+            .setCustomIconResId(R.drawable.ic_stop_playback)
+            .setSessionCommand(SessionCommand(ACTION_STOP_PLAYBACK, Bundle.EMPTY))
+            .build()
+        return ImmutableList.of(shuffle, stop)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -127,6 +163,7 @@ class AudioPlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         mediaSession?.run {
             player.release()
             release()
@@ -138,5 +175,6 @@ class AudioPlaybackService : MediaSessionService() {
 
     companion object {
         const val ACTION_STOP_PLAYBACK = "com.example.player.STOP_PLAYBACK"
+        const val ACTION_TOGGLE_SHUFFLE = "com.example.player.TOGGLE_SHUFFLE"
     }
 }

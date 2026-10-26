@@ -450,37 +450,15 @@ fun AudioLibraryScreen(
     LaunchedEffect(currentTab, detailTabId, detailKey, selectionMode) {
         searchScroll.scrollState.scrollOffset = 0f
     }
-    var sortSheetOpen by remember { mutableStateOf(false) }
-    // The sort menu, opened right under the Sort button.
-    val sortMenu: @Composable () -> Unit = {
-        if (currentTab == LibraryTab.SONGS) {
-            LibrarySortMenu(
-                expanded = sortSheetOpen,
-                onDismiss = { sortSheetOpen = false },
-                field = prefs.songSort,
-                ascending = prefs.songAscending,
-                onSelectField = { field ->
-                    // A new field starts in its natural order (newest, longest, A to Z).
-                    scope.launch {
-                        AppPreferencesRepository.updateLibrarySongSort(context, field, field.naturalAscending)
-                    }
-                },
-                onSelectAscending = { asc ->
-                    scope.launch { AppPreferencesRepository.updateLibrarySongSort(context, prefs.songSort, asc) }
-                }
-            )
-        } else {
-            LibrarySortMenu(
-                expanded = sortSheetOpen,
-                onDismiss = { sortSheetOpen = false },
-                field = null,
-                ascending = prefs.groupAscending,
-                onSelectField = {},
-                onSelectAscending = { asc ->
-                    scope.launch { AppPreferencesRepository.updateLibraryGroupAscending(context, asc) }
-                }
-            )
-        }
+    val setSongSort: (LibrarySongSort) -> Unit = { field ->
+        // A new field starts in its natural order (newest, longest, A to Z).
+        scope.launch { AppPreferencesRepository.updateLibrarySongSort(context, field, field.naturalAscending) }
+    }
+    val setSongAscending: (Boolean) -> Unit = { asc ->
+        scope.launch { AppPreferencesRepository.updateLibrarySongSort(context, prefs.songSort, asc) }
+    }
+    val setGroupAscending: (Boolean) -> Unit = { asc ->
+        scope.launch { AppPreferencesRepository.updateLibraryGroupAscending(context, asc) }
     }
 
     val playFromList: (List<AudioTrackItem>, Int) -> Unit = { list, index ->
@@ -671,7 +649,8 @@ fun AudioLibraryScreen(
                         onBack = closeDetail,
                         detailActions = detailActions,
                         headerAction = {
-                            // One action beside the search bar: Sort, or New playlist on Playlists.
+                            // Beside the search bar on Playlists: New playlist. (Sorting sits at
+                            // the top of each list.)
                             if (currentTab == LibraryTab.PLAYLISTS) {
                                 TooltipIconButton(
                                     label = "New playlist",
@@ -679,16 +658,6 @@ fun AudioLibraryScreen(
                                     onClick = { playlistDialog = PlaylistDialog.Create(emptyList()) },
                                     modifier = Modifier.testTag("library_new_playlist_button")
                                 )
-                            } else {
-                                Box {
-                                    TooltipIconButton(
-                                        label = "Sort",
-                                        icon = Symbols.Sort,
-                                        onClick = { sortSheetOpen = true },
-                                        modifier = Modifier.testTag("library_sort_button")
-                                    )
-                                    sortMenu()
-                                }
                             }
                         }
                     )
@@ -734,7 +703,15 @@ fun AudioLibraryScreen(
                                         header = {
                                             LibraryActionRow(
                                                 label = songCountLabel(sortedSongs.size),
-                                                shuffle = shuffleFor(sortedSongs)
+                                                shuffle = shuffleFor(sortedSongs),
+                                                sort = {
+                                                    LibrarySortControls(
+                                                        field = prefs.songSort,
+                                                        ascending = prefs.songAscending,
+                                                        onSelectField = setSongSort,
+                                                        onSelectAscending = setSongAscending
+                                                    )
+                                                }
                                             )
                                         }
                                     )
@@ -742,12 +719,37 @@ fun AudioLibraryScreen(
                             }
                             tab == LibraryTab.ALBUMS -> AlbumsGrid(
                                 albums = albums,
-                                header = { LibraryActionRow(label = albumCountLabel(albums.size), horizontalPadding = 0.dp) },
+                                header = {
+                                    LibraryActionRow(
+                                        label = albumCountLabel(albums.size),
+                                        horizontalPadding = 0.dp,
+                                        sort = {
+                                            LibrarySortControls(
+                                                field = null,
+                                                ascending = prefs.groupAscending,
+                                                onSelectField = {},
+                                                onSelectAscending = setGroupAscending
+                                            )
+                                        }
+                                    )
+                                },
                                 onOpen = { album -> openDetail(LibraryTab.ALBUMS, album.key) }
                             )
                             tab == LibraryTab.ARTISTS -> ArtistsList(
                                 artists = artists,
-                                header = { LibraryActionRow(label = artistCountLabel(artists.size)) },
+                                header = {
+                                    LibraryActionRow(
+                                        label = artistCountLabel(artists.size),
+                                        sort = {
+                                            LibrarySortControls(
+                                                field = null,
+                                                ascending = prefs.groupAscending,
+                                                onSelectField = {},
+                                                onSelectAscending = setGroupAscending
+                                            )
+                                        }
+                                    )
+                                },
                                 onOpen = { artist -> openDetail(LibraryTab.ARTISTS, artist.key) }
                             )
                             tab == LibraryTab.PLAYLISTS -> PlaylistsList(
@@ -1158,13 +1160,15 @@ private fun PlayShuffleButtons(onPlay: (() -> Unit)?, shuffle: ShuffleControl?) 
 
 /**
  * First row of a library list (it scrolls away with the list): Shuffle or another [leading]
- * button on the left and the item count. With no button the count sits on the left.
+ * button on the left, then the item count, and the [sort] controls at the end. With no button
+ * the count sits on the left.
  */
 @Composable
 private fun LibraryActionRow(
     label: String,
     shuffle: ShuffleControl? = null,
     leading: (@Composable () -> Unit)? = null,
+    sort: (@Composable () -> Unit)? = null,
     // Lists sit 8 dp from the edge (rows bring their own padding); this lines the row up at 16 dp.
     horizontalPadding: Dp = 8.dp
 ) {
@@ -1176,21 +1180,32 @@ private fun LibraryActionRow(
             .padding(bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val hasButton = leading != null || shuffle != null
         if (leading != null) {
             leading()
         } else if (shuffle != null) {
             PlayShuffleButtons(onPlay = null, shuffle = shuffle)
         }
-        if (hasButton) Spacer(modifier = Modifier.weight(1f))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .padding(horizontal = 4.dp)
-                .testTag("library_count_label")
-        )
+        val hasButton = leading != null || shuffle != null
+        // The count, then the sort controls, packed to the end (or the count on the left when
+        // there's no button). A long count gives way before anything else does.
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = if (hasButton) Arrangement.End else Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .weight(1f, fill = !hasButton)
+                    .testTag("library_count_label")
+            )
+            if (sort != null) sort()
+        }
     }
 }
 

@@ -69,13 +69,6 @@ object MediaStoreScanner {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun hasLegacyWritePermission(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return true
-        return ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED
-    }
 
     suspend fun scanVideos(
         context: Context,

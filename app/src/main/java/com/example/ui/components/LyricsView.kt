@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.unit.Dp
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -25,7 +24,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -95,6 +93,9 @@ import com.example.lyrics.LyricsSettings
 import com.example.lyrics.LyricsState
 import com.example.model.AudioTrackItem
 import kotlin.math.abs
+import kotlin.math.exp
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.gestures.scrollBy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -137,9 +138,10 @@ fun rememberLivePosition(positionMs: Long, isPlaying: Boolean): State<Long> {
 }
 
 /**
- * Lyrics, Echo-style "depth of field": the current line is big, bold and bright; the lines next to
- * it stay sharp but dimmer; lines further away blur and fade. The list glides with a slow,
- * no-bounce spring, keeping the current line about a third of the way down.
+ * Lyrics with "depth of field": the current line is full size and bright; the lines next to it
+ * stay sharp but dimmer; lines further away blur and fade. When the song moves on, the lines glide
+ * up one after another (each a moment after the one above it), like a soft ripple, keeping the
+ * current line about a third of the way down.
  * Tap a line to jump there. Scrolling by hand pauses following for a few seconds.
  */
 @Composable
@@ -152,9 +154,7 @@ fun LyricsView(
     onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier,
     contentColor: Color = Color.White,
-    horizontalPadding: Int = 24,
-    /** Room kept free at the bottom (e.g. for player controls) for the "Back to current line" button. */
-    bottomInset: Dp = 0.dp
+    horizontalPadding: Int = 24
 ) {
     if (!lyrics.synced) {
         PlainLyrics(lyrics, settings, contentColor, horizontalPadding, modifier)
@@ -181,6 +181,7 @@ fun LyricsView(
     val dragged by listState.interactionSource.collectIsDraggedAsState()
     var following by remember { mutableStateOf(true) }
     var firstScroll by remember(lines) { mutableStateOf(true) }
+    val waves = remember { LyricWaves() }
 
     // Hand-scrolling pauses following; it picks up again by itself a few seconds later.
     LaunchedEffect(dragged) {
@@ -200,10 +201,22 @@ fun LyricsView(
         }
         val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }
         if (info != null) {
-            listState.animateScrollBy(
-                info.offset.toFloat(),
-                spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessVeryLow)
-            )
+            val delta = info.offset.toFloat()
+            if (delta == 0f) return@LaunchedEffect
+            // The list moves at once; each line then glides from where it was to its new place.
+            val now = withFrameNanos { it }
+            waves.start(delta, target, now)
+            listState.scrollBy(delta)
+            if (!waves.running) {
+                waves.running = true
+                scope.launch {
+                    try {
+                        while (waves.isActive()) withFrameNanos { waves.tick(it) }
+                    } finally {
+                        waves.running = false
+                    }
+                }
+            }
         } else {
             listState.animateScrollToItem(target)
         }
@@ -241,6 +254,7 @@ fun LyricsView(
                     origin = origin,
                     color = contentColor,
                     isPlaying = isPlaying,
+                    glide = { waves.offset(index) },
                     onClick = {
                         onSeekTo((line.timeMs + offsetMs).coerceAtLeast(0L))
                         following = true
@@ -255,7 +269,7 @@ fun LyricsView(
             exit = fadeOut() + slideOutVertically { it / 2 },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp + bottomInset)
+                .padding(bottom = 16.dp)
         ) {
             FilledTonalButton(
                 onClick = {
@@ -292,31 +306,33 @@ private fun SyncedLine(
     origin: TransformOrigin,
     color: Color,
     isPlaying: Boolean,
+    /** How far the line still is from its place while the lines glide (read while drawing). */
+    glide: () -> Float,
     onClick: () -> Unit
 ) {
     val motion = MaterialTheme.motionScheme
     val alpha by animateFloatAsState(
         targetValue = when {
             isActive -> 1f
-            distance == 1 -> 0.6f
+            distance == 1 -> 0.55f
             distance == 2 -> 0.42f
-            else -> 0.3f
+            else -> 0.32f
         },
         animationSpec = motion.slowEffectsSpec(),
         label = "lyricAlpha"
     )
     // The line being sung grows in with a soft spring (Material 3 Expressive spatial motion).
     val scale by animateFloatAsState(
-        targetValue = if (isActive) 1f else 0.88f,
+        targetValue = if (isActive) 1f else 0.9f,
         animationSpec = motion.slowSpatialSpec(),
         label = "lyricScale"
     )
     // Near lines stay sharp; blur starts three lines away and grows gently (depth of field).
     val blurTarget = if (!settings.blur || isActive) 0f else when (distance) {
         0, 1, 2 -> 0f
-        3 -> 2f
-        4 -> 4f
-        else -> 6f
+        3 -> 1.5f
+        4 -> 3f
+        else -> 4.5f
     }
     val blur by animateFloatAsState(
         targetValue = blurTarget,
@@ -329,7 +345,8 @@ private fun SyncedLine(
         fontFamily = MaterialTheme.typography.displaySmall.fontFamily,
         fontSize = size.sp,
         lineHeight = 1.22.em,
-        fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
+        // One weight for every line, so a line doesn't re-wrap when it becomes the current one.
+        fontWeight = FontWeight.Bold,
         letterSpacing = (-0.01).em,
         textAlign = align,
         color = color
@@ -345,6 +362,7 @@ private fun SyncedLine(
                 scaleX = scale
                 scaleY = scale
                 transformOrigin = origin
+                translationY = glide()
             }
             .then(if (blur > 0.05f) Modifier.blur(blur.dp, BlurredEdgeTreatment.Unbounded) else Modifier)
             .clip(RoundedCornerShape(16.dp))
@@ -553,13 +571,15 @@ private fun RomanizedLine(text: String, style: TextStyle) {
 @Composable
 private fun BreathingDots(color: Color, active: Boolean, size: Int) {
     val dot = (size * 0.36f).dp
-    val transition = rememberInfiniteTransition(label = "lyricDots")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(durationMillis = 1_800, easing = LinearEasing)),
-        label = "lyricDotsPhase"
-    )
+    // Only the dots being played move (still dots don't keep the screen redrawing).
+    val phase = if (active) {
+        rememberInfiniteTransition(label = "lyricDots").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(durationMillis = 1_800, easing = LinearEasing)),
+            label = "lyricDotsPhase"
+        )
+    } else null
     Row(
         horizontalArrangement = Arrangement.spacedBy(dot * 0.7f),
         verticalAlignment = Alignment.CenterVertically,
@@ -573,8 +593,8 @@ private fun BreathingDots(color: Color, active: Boolean, size: Int) {
                     .size(dot)
                     .graphicsLayer {
                         // Each dot peaks a third of a cycle after the one before.
-                        val wave = if (active) {
-                            (kotlin.math.sin((phase - i / 3f) * 2f * Math.PI.toFloat()) + 1f) / 2f
+                        val wave = if (phase != null) {
+                            (kotlin.math.sin((phase.value - i / 3f) * 2f * Math.PI.toFloat()) + 1f) / 2f
                         } else 0.4f
                         scaleX = 0.7f + 0.3f * wave
                         scaleY = 0.7f + 0.3f * wave
@@ -635,5 +655,57 @@ private fun PlainLyrics(
                     .padding(vertical = if (line.text.isBlank()) 8.dp else 3.dp)
             )
         }
+    }
+}
+
+/**
+ * The ripple when the lyrics move on to the next line. The list itself jumps to its new place at
+ * once; each line is then drawn shifted back to where it was and glides into place with a soft,
+ * no-bounce spring. Lines further down start a little later, so they follow one after another.
+ * Several ripples can overlap (fast songs); their shifts add up, so nothing ever jumps.
+ */
+private class LyricWaves {
+    private class Wave(val delta: Float, val anchor: Int, val startNanos: Long)
+
+    private val waves = ArrayList<Wave>()
+    /** The frame time; drawing reads it, so lines redraw (only redraw) each frame of a ripple. */
+    private val clock = mutableLongStateOf(0L)
+    var running = false
+
+    fun start(delta: Float, anchor: Int, nowNanos: Long) {
+        waves.add(Wave(delta, anchor, nowNanos))
+        clock.longValue = nowNanos
+    }
+
+    fun isActive(): Boolean = waves.isNotEmpty()
+
+    fun tick(nowNanos: Long) {
+        clock.longValue = nowNanos
+        waves.removeAll { (nowNanos - it.startNanos) / 1_000_000L > WaveLifeMs }
+    }
+
+    fun offset(index: Int): Float {
+        val now = clock.longValue
+        if (waves.isEmpty()) return 0f
+        var sum = 0f
+        for (wave in waves) {
+            val lag = (index - wave.anchor + 1).coerceIn(0, WaveMaxSteps) * WaveStepMs
+            val t = (now - wave.startNanos) / 1_000_000f - lag
+            sum += if (t <= 0f) wave.delta else wave.delta * (1f - settle(t))
+        }
+        return sum
+    }
+
+    /** A critically damped spring (no bounce) from 0 to 1. */
+    private fun settle(ms: Float): Float {
+        val x = ms / 1000f * WaveSpeed
+        return (1f - (1f + x) * exp(-x)).coerceIn(0f, 1f)
+    }
+
+    private companion object {
+        const val WaveStepMs = 45f
+        const val WaveMaxSteps = 6
+        const val WaveSpeed = 11f
+        const val WaveLifeMs = 1_200L
     }
 }

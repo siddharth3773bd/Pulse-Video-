@@ -265,7 +265,8 @@ internal fun InfoSheet(
                                 .aspectRatio(artAspectRatio)
                         )
                         Spacer(Modifier.height(12.dp))
-                        Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        // Two lines at most, so a long name can't stretch the box.
+                        Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
                             subtitle,
                             style = MaterialTheme.typography.bodyMedium,

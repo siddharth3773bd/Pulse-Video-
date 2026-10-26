@@ -102,9 +102,6 @@ data class AudioPlaylist(
     val trackIds: List<String>
 )
 
-/** Id of the built-in "Liked songs" playlist shown first in the Playlists tab. */
-const val LIKED_PLAYLIST_ID = "liked"
-
 /** Where the Now Playing screen and mini player take their colours from. */
 enum class NowPlayingColorSource(val id: String, val label: String, val description: String) {
     ALBUM_ART("album_art", "Album art", "Colours picked from the song's cover"),
