@@ -403,6 +403,45 @@ object MediaStoreScanner {
         result
     }
 
+    /**
+     * Asks Android to look through the usual media folders again, plus [knownFolders] (where the
+     * library's files already are), for files it hasn't noticed yet: ones copied in by cable or a
+     * file manager. Android walks each folder; new files then show up in MediaStore. Returns when
+     * every folder has been looked at (callers put a time limit on it).
+     */
+    suspend fun requestSystemScan(context: Context, knownFolders: Collection<String>) {
+        val root = android.os.Environment.getExternalStorageDirectory()?.absolutePath ?: return
+        val standard = listOfNotNull(
+            android.os.Environment.DIRECTORY_MOVIES,
+            android.os.Environment.DIRECTORY_MUSIC,
+            android.os.Environment.DIRECTORY_DOWNLOADS,
+            android.os.Environment.DIRECTORY_DCIM,
+            android.os.Environment.DIRECTORY_PODCASTS,
+            android.os.Environment.DIRECTORY_AUDIOBOOKS,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) android.os.Environment.DIRECTORY_RECORDINGS else null
+        ).map { "$root/$it" }
+        val known = knownFolders
+            .filter { it.startsWith("/") }
+            .distinct()
+            .take(60)
+        // A folder inside another one on the list gets looked at anyway.
+        val all = (standard + known).map { it.trimEnd('/') }.distinct().sortedBy { it.length }
+        val folders = all.filterIndexed { i, path ->
+            all.subList(0, i).none { parent -> path.startsWith("$parent/") }
+        }.filter { File(it).isDirectory }
+        if (folders.isEmpty()) return
+        kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            val left = java.util.concurrent.atomic.AtomicInteger(folders.size)
+            try {
+                android.media.MediaScannerConnection.scanFile(context, folders.toTypedArray(), null) { _, _ ->
+                    if (left.decrementAndGet() == 0 && cont.isActive) cont.resumeWith(Result.success(Unit))
+                }
+            } catch (_: Exception) {
+                if (cont.isActive) cont.resumeWith(Result.success(Unit))
+            }
+        }
+    }
+
     fun evictThumbnail(uriKey: String) {
         thumbnailCache.remove(uriKey)
         thumbDir?.let { dir ->

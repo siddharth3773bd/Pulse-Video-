@@ -56,6 +56,7 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
@@ -84,6 +85,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -274,14 +277,7 @@ fun NowPlayingScreen(
             modifier = Modifier.matchParentSize()
         )
         // The pieces of the screen; upright they stack, sideways the cover goes on the left.
-        val topBar: @Composable () -> Unit = {
-            NowPlayingTopBar(
-                colors = colors,
-                title = track.realAlbum,
-                subtitle = null,
-                onClose = onClose,
-                closeLabel = "Close Now Playing",
-                action = {
+        val moreMenuButton: @Composable () -> Unit = {
                     Box {
                         TooltipIconButton(
                             label = "More options",
@@ -305,7 +301,15 @@ fun NowPlayingScreen(
                             )
                         )
                     }
-                }
+        }
+        val topBar: @Composable () -> Unit = {
+            NowPlayingTopBar(
+                colors = colors,
+                title = track.realAlbum,
+                subtitle = null,
+                onClose = onClose,
+                closeLabel = "Close Now Playing",
+                action = moreMenuButton
             )
         }
         val cover: @Composable (Modifier) -> Unit = { coverModifier ->
@@ -380,8 +384,8 @@ fun NowPlayingScreen(
                 }
             }
         }
-        // Wavy seek bar, times and the sound details in between.
-        val seekBlock: @Composable () -> Unit = {
+        // Wavy seek bar, times and the sound details in between (left out sideways, to keep it calm).
+        val seekBlock: @Composable (showTech: Boolean) -> Unit = { showTech ->
             Column(modifier = Modifier.fillMaxWidth()) {
                 PlaybackSeekBar(
                     progress = fraction,
@@ -409,7 +413,7 @@ fun NowPlayingScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Crossfade(
-                            targetState = techLabel,
+                            targetState = techLabel.takeIf { showTech },
                             animationSpec = motion.defaultEffectsSpec(),
                             label = "nowPlayingTechChip"
                         ) { chip ->
@@ -496,11 +500,60 @@ fun NowPlayingScreen(
                             .fillMaxHeight(),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        topBar()
+                        // Close, then the tray's other buttons as small icons, then ⋮.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TooltipIconButton(
+                                label = "Close Now Playing",
+                                icon = Symbols.KeyboardArrowDown,
+                                onClick = onClose,
+                                modifier = Modifier.testTag("now_playing_close")
+                            )
+                            Spacer(Modifier.weight(1f))
+                            trayActions.filter { it != NowPlayingAction.SHUFFLE && it != NowPlayingAction.REPEAT }
+                                .forEach { action ->
+                                    val active = action == NowPlayingAction.SLEEP && sleepActive
+                                    TooltipIconButton(
+                                        label = if (active) "Sleep timer: ${formatCountdown(sleepTimerRemainingMs)}" else action.label,
+                                        icon = nowPlayingActionIcon(action),
+                                        onClick = {
+                                            when (action) {
+                                                NowPlayingAction.QUEUE -> showQueueSheet = true
+                                                NowPlayingAction.AMBIENT -> onOpenAmbient()
+                                                NowPlayingAction.SLEEP -> showSleepSheet = true
+                                                else -> Unit
+                                            }
+                                        },
+                                        modifier = Modifier.testTag("now_playing_tray_${action.id}")
+                                    )
+                                }
+                            moreMenuButton()
+                        }
                         titleRow()
-                        seekBlock()
-                        controls(true)
-                        if (trayActions.isNotEmpty()) tray(48.dp)
+                        seekBlock(false)
+                        // Shuffle · previous · play · next · repeat, all in one row.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (NowPlayingAction.SHUFFLE in trayActions) {
+                                TrayToggle(
+                                    checked = shuffleEnabled,
+                                    icon = if (shuffleEnabled) Symbols.ShuffleOn else Symbols.Shuffle,
+                                    label = "Shuffle",
+                                    colors = colors,
+                                    onClick = onToggleShuffle
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Box(Modifier.weight(1f)) { controls(true) }
+                            if (NowPlayingAction.REPEAT in trayActions) {
+                                Spacer(Modifier.width(8.dp))
+                                TrayToggle(
+                                    checked = repeatMode != Player.REPEAT_MODE_OFF,
+                                    icon = if (repeatMode == Player.REPEAT_MODE_ONE) Symbols.RepeatOne else Symbols.Repeat,
+                                    label = "Repeat",
+                                    colors = colors,
+                                    onClick = onCycleRepeat
+                                )
+                            }
+                        }
                     }
                 }
             } else {
@@ -524,7 +577,7 @@ fun NowPlayingScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     titleRow()
                     Spacer(modifier = Modifier.height(16.dp))
-                    seekBlock()
+                    seekBlock(true)
                     Spacer(modifier = Modifier.height(20.dp))
                     controls(false)
                     if (trayActions.isNotEmpty()) {
@@ -814,6 +867,34 @@ private fun NowPlayingTray(
                 }
             )
         }
+    }
+}
+
+/** Shuffle or repeat as a round toggle beside the play buttons (sideways Now Playing). */
+@Composable
+private fun TrayToggle(
+    checked: Boolean,
+    icon: ImageVector,
+    label: String,
+    colors: NowPlayingColors,
+    onClick: () -> Unit
+) {
+    FilledTonalIconToggleButton(
+        checked = checked,
+        onCheckedChange = { onClick() },
+        shapes = IconButtonDefaults.toggleableShapes(),
+        colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+            containerColor = colors.soft,
+            contentColor = colors.onSoft,
+            checkedContainerColor = colors.main,
+            checkedContentColor = colors.onMain
+        ),
+        modifier = Modifier
+            .size(IconButtonDefaults.mediumContainerSize())
+            .semantics { contentDescription = label }
+            .testTag("now_playing_tray_${label.lowercase()}")
+    ) {
+        Icon(icon, contentDescription = null)
     }
 }
 

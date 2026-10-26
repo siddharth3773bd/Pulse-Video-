@@ -9,8 +9,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -25,6 +23,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Surface
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.DropdownMenuItem
@@ -38,7 +42,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -53,8 +56,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -64,15 +65,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.model.LayoutMode
 import com.example.model.PlaylistItem
-import com.example.model.SortBy
-import com.example.model.SortDir
 import com.example.model.VideoItem
-import com.example.model.ViewMode
 import com.example.model.formatSizeLabel
 import com.example.model.formatCompactDate
-import com.example.model.naturalDir
 
 // ---------------------------------------------------------------------------------------------
 // Video ⋮ menu (anchored to the button that opened it)
@@ -109,117 +105,6 @@ fun VideoActionsMenu(
 // ---------------------------------------------------------------------------------------------
 // Sort & view
 // ---------------------------------------------------------------------------------------------
-
-/**
- * View & sort, kept compact: each part is one short row (Show, Layout, Sort by, Order) plus a
- * slim Smart groups switch, so the panel only takes the space it needs.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun SortAndViewBottomSheet(
-    smartGroups: Boolean,
-    viewMode: ViewMode,
-    layoutMode: LayoutMode,
-    onSelectViewMode: (ViewMode) -> Unit,
-    onSelectLayoutMode: (LayoutMode) -> Unit,
-    sortBy: SortBy,
-    sortDir: SortDir,
-    onToggleSmartGroups: () -> Unit,
-    onSelectSortField: (SortBy) -> Unit,
-    onSelectSortDir: (SortDir) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val scheme = MaterialTheme.colorScheme
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        // Opens fully, so nothing ends up under the gesture bar.
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.testTag("sort_and_view_sheet")
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            CompactRow("Show") {
-                ChoiceButtonGroup(
-                    options = listOf(
-                        ViewMode.VIDEOS to "Videos",
-                        ViewMode.FOLDERS to "Folders",
-                        ViewMode.TREE to "Tree"
-                    ),
-                    selected = viewMode,
-                    onSelect = onSelectViewMode,
-                    tag = { "view_mode_btn_${it.id}" }
-                )
-            }
-            val layoutRow: @Composable () -> Unit = {
-                CompactRow("Layout") {
-                    ChoiceButtonGroup(
-                        options = listOf(
-                            LayoutMode.LIST to "List",
-                            LayoutMode.GRID to "Grid"
-                        ),
-                        selected = layoutMode,
-                        onSelect = onSelectLayoutMode,
-                        tag = { "layout_mode_btn_${it.id}" }
-                    )
-                }
-            }
-            val orderRow: @Composable () -> Unit = {
-                CompactRow("Order") {
-                    val natural = sortBy.naturalDir
-                    val dirs = listOf(natural, if (natural == SortDir.ASC) SortDir.DESC else SortDir.ASC)
-                    ChoiceButtonGroup(
-                        options = dirs.map { it to if (it == SortDir.ASC) sortBy.ascFull else sortBy.descFull },
-                        selected = sortDir,
-                        onSelect = onSelectSortDir,
-                        tag = { "sort_dir_${it.name.lowercase()}" }
-                    )
-                }
-            }
-            val sortRow: @Composable () -> Unit = {
-                CompactRow("Sort by") {
-                    ChoiceButtonGroup(
-                        options = SortBy.entries.map { it to it.label },
-                        selected = sortBy,
-                        onSelect = onSelectSortField,
-                        tag = { "sort_option_btn_${it.id}" }
-                    )
-                }
-            }
-            if (currentWindowLayout().compactHeight) {
-                // Sideways: the two-choice rows share a line, so everything fits without scrolling.
-                sortRow()
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(Modifier.weight(1f)) { layoutRow() }
-                    Box(Modifier.weight(1f)) { orderRow() }
-                }
-            } else {
-                layoutRow()
-                sortRow()
-                orderRow()
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.large)
-                    .toggleable(value = smartGroups, onValueChange = { onToggleSmartGroups() })
-                    .padding(vertical = 4.dp)
-                    .testTag("smart_groups_toggle_card")
-            ) {
-                Icon(Symbols.AutoAwesome, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(12.dp))
-                Text("Group series together", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Switch(checked = smartGroups, onCheckedChange = null)
-            }
-        }
-    }
-}
 
 /** A small label above one row of choices. */
 @Composable
@@ -310,19 +195,122 @@ private fun qualityName(width: Int, height: Int): String? {
 }
 
 /**
- * Video details: the thumbnail, name and date on top, then one grouped Material 3 Expressive list
- * (the same grouped style as the ⋮ menu) with the basics, each with its icon.
+ * Video details: the thumbnail, name and date, then the basics, each with its icon.
+ * See [InfoSheet] for how it looks upright and sideways.
  */
 @Composable
 fun VideoDetailsSheet(
     video: VideoItem,
     onDismiss: () -> Unit
 ) {
+    val resolution = if (video.width > 0 && video.height > 0) {
+        listOfNotNull("${video.width} × ${video.height}", qualityName(video.width, video.height)).joinToString(" · ")
+    } else "Unknown"
+    val rows = listOf(
+        Triple(Symbols.Timer, "Length", video.durationLabel),
+        Triple(Symbols.HighQuality, "Resolution", resolution),
+        Triple(Symbols.Storage, "Size", formatSizeLabel(video.sizeMB)),
+        Triple(Symbols.Description, "Format", video.ext.uppercase().ifBlank { "Unknown" }),
+        Triple(Symbols.Folder, "Folder", friendlyFolderPath(video.folderPath))
+    )
+    InfoSheet(
+        title = video.title,
+        subtitle = formatCompactDate(video.dateStr),
+        rows = rows,
+        artAspectRatio = 16f / 9f,
+        art = { modifier -> VideoThumbnailBox(video = video, modifier = modifier) },
+        tagPrefix = "detail_row_",
+        onDismiss = onDismiss,
+        modifier = Modifier.testTag("video_details_sheet")
+    )
+}
+
+/**
+ * The frame shared by video Details and Song info.
+ * - Upright: a bottom sheet with the picture, name and line below on top, then one joined
+ *   Material 3 Expressive list of facts.
+ * - Sideways (little height): a centred dialog instead, the picture and name on the left and the
+ *   facts as small tiles in two columns on the right, so nothing needs scrolling.
+ */
+@Composable
+internal fun InfoSheet(
+    title: String,
+    subtitle: String,
+    rows: List<Triple<ImageVector, String, String>>,
+    artAspectRatio: Float,
+    art: @Composable (Modifier) -> Unit,
+    tagPrefix: String,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val scheme = MaterialTheme.colorScheme
+    if (currentWindowLayout().compactHeight) {
+        // Wider than a normal 560dp dialog, so the facts fit in two columns.
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = scheme.surfaceContainerHigh,
+                modifier = modifier
+                    .fillMaxWidth(0.88f)
+                    .widthIn(max = 760.dp)
+            ) {
+                Row(modifier = Modifier.padding(20.dp)) {
+                    Column(modifier = Modifier.width(if (artAspectRatio > 1f) 220.dp else 176.dp)) {
+                        art(
+                            Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(artAspectRatio)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(Modifier.width(20.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rows.chunked(2).forEach { pair ->
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.height(IntrinsicSize.Min)
+                                ) {
+                                    pair.forEach { (icon, label, value) ->
+                                        InfoTile(icon, label, value, Modifier.weight(1f).fillMaxHeight().testTag("$tagPrefix${label.lowercase()}"))
+                                    }
+                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                                }
+                            }
+                        }
+                        TextButton(
+                            onClick = onDismiss,
+                            shapes = ButtonDefaults.shapes(),
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(top = 8.dp)
+                        ) { Text("Close") }
+                    }
+                }
+            }
+        }
+        return
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.testTag("video_details_sheet")
+        modifier = modifier
     ) {
         Column(
             modifier = Modifier
@@ -332,78 +320,70 @@ fun VideoDetailsSheet(
                 .padding(bottom = 24.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
-                VideoThumbnailBox(
-                    video = video,
-                    modifier = Modifier
-                        .width(120.dp)
-                        .aspectRatio(16f / 9f)
+                art(
+                    Modifier
+                        .width(if (artAspectRatio > 1f) 120.dp else 72.dp)
+                        .aspectRatio(artAspectRatio)
                 )
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        video.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        formatCompactDate(video.dateStr),
+                        subtitle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = scheme.onSurfaceVariant
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
             Spacer(Modifier.height(16.dp))
+            InfoRows(rows = rows, tagPrefix = tagPrefix)
+        }
+    }
+}
 
-            val resolution = if (video.width > 0 && video.height > 0) {
-                listOfNotNull("${video.width} × ${video.height}", qualityName(video.width, video.height)).joinToString(" · ")
-            } else "Unknown"
-            val rows = listOf(
-                Triple(Symbols.Timer, "Length", video.durationLabel),
-                Triple(Symbols.HighQuality, "Resolution", resolution),
-                Triple(Symbols.Storage, "Size", formatSizeLabel(video.sizeMB)),
-                Triple(Symbols.Description, "Format", video.ext.uppercase().ifBlank { "Unknown" }),
-                Triple(Symbols.Folder, "Folder", friendlyFolderPath(video.folderPath))
-            )
-            InfoRows(rows = rows, tagPrefix = "detail_row_")
+/** One fact as a small tile (sideways details). */
+@Composable
+private fun InfoTile(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = MaterialTheme.shapes.large, color = scheme.surfaceContainerHighest, modifier = modifier) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                Text(value, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
 
 /**
  * The rows of a details sheet (an icon, a small label, the value) as one joined Expressive list.
- * Sideways there's little height, so they split into two joined lists side by side.
  */
 @Composable
 internal fun InfoRows(rows: List<Triple<ImageVector, String, String>>, tagPrefix: String) {
     val scheme = MaterialTheme.colorScheme
-    val group: @Composable (List<Triple<ImageVector, String, String>>, Modifier) -> Unit = { part, modifier ->
-        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-            part.forEachIndexed { i, (icon, label, value) ->
-                SegmentedListItem(
-                    shapes = ListItemDefaults.segmentedShapes(index = i, count = part.size),
-                    leadingContent = { Icon(icon, contentDescription = null) },
-                    overlineContent = { Text(label) },
-                    colors = ListItemDefaults.segmentedColors(
-                        containerColor = scheme.surfaceContainerHigh,
-                        leadingContentColor = scheme.onSurfaceVariant,
-                        overlineContentColor = scheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier.testTag("$tagPrefix${label.lowercase()}")
-                ) {
-                    Text(value, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+    Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+        rows.forEachIndexed { i, (icon, label, value) ->
+            SegmentedListItem(
+                shapes = ListItemDefaults.segmentedShapes(index = i, count = rows.size),
+                leadingContent = { Icon(icon, contentDescription = null) },
+                overlineContent = { Text(label) },
+                colors = ListItemDefaults.segmentedColors(
+                    containerColor = scheme.surfaceContainerHigh,
+                    leadingContentColor = scheme.onSurfaceVariant,
+                    overlineContentColor = scheme.onSurfaceVariant
+                ),
+                modifier = Modifier.testTag("$tagPrefix${label.lowercase()}")
+            ) {
+                Text(value, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
-    }
-    if (currentWindowLayout().compactHeight && rows.size > 2) {
-        val split = (rows.size + 1) / 2
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            group(rows.take(split), Modifier.weight(1f))
-            group(rows.drop(split), Modifier.weight(1f))
-        }
-    } else {
-        group(rows, Modifier)
     }
 }
 

@@ -276,43 +276,25 @@ fun SongInfoSheet(
         fileName?.let { Triple(Symbols.AudioFile, "File", it) }
     )
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    InfoSheet(
+        title = track.title,
+        subtitle = track.artist.ifBlank { "Unknown artist" },
+        rows = rows,
+        artAspectRatio = 1f,
+        art = { modifier ->
+            AudioArt(
+                uri = track.contentUri,
+                placeholderBackground = scheme.surfaceContainerHighest,
+                placeholderTint = scheme.primary,
+                modifier = modifier,
+                shape = RoundedCornerShape(16.dp),
+                iconSize = 30.dp
+            )
+        },
+        tagPrefix = "song_info_row_",
+        onDismiss = onDismiss,
         modifier = Modifier.testTag("song_info_sheet")
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
-                AudioArt(
-                    uri = track.contentUri,
-                    placeholderBackground = scheme.surfaceContainerHighest,
-                    placeholderTint = scheme.primary,
-                    modifier = Modifier.size(72.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    iconSize = 30.dp
-                )
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(track.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        track.artist.ifBlank { "Unknown artist" },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            InfoRows(rows = rows, tagPrefix = "song_info_row_")
-        }
-    }
+    )
 }
 
 /**

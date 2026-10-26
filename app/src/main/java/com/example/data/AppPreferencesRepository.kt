@@ -107,6 +107,7 @@ object AppPreferencesRepository {
     private val KEY_LYR_AUTO = booleanPreferencesKey("lyrics_auto_search_v2")
     private val KEY_LYR_SIZE = stringPreferencesKey("lyrics_text_size")
     private val KEY_LYR_CENTER = booleanPreferencesKey("lyrics_align_center")
+    private val KEY_LYR_ALIGN = stringPreferencesKey("lyrics_align")
     private val KEY_LYR_BLUR = booleanPreferencesKey("lyrics_blur")
     private val KEY_LYR_ROMAN = booleanPreferencesKey("lyrics_romanize")
     private val KEY_AMB_ART = booleanPreferencesKey("ambient_show_art")
@@ -114,6 +115,7 @@ object AppPreferencesRepository {
     private val KEY_AMB_ARTIST = booleanPreferencesKey("ambient_show_artist")
     private val KEY_AMB_LYRICS = booleanPreferencesKey("ambient_show_lyrics")
     private val KEY_AMB_ROTATE = booleanPreferencesKey("ambient_open_on_rotate")
+    private val KEY_AMB_SIDEWAYS = stringPreferencesKey("ambient_when_sideways")
     private val KEY_NP_KEEP_SCREEN_ON = booleanPreferencesKey("now_playing_keep_screen_on")
     private val KEY_LYR_KEEP_SCREEN_ON = booleanPreferencesKey("lyrics_keep_screen_on")
     private val KEY_AMB_BLACK = booleanPreferencesKey("ambient_black")
@@ -241,7 +243,10 @@ object AppPreferencesRepository {
                     showArtist = prefs[KEY_AMB_ARTIST] ?: true,
                     showLyrics = prefs[KEY_AMB_LYRICS] ?: true,
                     black = prefs[KEY_AMB_BLACK] ?: false,
-                    openOnRotate = prefs[KEY_AMB_ROTATE] ?: false
+                    // Older versions only had "ambient when sideways: on/off".
+                    whenSideways = com.example.model.SidewaysMode.entries.find { it.id == prefs[KEY_AMB_SIDEWAYS] }
+                        ?: if (prefs[KEY_AMB_ROTATE] == true) com.example.model.SidewaysMode.AMBIENT
+                        else com.example.model.SidewaysMode.NOW_PLAYING
                 ),
                 keepScreenOnNowPlaying = prefs[KEY_NP_KEEP_SCREEN_ON] ?: false,
                 keepScreenOnLyrics = prefs[KEY_LYR_KEEP_SCREEN_ON] ?: true,
@@ -249,7 +254,10 @@ object AppPreferencesRepository {
                     autoSearch = prefs[KEY_LYR_AUTO] ?: true,
                     textSize = com.example.lyrics.LyricsTextSize.entries.find { it.id == prefs[KEY_LYR_SIZE] }
                         ?: com.example.lyrics.LyricsTextSize.MEDIUM,
-                    alignCenter = prefs[KEY_LYR_CENTER] ?: false,
+                    // Older versions only had "centre or not".
+                    align = com.example.lyrics.LyricsAlign.entries.find { it.id == prefs[KEY_LYR_ALIGN] }
+                        ?: if (prefs[KEY_LYR_CENTER] == true) com.example.lyrics.LyricsAlign.CENTER
+                        else com.example.lyrics.LyricsAlign.LEFT,
                     blur = prefs[KEY_LYR_BLUR] ?: true,
                     romanize = prefs[KEY_LYR_ROMAN] ?: false
                 )
@@ -430,7 +438,7 @@ object AppPreferencesRepository {
         context.appDataStore.edit {
             it[KEY_LYR_AUTO] = value.autoSearch
             it[KEY_LYR_SIZE] = value.textSize.id
-            it[KEY_LYR_CENTER] = value.alignCenter
+            it[KEY_LYR_ALIGN] = value.align.id
             it[KEY_LYR_BLUR] = value.blur
             it[KEY_LYR_ROMAN] = value.romanize
         }
@@ -443,7 +451,7 @@ object AppPreferencesRepository {
             it[KEY_AMB_ARTIST] = value.showArtist
             it[KEY_AMB_LYRICS] = value.showLyrics
             it[KEY_AMB_BLACK] = value.black
-            it[KEY_AMB_ROTATE] = value.openOnRotate
+            it[KEY_AMB_SIDEWAYS] = value.whenSideways.id
         }
     }
 

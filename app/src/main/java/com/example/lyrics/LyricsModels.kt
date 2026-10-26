@@ -34,7 +34,9 @@ sealed interface LyricsState {
         /** The song file has its own lyrics (so "Use online lyrics instead" makes sense). */
         val hasEmbedded: Boolean,
         val hasUserFile: Boolean,
-        val offsetMs: Long
+        val offsetMs: Long,
+        /** Found online, but another version came close: offer "Not right? Other versions". */
+        val otherVersions: Boolean = false
     ) : LyricsState
 
     /** Nothing saved and auto-search is off: ask "Search online / Load lyrics file". */
@@ -42,6 +44,8 @@ sealed interface LyricsState {
     data object NotFound : LyricsState
     data object Instrumental : LyricsState
     data object NoInternet : LyricsState
+    /** Online, but LRCLIB is busy or slow right now. */
+    data object ServiceBusy : LyricsState
 }
 
 /** One LRCLIB result, used by "Search again". */
@@ -66,12 +70,19 @@ enum class LyricsTextSize(val id: String, val label: String, val activeSp: Int, 
     LARGE("large", "Large", 36, 26)
 }
 
+/** Which side the lyrics line up on. */
+enum class LyricsAlign(val id: String, val label: String) {
+    LEFT("left", "Left"),
+    CENTER("center", "Centre"),
+    RIGHT("right", "Right")
+}
+
 /** Lyrics settings that apply to every song. */
 data class LyricsSettings(
     /** Search LRCLIB automatically when a song has no lyrics of its own. */
     val autoSearch: Boolean = true,
     val textSize: LyricsTextSize = LyricsTextSize.MEDIUM,
-    val alignCenter: Boolean = false,
+    val align: LyricsAlign = LyricsAlign.LEFT,
     val blur: Boolean = true,
     /** Show each line in English letters too (e.g. Hindi written in Devanagari). */
     val romanize: Boolean = false

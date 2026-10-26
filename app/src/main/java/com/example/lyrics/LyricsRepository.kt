@@ -18,6 +18,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -33,7 +36,11 @@ data class SongLyricsRecord(
     /** "Use online lyrics instead" even though the song file has its own. */
     val preferOnline: Boolean = false,
     /** Sync adjustment: positive shows lines later. */
-    val offsetMs: Long = 0L
+    val offsetMs: Long = 0L,
+    /** Which matching rules found [onlineText] / [notFound]; older results get one fresh look. */
+    val matchVersion: Int = 0,
+    /** Another version came close when these lyrics were picked automatically. */
+    val ambiguous: Boolean = false
 )
 
 /**
@@ -43,6 +50,9 @@ data class SongLyricsRecord(
 object LyricsRepository {
 
     // ---------------------------------------------------------------- resolve
+
+    /** Bumped when the matching gets better, so automatic picks made before are looked at again. */
+    private const val MATCH_VERSION = 2
 
     /**
      * Works out what to show for [track].
@@ -54,14 +64,24 @@ object LyricsRepository {
         settings: LyricsSettings,
         forceOnline: Boolean = false
     ): LyricsState = withContext(Dispatchers.IO) {
-        val record = readRecord(context, track)
+        val stored = readRecord(context, track)
         val embeddedText = readEmbedded(context, track)
         val hasEmbedded = !embeddedText.isNullOrBlank()
+        // An automatic pick (or "not found") from older, simpler matching gets one fresh look.
+        val outdated = stored.userText == null && !stored.preferOnline && stored.matchVersion < MATCH_VERSION &&
+            (stored.onlineText != null || stored.notFound)
+        val record = if (outdated && (settings.autoSearch || forceOnline)) {
+            stored.copy(onlineText = null, notFound = false, instrumental = false)
+        } else stored
 
         fun loaded(text: String, source: LyricsSource): LyricsState {
             val lyrics = LrcParser.parse(text)
+            val fresh = readRecordCached(track) ?: record
             return if (lyrics.isEmpty) LyricsState.NotFound
-            else LyricsState.Loaded(lyrics, source, hasEmbedded, record.userText != null, record.offsetMs)
+            else LyricsState.Loaded(
+                lyrics, source, hasEmbedded, record.userText != null, record.offsetMs,
+                otherVersions = source == LyricsSource.ONLINE && fresh.ambiguous && !fresh.preferOnline
+            )
         }
 
         // 1. The user's own file.
@@ -104,90 +124,100 @@ object LyricsRepository {
                 hasEmbedded -> loaded(embeddedText!!, LyricsSource.EMBEDDED)
                 else -> LyricsState.NotFound
             }
-        } catch (_: LyricsNetworkException) {
-            if (hasEmbedded) loaded(embeddedText!!, LyricsSource.EMBEDDED) else LyricsState.NoInternet
+        } catch (e: LyricsNetworkException) {
+            when {
+                // Couldn't look again: keep what was found before.
+                outdated && stored.onlineText != null -> loaded(stored.onlineText, LyricsSource.ONLINE)
+                hasEmbedded -> loaded(embeddedText!!, LyricsSource.EMBEDDED)
+                e.offline || !isOnline(context) -> LyricsState.NoInternet
+                else -> LyricsState.ServiceBusy
+            }
         }
     }
 
     /** Searches LRCLIB for [track], saves the outcome and returns the lyrics text (or null). */
     private suspend fun fetchOnline(context: Context, track: AudioTrackItem, record: SongLyricsRecord): String? {
-        val result = findBest(track)
+        val (result, ambiguous) = findBest(track)
+        val base = record.copy(matchVersion = MATCH_VERSION, ambiguous = ambiguous)
         return when {
             result == null -> {
-                writeRecord(context, track, record.copy(notFound = true, instrumental = false))
+                writeRecord(context, track, base.copy(notFound = true, instrumental = false))
                 null
             }
             result.hasAnyLyrics -> {
                 val text = result.syncedLyrics ?: result.plainLyrics!!
-                writeRecord(context, track, record.copy(onlineText = text, notFound = false, instrumental = false))
+                writeRecord(context, track, base.copy(onlineText = text, notFound = false, instrumental = false))
                 text
             }
             else -> {
-                writeRecord(context, track, record.copy(instrumental = result.instrumental, notFound = !result.instrumental))
+                writeRecord(context, track, base.copy(instrumental = result.instrumental, notFound = !result.instrumental))
                 null
             }
         }
     }
 
-    /** Tries an exact match first, then cleaned-up names, then a search filtered by song length. */
-    private suspend fun findBest(track: AudioTrackItem): LyricsSearchResult? {
-        val durationSec = (track.durationMs / 1000L).toInt()
-        val artist = track.artist.takeUnless { it.isBlank() || it.equals("Unknown artist", true) }.orEmpty()
-        val album = track.album.takeUnless { it.isBlank() || it.equals("Unknown album", true) }
-        val title = track.title
-        val cleanTitle = cleanTitle(title)
-        val mainArtist = primaryArtist(artist)
+    /** The song's details, cleaned (see [LyricsMatcher]). */
+    fun queryFor(track: AudioTrackItem): LyricsMatcher.Query = LyricsMatcher.queryFor(
+        title = track.title,
+        artist = track.artist,
+        album = track.album,
+        folder = track.folder,
+        durationSec = (track.durationMs / 1000L).toInt()
+    )
 
-        fun good(r: LyricsSearchResult?) = r != null && (r.hasAnyLyrics || r.instrumental)
+    /**
+     * Asks LRCLIB several ways at once and lets [LyricsMatcher] pick: the best result if it's
+     * clearly good (null otherwise), and whether another version came close.
+     */
+    private suspend fun findBest(track: AudioTrackItem): Pair<LyricsSearchResult?, Boolean> = coroutineScope {
+        val ranked = rankCandidates(queryFor(track))
+        LyricsMatcher.decide(ranked)
+    }
 
-        if (artist.isNotEmpty()) {
-            LrcLibClient.get(title, artist, album, durationSec).takeIf(::good)?.let { return it }
-            if (cleanTitle != title || mainArtist != artist) {
-                LrcLibClient.get(cleanTitle, mainArtist, null, durationSec).takeIf(::good)?.let { return it }
+    /** All candidates for [query], best first. Throws [LyricsNetworkException] only if every request failed. */
+    suspend fun rankCandidates(query: LyricsMatcher.Query): List<LyricsMatcher.Scored> = coroutineScope {
+        val title = query.title
+        val artists = query.artists
+        val requests = buildList<suspend () -> List<LyricsSearchResult>> {
+            artists.firstOrNull()?.let { artist ->
+                add { listOfNotNull(LrcLibClient.get(title, artist, query.albumHint, query.durationSec)) }
+                add { LrcLibClient.search(title, artist) }
             }
+            artists.getOrNull(1)?.let { artist -> add { LrcLibClient.search(title, artist) } }
+            query.albumHint?.let { hint -> add { LrcLibClient.searchWords("$title $hint") } }
+            add { LrcLibClient.search(title, null) }
         }
-        val candidates = buildList {
-            if (mainArtist.isNotEmpty()) addAll(LrcLibClient.search(cleanTitle, mainArtist))
-            if (isEmpty()) addAll(LrcLibClient.search(cleanTitle, null))
+        val outcomes = requests.map { request -> async { runCatching { request() } } }.awaitAll()
+        val found = outcomes.mapNotNull { it.getOrNull() }.flatten()
+        if (found.isEmpty()) {
+            outcomes.firstNotNullOfOrNull { it.exceptionOrNull() as? LyricsNetworkException }?.let { throw it }
         }
-        return pickBest(candidates, durationSec)
+        LyricsMatcher.rank(found, query)
     }
 
-    /** Closest length (within 3 s when the length is known), synced lyrics first. */
-    fun pickBest(candidates: List<LyricsSearchResult>, durationSec: Int): LyricsSearchResult? {
-        val usable = candidates.filter { it.hasAnyLyrics || it.instrumental }
-        val inRange = if (durationSec > 0) usable.filter { abs(it.durationSec - durationSec) <= 3 } else usable
-        return inRange.sortedWith(
-            compareByDescending<LyricsSearchResult> { it.hasSynced }
-                .thenBy { if (durationSec > 0) abs(it.durationSec - durationSec) else 0 }
-        ).firstOrNull()
+    /** Whether the phone has a working internet connection right now. */
+    private fun isOnline(context: Context): Boolean {
+        val manager = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+        val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
+        return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    /** "Song (From “Movie”) [Remastered]" -> "Song". */
-    fun cleanTitle(title: String): String {
-        val stripped = title
-            .replace(Regex("""\s*[(\[][^)\]]*[)\]]"""), "")
-            .replace(Regex("""\s+-\s+.*(remaster|version|edit|mix|live|from|feat).*$""", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("""\s+(feat\.?|ft\.?)\s+.*$""", RegexOption.IGNORE_CASE), "")
-            .trim()
-        return stripped.ifBlank { title.trim() }
-    }
+    /** "Song (From “Movie”) [Remastered] - site.com" -> "Song". */
+    fun cleanTitle(title: String): String = LyricsMatcher.cleanTitle(title).first
 
-    /** "Pritam, Mahmood & Raghav" -> "Pritam". */
-    fun primaryArtist(artist: String): String =
-        artist.split(Regex("""\s*(,|&|;|/|\sx\s|\sfeat\.?\s|\sft\.?\s|\sand\s)\s*""", RegexOption.IGNORE_CASE))
-            .firstOrNull { it.isNotBlank() }?.trim() ?: artist.trim()
+    private fun readRecordCached(track: AudioTrackItem): SongLyricsRecord? = cache[keyOf(track)]
 
     // ---------------------------------------------------------------- user actions
 
-    /** "Search again" with the user's own words. */
-    suspend fun searchManually(title: String, artist: String, album: String): List<LyricsSearchResult> {
-        val results = LrcLibClient.search(title.trim(), artist.trim().ifBlank { null }, album.trim().ifBlank { null })
-        val withAlbumless = if (results.isEmpty() && album.isNotBlank()) {
-            LrcLibClient.search(title.trim(), artist.trim().ifBlank { null })
-        } else results
-        return withAlbumless.filter { it.hasAnyLyrics || it.instrumental }
-            .sortedByDescending { it.hasSynced }
+    /** "Search again" with the user's own words: every version found, best match first. */
+    suspend fun searchManually(title: String, artist: String, album: String, durationSec: Int): List<LyricsSearchResult> {
+        val query = LyricsMatcher.Query(
+            title = LyricsMatcher.cleanTitle(title).first.ifBlank { title.trim() },
+            artists = LyricsMatcher.splitArtists(artist),
+            albumHint = album.trim().ifBlank { null },
+            durationSec = durationSec
+        )
+        return rankCandidates(query).map { it.result }
     }
 
     /** The user picked [result] from "Search again": use it for this song. */
@@ -256,7 +286,9 @@ object LyricsRepository {
                     instrumental = o.optBoolean("instrumental"),
                     notFound = o.optBoolean("notFound"),
                     preferOnline = o.optBoolean("preferOnline"),
-                    offsetMs = o.optLong("offsetMs")
+                    offsetMs = o.optLong("offsetMs"),
+                    matchVersion = o.optInt("matchVersion"),
+                    ambiguous = o.optBoolean("ambiguous")
                 )
             }.getOrDefault(SongLyricsRecord())
         } else SongLyricsRecord()
@@ -277,6 +309,8 @@ object LyricsRepository {
                 put("notFound", record.notFound)
                 put("preferOnline", record.preferOnline)
                 put("offsetMs", record.offsetMs)
+                put("matchVersion", record.matchVersion)
+                put("ambiguous", record.ambiguous)
             }
             runCatching { fileOf(context, key).writeText(o.toString()) }
         }

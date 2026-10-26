@@ -73,6 +73,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -82,6 +83,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.lyrics.LrcParser
+import com.example.lyrics.LyricsAlign
 import com.example.lyrics.LyricsNetworkException
 import com.example.lyrics.LyricsRepository
 import com.example.lyrics.LyricsSearchResult
@@ -122,6 +124,8 @@ fun LyricsScreen(
     val handle = rememberLyricsState(track, settings)
     var showSettings by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
+    // "Not right? Other versions": the search opens with its results already there.
+    var searchNow by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -173,14 +177,29 @@ fun LyricsScreen(
             drift = true,
             modifier = Modifier.matchParentSize()
         )
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(interactionSource = null, indication = null, onClick = {})
                 // Also clear of the camera cut-out when the phone is sideways.
                 .windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
-            Box(Modifier.padding(horizontal = 24.dp)) {
+            // The song's name at the top steps aside together with the controls, so the lyrics
+            // have the whole screen; any touch brings both back.
+            AnimatedVisibility(
+                visible = controlsShown || !showingLyrics,
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                    slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { -it / 2 },
+                exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()) +
+                    slideOutVertically(MaterialTheme.motionScheme.slowSpatialSpec()) { -it / 2 },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(1f)
+            ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 NowPlayingTopBar(
                     colors = colors,
                     title = track.title,
@@ -198,6 +217,28 @@ fun LyricsScreen(
                         }
                     }
                 )
+                // Found automatically, but another version came close: one tap to compare.
+                val otherVersions = (handle.state as? LyricsState.Loaded)?.otherVersions == true
+                if (otherVersions) {
+                    androidx.compose.material3.AssistChip(
+                        onClick = {
+                            searchNow = true
+                            showSearch = true
+                        },
+                        label = { Text("Not right? Other versions") },
+                        leadingIcon = {
+                            Icon(Symbols.Lyrics, contentDescription = null, modifier = Modifier.size(androidx.compose.material3.AssistChipDefaults.IconSize))
+                        },
+                        colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                            containerColor = colors.soft,
+                            labelColor = colors.onSoft,
+                            leadingIconContentColor = colors.onSoft
+                        ),
+                        border = null,
+                        modifier = Modifier.testTag("lyrics_other_versions")
+                    )
+                }
+            }
             }
 
             // Lyrics, or a short message with what to do next.
@@ -206,9 +247,7 @@ fun LyricsScreen(
                 contentKey = { it::class },
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
                 label = "lyricsState",
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
+                modifier = Modifier.fillMaxSize()
             ) { state ->
                 when (state) {
                     LyricsState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -248,6 +287,14 @@ fun LyricsScreen(
                         title = "No internet connection",
                         body = "Connect and try again, or load your own lyrics file.",
                         primary = "Retry" to { handle.reload(true) },
+                        secondary = "Load file" to loadFile
+                    )
+                    LyricsState.ServiceBusy -> MessagePanel(
+                        colors = colors,
+                        icon = Symbols.Cloud,
+                        title = "LRCLIB is busy",
+                        body = "The free lyrics library isn't answering right now. Try again in a moment, or load your own file.",
+                        primary = "Try again" to { handle.reload(true) },
                         secondary = "Load file" to loadFile
                     )
                     LyricsState.Instrumental -> MessagePanel(
@@ -330,12 +377,17 @@ fun LyricsScreen(
             track = track,
             onPick = { result ->
                 showSearch = false
+                searchNow = false
                 scope.launch {
                     LyricsRepository.useResult(context, track, result)
                     handle.reload(false)
                 }
             },
-            onDismiss = { showSearch = false }
+            onDismiss = {
+                showSearch = false
+                searchNow = false
+            },
+            searchNow = searchNow
         )
     }
 }
@@ -477,11 +529,15 @@ private fun LyricsSettingsSheet(
                 )
                 ChoiceRow(
                     index = 1, count = 4,
-                    icon = if (settings.alignCenter) Symbols.FormatAlignCenter else Symbols.FormatAlignLeft,
+                    icon = when (settings.align) {
+                        LyricsAlign.LEFT -> Symbols.FormatAlignLeft
+                        LyricsAlign.CENTER -> Symbols.FormatAlignCenter
+                        LyricsAlign.RIGHT -> Symbols.FormatAlignRight
+                    },
                     title = "Alignment",
-                    options = listOf("Left", "Centre"),
-                    selected = if (settings.alignCenter) 1 else 0,
-                    onSelect = { onSettingsChange(settings.copy(alignCenter = it == 1)) }
+                    options = LyricsAlign.entries.map { it.label },
+                    selected = settings.align.ordinal,
+                    onSelect = { onSettingsChange(settings.copy(align = LyricsAlign.entries[it])) }
                 )
                 SwitchRow(
                     index = 2, count = 4, icon = Symbols.BlurOn, title = "Blur",
@@ -622,21 +678,23 @@ private fun ChoiceRow(
 // Search again
 // ---------------------------------------------------------------------------------------------
 
-/** "Search again": edit the title / artist / album (pre-filled) and pick the right match. */
+/**
+ * "Search again": the title / artist / album, already cleaned of junk (site names, "(From …)",
+ * a time as the artist, the folder as the album), to edit if needed; results come best first.
+ * [searchNow] runs the search straight away (from "Not right? Other versions").
+ */
 @Composable
 private fun LyricsSearchSheet(
     track: AudioTrackItem,
     onPick: (LyricsSearchResult) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    searchNow: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
-    var title by remember { mutableStateOf(LyricsRepository.cleanTitle(track.title)) }
-    var artist by remember {
-        mutableStateOf(track.artist.takeUnless { it.equals("Unknown artist", true) }.orEmpty())
-    }
-    var album by remember {
-        mutableStateOf(track.album.takeUnless { it.equals("Unknown album", true) }.orEmpty())
-    }
+    val cleaned = remember(track.id) { LyricsRepository.queryFor(track) }
+    var title by remember { mutableStateOf(cleaned.title) }
+    var artist by remember { mutableStateOf(cleaned.artists.take(2).joinToString(", ")) }
+    var album by remember { mutableStateOf(cleaned.albumHint.orEmpty()) }
     var searching by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var results by remember { mutableStateOf<List<LyricsSearchResult>>(emptyList()) }
@@ -647,11 +705,11 @@ private fun LyricsSearchSheet(
         message = null
         scope.launch {
             try {
-                results = LyricsRepository.searchManually(title, artist, album)
+                results = LyricsRepository.searchManually(title, artist, album, (track.durationMs / 1000L).toInt())
                 if (results.isEmpty()) message = "No matches. Try a shorter title or just the main artist."
-            } catch (_: LyricsNetworkException) {
+            } catch (e: LyricsNetworkException) {
                 results = emptyList()
-                message = "No internet connection."
+                message = if (e.offline) "No internet connection." else "LRCLIB is busy right now. Try again in a moment."
             } catch (_: Exception) {
                 results = emptyList()
                 message = "Something went wrong. Try again."
@@ -660,6 +718,8 @@ private fun LyricsSearchSheet(
             }
         }
     }
+
+    LaunchedEffect(Unit) { if (searchNow) search() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

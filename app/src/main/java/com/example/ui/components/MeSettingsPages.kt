@@ -66,6 +66,7 @@ import com.example.model.NowPlayingBackground
 import com.example.model.NowPlayingColorSource
 import com.example.model.PlaybackSettings
 import com.example.model.ScreenOrientationMode
+import com.example.model.SidewaysMode
 import com.example.model.ThemeMode
 import com.example.ui.icons.Symbols
 import com.example.ui.theme.AppColorPresets
@@ -729,17 +730,12 @@ internal fun MusicSettingsPage(audioTracks: List<AudioTrackItem>, onBack: () -> 
                     checked = prefs.keepScreenOnNowPlaying,
                     onCheckedChange = { on -> scope.launch { AppPreferencesRepository.setNowPlayingKeepScreenOn(context, on) } }
                 ),
-                SettingRow.Toggle(
+                SettingRow.Choice(
                     key = "ambient_rotate",
                     icon = Symbols.ScreenRotation,
-                    title = "Ambient mode when sideways",
-                    summary = "Turning the phone on Now Playing opens ambient mode instead",
-                    checked = prefs.ambient.openOnRotate,
-                    onCheckedChange = { on ->
-                        scope.launch {
-                            AppPreferencesRepository.updateAmbientSettings(context, prefs.ambient.copy(openOnRotate = on))
-                        }
-                    }
+                    title = "When the phone turns sideways",
+                    value = prefs.ambient.whenSideways.label,
+                    onClick = { lookChoice = "sideways" }
                 )
             )
         )
@@ -813,6 +809,18 @@ internal fun MusicSettingsPage(audioTracks: List<AudioTrackItem>, onBack: () -> 
             selected = prefs.nowPlayingColorSource,
             onSelect = { value ->
                 scope.launch { AppPreferencesRepository.setNowPlayingColorSource(context, value) }
+                lookChoice = null
+            },
+            onDismiss = { lookChoice = null }
+        )
+        "sideways" -> ChoiceSheet(
+            title = "When the phone turns sideways",
+            options = SidewaysMode.entries.map { ChoiceOption(it, it.label, it.description) },
+            selected = prefs.ambient.whenSideways,
+            onSelect = { value ->
+                scope.launch {
+                    AppPreferencesRepository.updateAmbientSettings(context, prefs.ambient.copy(whenSideways = value))
+                }
                 lookChoice = null
             },
             onDismiss = { lookChoice = null }

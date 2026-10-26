@@ -40,9 +40,16 @@ data class AmbientSettings(
     val showLyrics: Boolean = true,
     /** Black background for the night, whatever Now Playing uses. */
     val black: Boolean = false,
-    /** Turning the phone sideways on Now Playing opens ambient mode (off: Now Playing turns too). */
-    val openOnRotate: Boolean = false
+    /** What turning the phone sideways on Now Playing does. */
+    val whenSideways: SidewaysMode = SidewaysMode.NOW_PLAYING
 )
+
+/** What happens when the phone turns sideways on Now Playing. */
+enum class SidewaysMode(val id: String, val label: String, val description: String) {
+    NOW_PLAYING("now_playing", "Now Playing", "The player turns with the phone. Ambient mode opens only from its button"),
+    AMBIENT("ambient", "Ambient mode", "Ambient mode opens straight away. Its Now Playing button takes you back"),
+    AMBIENT_WHEN_IDLE("idle", "Ambient when idle", "Now Playing first; after 10 seconds untouched it fades into ambient mode")
+}
 
 enum class LibrarySongSort(val id: String, val label: String) {
     DATE_ADDED("date_added", "Date added"),

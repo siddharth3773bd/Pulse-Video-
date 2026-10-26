@@ -173,7 +173,7 @@ import com.example.ui.components.RenameVideoDialog
 import com.example.ui.components.FoldersLibraryView
 import com.example.ui.components.MeTabScreen
 import com.example.ui.components.MediaPermissionPromptCard
-import com.example.ui.components.SortAndViewBottomSheet
+import com.example.ui.components.VideoSortMenu
 import com.example.ui.components.TreeHierarchyView
 import com.example.ui.components.VideoGridItem
 import com.example.ui.components.VideoListItem
@@ -181,6 +181,8 @@ import com.example.ui.components.VideoPlayerModal
 import com.example.ui.theme.AlbumArtTheme
 import com.example.model.NowPlayingBackground
 import com.example.model.NowPlayingColorSource
+import com.example.model.SidewaysMode
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -533,8 +535,13 @@ fun Material3VideoPlayerScreen(
     val audioUiScope = rememberCoroutineScope()
     val miniTrack = uiState.playingAudio
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
-    // Ambient mode: opened from the Now Playing tray, or automatically when the phone is turned
-    // sideways on Now Playing (unless closed while sideways; turning upright resets that).
+    // Ambient mode: opened from the Now Playing tray, or by turning the phone sideways, as chosen
+    // in Me › Music › When the phone turns sideways:
+    // - Now Playing: the player just turns; ambient only from its button.
+    // - Ambient mode: opens straight away; its Now Playing button goes back to the player.
+    // - Ambient when idle: Now Playing first, ambient after 10 seconds without a touch.
+    // Leaving ambient by hand sticks until the phone is upright again (or, when idle, until the
+    // next 10 untouched seconds).
     var ambientRequested by rememberSaveable { mutableStateOf(false) }
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(showNowPlaying) { if (!showNowPlaying) showLyrics = false }
@@ -543,9 +550,24 @@ fun Material3VideoPlayerScreen(
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
     LaunchedEffect(isLandscape) { if (!isLandscape) ambientDismissedSideways = false }
     LaunchedEffect(showNowPlaying) { if (!showNowPlaying) ambientRequested = false }
+    val sidewaysMode = libraryPrefs.ambient.whenSideways
+    var lastNowPlayingTouch by remember { mutableLongStateOf(0L) }
+    var idleAmbient by remember { mutableStateOf(false) }
+    LaunchedEffect(isLandscape, showNowPlaying, showLyrics, sidewaysMode, lastNowPlayingTouch, ambientRequested) {
+        idleAmbient = false
+        // Not over the lyrics: reading them is not "idle".
+        if (isLandscape && showNowPlaying && !showLyrics && !ambientRequested && sidewaysMode == SidewaysMode.AMBIENT_WHEN_IDLE) {
+            kotlinx.coroutines.delay(10_000L)
+            idleAmbient = true
+        }
+    }
     val showAmbient = showNowPlaying && miniTrack != null && (
         ambientRequested ||
-            (isLandscape && libraryPrefs.ambient.openOnRotate && !ambientDismissedSideways)
+            (isLandscape && when (sidewaysMode) {
+                SidewaysMode.NOW_PLAYING -> false
+                SidewaysMode.AMBIENT -> !ambientDismissedSideways
+                SidewaysMode.AMBIENT_WHEN_IDLE -> idleAmbient
+            })
         )
     // Long-press selection in the Music tab: its own toolbar replaces the nav pill and mini player.
     var audioSelectionActive by remember { mutableStateOf(false) }
@@ -682,7 +704,7 @@ fun Material3VideoPlayerScreen(
                 viewModel.openVideoMenu(video)
             },
             menu = videoMenu,
-            onRescan = { viewModel.refreshPermissionsAndScan(context, showSpinner = true) }
+            onRescan = { viewModel.pullToRefresh(context) }
         )
     }
 
@@ -733,6 +755,23 @@ fun Material3VideoPlayerScreen(
             ) {
             Column(Modifier.fillMaxSize()) {
             // 1. Header (the Me tab and the Music library draw their own)
+            // One View and sort menu, under whichever header is on top (a folder's or the list's).
+            val videoSortMenu: @Composable (forFolder: Boolean) -> Unit = { forFolder ->
+                VideoSortMenu(
+                    expanded = uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS && inVideoFolder == forFolder,
+                    onDismiss = { viewModel.clearAllOverlays() },
+                    viewMode = uiState.viewMode,
+                    layoutMode = uiState.layoutMode,
+                    sortBy = uiState.sortBy,
+                    sortDir = uiState.sortDir,
+                    smartGroups = uiState.smartGroups,
+                    onSelectViewMode = { viewModel.setViewMode(it, context) },
+                    onSelectLayoutMode = { viewModel.setLayoutMode(it, context) },
+                    onSelectSortField = { viewModel.setSortField(it, context) },
+                    onSelectSortDir = { viewModel.setSortDir(it, context) },
+                    onToggleSmartGroups = { viewModel.toggleSmartGroups(context) }
+                )
+            }
             val hideMainHeader = uiState.bottomTab == BottomTab.ME ||
                 (uiState.bottomTab == BottomTab.AUDIO && uiState.hasAudioPermission)
             if (!hideMainHeader) {
@@ -746,7 +785,8 @@ fun Material3VideoPlayerScreen(
                     onClearSelection = { viewModel.clearSelection() },
                     onToggleSelectAll = { viewModel.toggleSelectAll() },
                     onOpenSortSheet = { viewModel.openSortSheet() },
-                    onClearSubFilter = closeVideoFolder
+                    onClearSubFilter = closeVideoFolder,
+                    sortMenu = { videoSortMenu(false) }
                 )
             }
             Box(
@@ -788,7 +828,7 @@ fun Material3VideoPlayerScreen(
             } else {
                 PullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
-                    onRefresh = { viewModel.refreshPermissionsAndScan(context, showSpinner = true) },
+                    onRefresh = { viewModel.pullToRefresh(context) },
                     state = pullToRefreshState,
                     indicator = {
                         PullToRefreshDefaults.LoadingIndicator(
@@ -935,7 +975,8 @@ fun Material3VideoPlayerScreen(
                                 onClearSelection = { viewModel.clearSelection() },
                                 onToggleSelectAll = { viewModel.toggleSelectAll() },
                                 onOpenSortSheet = { viewModel.openSortSheet() },
-                                onClearSubFilter = closeVideoFolder
+                                onClearSubFilter = closeVideoFolder,
+                                sortMenu = { videoSortMenu(true) }
                             )
                             Box(Modifier.weight(1f).fillMaxWidth()) {
                                 CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
@@ -1085,7 +1126,16 @@ fun Material3VideoPlayerScreen(
                         if (miniPlayerAllowed) PlayerTransitionScopes(playerSharedScope, this@AnimatedVisibility) else null
                 ) {
                 NowPlayingScreen(
-                    modifier = Modifier.playerContainer(),
+                    modifier = Modifier
+                        .playerContainer()
+                        // Any touch restarts the "ambient when idle" countdown. Watches only;
+                        // the touch still reaches the player as normal.
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                lastNowPlayingTouch = android.os.SystemClock.uptimeMillis()
+                            }
+                        },
                     track = nowTrack,
                     isPlaying = uiState.isAudioPlaying,
                     positionMs = audioState.positionMs,
@@ -1208,6 +1258,8 @@ fun Material3VideoPlayerScreen(
                     onClose = {
                         ambientRequested = false
                         if (isLandscape) ambientDismissedSideways = true
+                        // When idle: back to Now Playing, and the 10 seconds start again.
+                        lastNowPlayingTouch = android.os.SystemClock.uptimeMillis()
                     },
                     positionMs = audioState.positionMs,
                     lyricsSettings = libraryPrefs.lyrics,
@@ -1262,22 +1314,6 @@ fun Material3VideoPlayerScreen(
                 activeTabs = uiState.activeTabs,
                 onSetTabActive = { tab, active -> viewModel.setTabActive(tab, active, context) },
                 onDismiss = { showTabsSheet = false }
-            )
-        }
-
-        if (uiState.sortSheetOpen && uiState.bottomTab == BottomTab.VIDEOS) {
-            SortAndViewBottomSheet(
-                smartGroups = uiState.smartGroups,
-                viewMode = uiState.viewMode,
-                layoutMode = uiState.layoutMode,
-                onSelectViewMode = { viewModel.setViewMode(it, context) },
-                onSelectLayoutMode = { viewModel.setLayoutMode(it, context) },
-                sortBy = uiState.sortBy,
-                sortDir = uiState.sortDir,
-                onToggleSmartGroups = { viewModel.toggleSmartGroups(context) },
-                onSelectSortField = { viewModel.setSortField(it, context) },
-                onSelectSortDir = { viewModel.setSortDir(it, context) },
-                onDismiss = { viewModel.clearAllOverlays() }
             )
         }
 
@@ -1393,16 +1429,21 @@ private fun MainHeader(
     onClearSelection: () -> Unit,
     onToggleSelectAll: () -> Unit,
     onOpenSortSheet: () -> Unit,
-    onClearSubFilter: () -> Unit
+    onClearSubFilter: () -> Unit,
+    sortMenu: @Composable () -> Unit = {}
 ) {
     val scheme = MaterialTheme.colorScheme
     val sortButton: @Composable () -> Unit = {
-        TooltipIconButton(
-            label = "View and sort",
-            icon = Symbols.Tune,
-            onClick = onOpenSortSheet,
-            modifier = Modifier.testTag("header_sort_btn")
-        )
+        // The View and sort menu opens right under its button.
+        Box {
+            TooltipIconButton(
+                label = "View and sort",
+                icon = Symbols.Tune,
+                onClick = onOpenSortSheet,
+                modifier = Modifier.testTag("header_sort_btn")
+            )
+            sortMenu()
+        }
     }
     when {
         videosSearchHeader -> AppBarWithSearch(

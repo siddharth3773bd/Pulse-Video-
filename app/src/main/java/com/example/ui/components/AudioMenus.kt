@@ -48,7 +48,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.AudioPlaylist
-import com.example.model.LibrarySongSort
 
 // ---------------------------------------------------------------------------------------------
 // Grouped menu (Material 3 Expressive: DropdownMenuPopup + DropdownMenuGroup)
@@ -187,62 +186,7 @@ fun PlaylistActionsMenu(
 // Sort menu
 // ---------------------------------------------------------------------------------------------
 
-/**
- * Sort panel (a bottom sheet), styled like the Videos one: "Sort by" and "Order" as the official
- * Expressive standard button group. Changes apply right away. [field] is null for albums and
- * artists, which only sort A to Z / Z to A.
- */
-@Composable
-fun LibrarySortMenu(
-    expanded: Boolean,
-    onDismiss: () -> Unit,
-    field: LibrarySongSort?,
-    ascending: Boolean,
-    onSelectField: (LibrarySongSort) -> Unit,
-    onSelectAscending: (Boolean) -> Unit
-) {
-    if (!expanded) return
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.testTag("library_sort_menu")
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (field != null) {
-                CompactRow("Sort by") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        LibrarySongSort.entries.chunked(3).forEach { row ->
-                            ChoiceButtonGroup(
-                                options = row.map { it to it.label },
-                                selected = field.takeIf { it in row },
-                                onSelect = { option -> if (option != null) onSelectField(option) },
-                                tag = { "sort_field_${it?.id}" }
-                            )
-                        }
-                    }
-                }
-            }
-            // The usual choice for this field comes first: Newest, Longest, A to Z.
-            val naturalAscending = field?.naturalAscending ?: true
-            CompactRow("Order") {
-                ChoiceButtonGroup(
-                    options = listOf(naturalAscending, !naturalAscending).map { isAscending ->
-                        isAscending to if (isAscending) field?.ascendingLabel ?: "A to Z" else field?.descendingLabel ?: "Z to A"
-                    },
-                    selected = ascending,
-                    onSelect = { onSelectAscending(it) },
-                    tag = { if (it) "sort_order_asc" else "sort_order_desc" }
-                )
-            }
-        }
-    }
-}
+// Lives in SortMenus.kt now.
 
 // ---------------------------------------------------------------------------------------------
 // Selection toolbar (long-press)

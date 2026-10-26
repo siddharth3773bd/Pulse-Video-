@@ -62,18 +62,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.ResolvedTextDirection
+import com.example.lyrics.LyricsAlign
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -198,8 +209,8 @@ fun LyricsView(
         }
     }
 
-    val align = if (settings.alignCenter) TextAlign.Center else TextAlign.Start
-    val origin = TransformOrigin(if (settings.alignCenter) 0.5f else 0f, 0.5f)
+    val align = settings.align.textAlign()
+    val origin = TransformOrigin(settings.align.originX(), 0.5f)
 
     BoxWithConstraints(modifier = modifier.testTag("lyrics_view")) {
         LazyColumn(
@@ -210,13 +221,17 @@ fun LyricsView(
                 top = maxHeight * 0.3f,
                 bottom = maxHeight * 0.6f
             ),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                // Lines dissolve softly at the top and bottom edges instead of being cut off.
+                .softEdges()
         ) {
             itemsIndexed(lines, key = { index, line -> "${line.timeMs}#$index" }) { index, line ->
                 val isActive = index == currentIndex
                 val distance = if (currentIndex < 0) index + 1 else abs(index - currentIndex)
                 SyncedLine(
                     line = line,
+                    nextTimeMs = lines.getOrNull(index + 1)?.timeMs,
                     isActive = isActive,
                     distance = distance,
                     live = live,
@@ -267,6 +282,7 @@ fun LyricsView(
 @Composable
 private fun SyncedLine(
     line: LyricLine,
+    nextTimeMs: Long?,
     isActive: Boolean,
     distance: Int,
     live: State<Long>,
@@ -278,6 +294,7 @@ private fun SyncedLine(
     isPlaying: Boolean,
     onClick: () -> Unit
 ) {
+    val motion = MaterialTheme.motionScheme
     val alpha by animateFloatAsState(
         targetValue = when {
             isActive -> 1f
@@ -285,12 +302,13 @@ private fun SyncedLine(
             distance == 2 -> 0.42f
             else -> 0.3f
         },
-        animationSpec = tween(350),
+        animationSpec = motion.slowEffectsSpec(),
         label = "lyricAlpha"
     )
+    // The line being sung grows in with a soft spring (Material 3 Expressive spatial motion).
     val scale by animateFloatAsState(
         targetValue = if (isActive) 1f else 0.88f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+        animationSpec = motion.slowSpatialSpec(),
         label = "lyricScale"
     )
     // Near lines stay sharp; blur starts three lines away and grows gently (depth of field).
@@ -308,12 +326,13 @@ private fun SyncedLine(
 
     val size = settings.textSize.activeSp
     val style = TextStyle(
+        fontFamily = MaterialTheme.typography.displaySmall.fontFamily,
         fontSize = size.sp,
         lineHeight = 1.22.em,
         fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
+        letterSpacing = (-0.01).em,
         textAlign = align,
-        color = color,
-        shadow = if (isActive) Shadow(color = color.copy(alpha = 0.35f), blurRadius = 28f) else null
+        color = color
     )
     // Lines in another script (Hindi, Urdu, Punjabi…) can also be shown in English letters.
     val romanized = if (settings.romanize && line.text.isNotBlank()) remember(line.text) { toEnglishLetters(line.text) } else null
@@ -335,19 +354,9 @@ private fun SyncedLine(
         if (line.text.isBlank()) {
             // A music-only part (intro, solo): three dots that breathe while it plays.
             BreathingDots(color = color, active = isActive && isPlaying, size = size)
-        } else if (isActive && line.words.isNotEmpty()) {
-            // Karaoke: words light up as they are sung (only when the lyrics have word timings).
-            val pos = live.value - offsetMs
-            val annotated = buildAnnotatedString {
-                line.words.forEach { word ->
-                    val sung = word.startMs <= pos
-                    withStyle(SpanStyle(color = color.copy(alpha = if (sung) 1f else 0.4f))) {
-                        append(word.text)
-                    }
-                }
-            }
+        } else if (isActive) {
             Column {
-                Text(text = annotated, style = style, modifier = Modifier.fillMaxWidth())
+                SungLine(line = line, nextTimeMs = nextTimeMs, live = live, offsetMs = offsetMs, style = style)
                 if (romanized != null) RomanizedLine(romanized, style)
             }
         } else {
@@ -357,6 +366,167 @@ private fun SyncedLine(
             }
         }
     }
+}
+
+/**
+ * The line being sung: the colour sweeps through it as it is sung, karaoke style, with a soft
+ * edge. With word timings (enhanced lyrics) it follows each word; otherwise it moves evenly
+ * through the line in the time until the next one. The sweep is drawn, not recomposed, so it
+ * stays smooth.
+ */
+@Composable
+private fun SungLine(
+    line: LyricLine,
+    nextTimeMs: Long?,
+    live: State<Long>,
+    offsetMs: Long,
+    style: TextStyle
+) {
+    val text = line.text
+    var layout by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
+    val feather = with(LocalDensity.current) { 28.dp.toPx() }
+    // When the line has finished being sung (an estimate when there are no word timings).
+    val endMs = remember(line, nextTimeMs) {
+        val byLength = line.timeMs + (text.length * 140L).coerceIn(1_500L, 9_000L)
+        val byNext = nextTimeMs?.let { it - 150L } ?: byLength
+        minOf(byNext, byLength).coerceAtLeast(line.timeMs + 400L)
+    }
+    val wordsMatch = remember(line) { line.words.isNotEmpty() && line.words.joinToString("") { it.text } == text }
+
+    fun sungChars(): Float {
+        val pos = live.value - offsetMs
+        if (wordsMatch) {
+            var chars = 0f
+            for (word in line.words) {
+                when {
+                    pos >= word.endMs -> chars += word.text.length
+                    pos > word.startMs -> {
+                        val span = (word.endMs - word.startMs).coerceAtLeast(1L)
+                        chars += word.text.length * ((pos - word.startMs).toFloat() / span)
+                        return chars
+                    }
+                    else -> return chars
+                }
+            }
+            return chars
+        }
+        val fraction = ((pos - line.timeMs).toFloat() / (endMs - line.timeMs).coerceAtLeast(1L)).coerceIn(0f, 1f)
+        return fraction * text.length
+    }
+
+    Box {
+        // Not yet sung: quieter.
+        Text(
+            text = text,
+            style = style.copy(color = style.color.copy(alpha = 0.42f)),
+            onTextLayout = { layout = it },
+            modifier = Modifier.fillMaxWidth()
+        )
+        // Sung so far: bright, with a soft glow, revealed up to the singing point.
+        Text(
+            text = text,
+            style = style.copy(shadow = Shadow(color = style.color.copy(alpha = 0.35f), blurRadius = 28f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    val l = layout ?: return@drawWithContent
+                    val upTo = sungChars()
+                    if (upTo <= 0f) return@drawWithContent
+                    if (upTo >= text.length) {
+                        drawContent()
+                        return@drawWithContent
+                    }
+                    val reveal = sweepReveal(l, upTo, feather) ?: run {
+                        drawContent()
+                        return@drawWithContent
+                    }
+                    clipPath(reveal.path) { this@drawWithContent.drawContent() }
+                    // Soft edge where the singing is.
+                    val brush = if (reveal.rtl) {
+                        Brush.horizontalGradient(
+                            listOf(Color.Transparent, Color.Black),
+                            startX = reveal.x - feather,
+                            endX = reveal.x + feather
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            listOf(Color.Black, Color.Transparent),
+                            startX = reveal.x - feather,
+                            endX = reveal.x + feather
+                        )
+                    }
+                    drawRect(
+                        brush = brush,
+                        topLeft = Offset(reveal.x - feather, reveal.top),
+                        size = Size(feather * 2f, reveal.bottom - reveal.top),
+                        blendMode = BlendMode.DstIn
+                    )
+                }
+        )
+    }
+}
+
+/** Where the sweep is: the sung area (whole lines, plus the current line up to just past [x]). */
+private class SweepReveal(val path: Path, val x: Float, val top: Float, val bottom: Float, val rtl: Boolean)
+
+private fun sweepReveal(layout: TextLayoutResult, upTo: Float, feather: Float): SweepReveal? {
+    val length = layout.layoutInput.text.length
+    val index = upTo.toInt().coerceIn(0, length)
+    val partOfChar = upTo - index
+    val path = Path()
+    for (lineIndex in 0 until layout.lineCount) {
+        val start = layout.getLineStart(lineIndex)
+        val end = layout.getLineEnd(lineIndex, visibleEnd = true)
+        val top = layout.getLineTop(lineIndex)
+        val bottom = layout.getLineBottom(lineIndex)
+        val left = layout.getLineLeft(lineIndex)
+        val right = layout.getLineRight(lineIndex)
+        if (index >= end) {
+            path.addRect(Rect(left, top, right, bottom))
+            continue
+        }
+        if (index < start) return null
+        val rtl = layout.getBidiRunDirection(index.coerceAtMost(length - 1)) == ResolvedTextDirection.Rtl
+        val x0 = layout.getHorizontalPosition(index, usePrimaryDirection = true)
+        val x1 = if (index + 1 <= end) layout.getHorizontalPosition(index + 1, usePrimaryDirection = true) else x0
+        val x = x0 + (x1 - x0) * partOfChar
+        if (rtl) {
+            path.addRect(Rect((x - feather).coerceAtLeast(left), top, right, bottom))
+        } else {
+            path.addRect(Rect(left, top, (x + feather).coerceAtMost(right), bottom))
+        }
+        return SweepReveal(path, x, top, bottom, rtl)
+    }
+    return null
+}
+
+/** Fades content out at its top and bottom edges. */
+private fun Modifier.softEdges(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(
+            brush = Brush.verticalGradient(
+                0f to Color.Transparent,
+                0.08f to Color.Black,
+                0.86f to Color.Black,
+                1f to Color.Transparent
+            ),
+            blendMode = BlendMode.DstIn
+        )
+    }
+
+private fun LyricsAlign.textAlign(): TextAlign = when (this) {
+    LyricsAlign.LEFT -> TextAlign.Start
+    LyricsAlign.CENTER -> TextAlign.Center
+    LyricsAlign.RIGHT -> TextAlign.End
+}
+
+private fun LyricsAlign.originX(): Float = when (this) {
+    LyricsAlign.LEFT -> 0f
+    LyricsAlign.CENTER -> 0.5f
+    LyricsAlign.RIGHT -> 1f
 }
 
 /** A gap longer than this before the first line gets a "music only" row. */
@@ -440,16 +610,20 @@ private fun PlainLyrics(
     horizontalPadding: Int,
     modifier: Modifier
 ) {
-    val align = if (settings.alignCenter) TextAlign.Center else TextAlign.Start
+    val align = settings.align.textAlign()
+    val fontFamily = MaterialTheme.typography.bodyLarge.fontFamily
     LazyColumn(
         contentPadding = PaddingValues(horizontal = (horizontalPadding + 8).dp, vertical = 32.dp),
-        modifier = modifier.testTag("lyrics_plain")
+        modifier = modifier
+            .softEdges()
+            .testTag("lyrics_plain")
     ) {
         itemsIndexed(lyrics.lines) { _, line ->
             val romanized = if (settings.romanize) remember(line.text) { toEnglishLetters(line.text) } else null
             Text(
                 text = if (romanized != null) "${line.text}\n$romanized" else line.text,
                 style = TextStyle(
+                    fontFamily = fontFamily,
                     fontSize = settings.textSize.plainSp.sp,
                     lineHeight = 1.35.em,
                     fontWeight = FontWeight.SemiBold,

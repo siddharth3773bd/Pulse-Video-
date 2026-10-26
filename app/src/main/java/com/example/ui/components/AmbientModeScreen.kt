@@ -44,6 +44,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.widthIn
+import android.os.SystemClock
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -78,9 +85,9 @@ import kotlinx.coroutines.launch
 /**
  * Ambient mode: a calm, full-screen, always-on view of the current song, on the same background
  * as Now Playing. It opens in landscape when started from the button ([forceLandscape]); the
- * screen stays on and the system bars hide while it is open. There are no buttons on screen:
- * double-tap the artwork to play/pause and swipe it to change song (anywhere on screen when the
- * artwork is hidden). The ⋮ in the corner opens the options.
+ * screen stays on and the system bars hide while it is open. Double-tap the artwork to play/pause
+ * and swipe it to change song (anywhere on screen when the artwork is hidden). A tap on empty space
+ * shows the play controls for a few seconds. The top corners hold "back to Now Playing" and ⋮.
  */
 @Composable
 fun AmbientModeScreen(
@@ -107,14 +114,27 @@ fun AmbientModeScreen(
     LockLandscape(enabled = forceLandscape)
 
     var showOptions by remember { mutableStateOf(false) }
+    // A tap shows the controls; they fade away 4 seconds after the last touch.
+    var controlsTouchedAt by remember { mutableLongStateOf(0L) }
+    var controlsShown by remember { mutableStateOf(false) }
+    LaunchedEffect(controlsTouchedAt) {
+        if (controlsTouchedAt == 0L) return@LaunchedEffect
+        controlsShown = true
+        delay(4_000L)
+        controlsShown = false
+    }
+    val touchControls = { controlsTouchedAt = SystemClock.uptimeMillis() }
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val colors = nowPlayingColors(background)
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            // Taps on empty space stop here (they used to reach Now Playing underneath).
-            .clickable(interactionSource = null, indication = null, onClick = {})
+            // Taps on empty space stop here (they used to reach Now Playing underneath) and
+            // show or hide the controls.
+            .clickable(interactionSource = null, indication = null, onClick = {
+                if (controlsShown) controlsShown = false else touchControls()
+            })
             .testTag("ambient_mode")
     ) {
         // The colours move very slowly, so the screen feels alive without drawing attention.
@@ -171,7 +191,10 @@ fun AmbientModeScreen(
                         positionMs = positionMs,
                         isPlaying = isPlaying,
                         offsetMs = st.offsetMs,
-                        settings = lyricsSettings.copy(alignCenter = align == TextAlign.Center),
+                        settings = lyricsSettings.copy(
+                            align = if (align == TextAlign.Center) com.example.lyrics.LyricsAlign.CENTER
+                            else com.example.lyrics.LyricsAlign.LEFT
+                        ),
                         onSeekTo = onSeekTo,
                         contentColor = colors.content,
                         modifier = Modifier.fillMaxSize(),
@@ -259,7 +282,49 @@ fun AmbientModeScreen(
             }
         }
 
-        // The only thing on screen besides the song: ⋮ with a small menu of options.
+        // Play controls, shown for a moment after a tap.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = controlsShown,
+            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
+                slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { it / 3 },
+            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.displayCutout)
+                .padding(horizontal = 24.dp, vertical = 20.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                modifier = Modifier.widthIn(max = 360.dp)
+            ) {
+                NowPlayingControls(
+                    isPlaying = isPlaying,
+                    colors = colors,
+                    onPrevious = { touchControls(); onSkipPrevious() },
+                    onPlayPause = { touchControls(); onTogglePlayPause() },
+                    onNext = { touchControls(); onSkipNext() },
+                    compact = true,
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
+        }
+
+        // Back to Now Playing: always there, but quiet.
+        IconButton(
+            onClick = onClose,
+            shapes = IconButtonDefaults.shapes(),
+            colors = IconButtonDefaults.iconButtonColors(contentColor = colors.content.copy(alpha = 0.6f)),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(WindowInsets.displayCutout)
+                .padding(8.dp)
+                .testTag("ambient_exit_btn")
+        ) {
+            Icon(Symbols.CloseFullscreen, contentDescription = "Back to Now Playing")
+        }
+
+        // ⋮ with a small menu of options.
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)

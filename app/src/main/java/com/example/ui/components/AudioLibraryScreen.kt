@@ -451,6 +451,37 @@ fun AudioLibraryScreen(
         searchScroll.scrollState.scrollOffset = 0f
     }
     var sortSheetOpen by remember { mutableStateOf(false) }
+    // The sort menu, opened right under the Sort button.
+    val sortMenu: @Composable () -> Unit = {
+        if (currentTab == LibraryTab.SONGS) {
+            LibrarySortMenu(
+                expanded = sortSheetOpen,
+                onDismiss = { sortSheetOpen = false },
+                field = prefs.songSort,
+                ascending = prefs.songAscending,
+                onSelectField = { field ->
+                    // A new field starts in its natural order (newest, longest, A to Z).
+                    scope.launch {
+                        AppPreferencesRepository.updateLibrarySongSort(context, field, field.naturalAscending)
+                    }
+                },
+                onSelectAscending = { asc ->
+                    scope.launch { AppPreferencesRepository.updateLibrarySongSort(context, prefs.songSort, asc) }
+                }
+            )
+        } else {
+            LibrarySortMenu(
+                expanded = sortSheetOpen,
+                onDismiss = { sortSheetOpen = false },
+                field = null,
+                ascending = prefs.groupAscending,
+                onSelectField = {},
+                onSelectAscending = { asc ->
+                    scope.launch { AppPreferencesRepository.updateLibraryGroupAscending(context, asc) }
+                }
+            )
+        }
+    }
 
     val playFromList: (List<AudioTrackItem>, Int) -> Unit = { list, index ->
         val target = list.getOrNull(index)
@@ -649,12 +680,15 @@ fun AudioLibraryScreen(
                                     modifier = Modifier.testTag("library_new_playlist_button")
                                 )
                             } else {
-                                TooltipIconButton(
-                                    label = "Sort",
-                                    icon = Symbols.Sort,
-                                    onClick = { sortSheetOpen = true },
-                                    modifier = Modifier.testTag("library_sort_button")
-                                )
+                                Box {
+                                    TooltipIconButton(
+                                        label = "Sort",
+                                        icon = Symbols.Sort,
+                                        onClick = { sortSheetOpen = true },
+                                        modifier = Modifier.testTag("library_sort_button")
+                                    )
+                                    sortMenu()
+                                }
                             }
                         }
                     )
@@ -853,34 +887,6 @@ fun AudioLibraryScreen(
     }
 
     // ---- Sheets and dialogs -----------------------------------------------------------------
-    if (currentTab == LibraryTab.SONGS) {
-        LibrarySortMenu(
-            expanded = sortSheetOpen,
-            onDismiss = { sortSheetOpen = false },
-            field = prefs.songSort,
-            ascending = prefs.songAscending,
-            onSelectField = { field ->
-                // A new field starts in its natural order (newest, longest, A to Z).
-                scope.launch {
-                    AppPreferencesRepository.updateLibrarySongSort(context, field, field.naturalAscending)
-                }
-            },
-            onSelectAscending = { asc ->
-                scope.launch { AppPreferencesRepository.updateLibrarySongSort(context, prefs.songSort, asc) }
-            }
-        )
-    } else {
-        LibrarySortMenu(
-            expanded = sortSheetOpen,
-            onDismiss = { sortSheetOpen = false },
-            field = null,
-            ascending = prefs.groupAscending,
-            onSelectField = {},
-            onSelectAscending = { asc ->
-                scope.launch { AppPreferencesRepository.updateLibraryGroupAscending(context, asc) }
-            }
-        )
-    }
     infoTrack?.let { track ->
         SongInfoSheet(track = track, onDismiss = { infoTrack = null })
     }

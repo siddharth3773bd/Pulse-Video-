@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppPreferencesRepository
 import com.example.data.MediaStoreScanner
+import com.example.data.LibraryCache
 import com.example.model.AudioTrackItem
 import com.example.model.naturalDir
 import com.example.model.BottomTab
@@ -30,6 +31,8 @@ import com.example.player.PlayerController
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
+import android.os.SystemClock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -236,6 +239,24 @@ class VideoPlayerViewModel : ViewModel() {
         getOrCreateAudioPlaybackManager(appContext)
         if (!prefsInitialized) {
             prefsInitialized = true
+            // Last time's library, shown at once; the scan below then quietly brings it up to date.
+            viewModelScope.launch {
+                val cached = LibraryCache.load(appContext) ?: return@launch
+                if (cached.audio.isNotEmpty() && _uiState.value.hasAudioPermission) {
+                    getOrCreateAudioPlaybackManager(appContext).registerTracksCatalog(cached.audio)
+                }
+                _uiState.update { state ->
+                    if (state.videosLoaded) return@update state
+                    val progress = state.progressHistory
+                    state.copy(
+                        videos = if (state.hasVideoPermission) {
+                            cached.videos.map { v -> v.copy(progress = progress[v.id] ?: 0f) }
+                        } else emptyList(),
+                        audioTracks = if (state.hasAudioPermission) cached.audio else emptyList(),
+                        videosLoaded = true
+                    )
+                }
+            }
             viewModelScope.launch {
                 val stored = AppPreferencesRepository.observePreferences(appContext).first()
                 val cappedHistory = stored.historyEntries.take(MAX_HISTORY_ITEMS)
@@ -284,37 +305,105 @@ class VideoPlayerViewModel : ViewModel() {
                 isRefreshing = if (showSpinner) true else it.isRefreshing
             )
         }
+        // A pull to refresh is already scanning; it shows the result when done.
+        if (pullRefreshJob?.isActive == true) return
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             // Many MediaStore change events arrive in bursts; wait a moment so they become one scan.
-            if (!showSpinner && _uiState.value.videosLoaded) delay(400L)
-            val history = _uiState.value.progressHistory
-            val scannedVideos = if (hasVideo) {
-                MediaStoreScanner.scanVideos(context, history)
-            } else {
-                emptyList()
+            if (!showSpinner && firstScanDone) delay(400L)
+            scanLibrary(context, hasVideo, hasAudio)
+            _uiState.update { it.copy(isRefreshing = false) }
+        }
+    }
+
+    /** Reads the library from MediaStore and shows it. */
+    private suspend fun scanLibrary(context: Context, hasVideo: Boolean, hasAudio: Boolean) {
+        val history = _uiState.value.progressHistory
+        val scannedVideos = if (hasVideo) {
+            MediaStoreScanner.scanVideos(context, history)
+        } else {
+            emptyList()
+        }
+        val scannedAudio = if (hasAudio) {
+            MediaStoreScanner.scanAudio(context)
+        } else {
+            emptyList()
+        }
+        if (scannedAudio.isNotEmpty()) {
+            getOrCreateAudioPlaybackManager(context).registerTracksCatalog(scannedAudio)
+        }
+        var changed = false
+        _uiState.update { state ->
+            // Unchanged results keep the same lists, so nothing on screen has to redraw.
+            val videos = if (scannedVideos == state.videos) state.videos else scannedVideos
+            val audio = if (scannedAudio == state.audioTracks) state.audioTracks else scannedAudio
+            changed = videos !== state.videos || audio !== state.audioTracks
+            val validIds = videos.mapTo(HashSet()) { it.id }
+            state.copy(
+                videos = videos,
+                audioTracks = audio,
+                selectedIds = state.selectedIds.filter { it in validIds },
+                videosLoaded = true
+            )
+        }
+        firstScanDone = true
+        if (changed || !cacheWritten) {
+            cacheWritten = true
+            LibraryCache.save(context.applicationContext, scannedVideos, scannedAudio)
+        }
+    }
+
+    private var firstScanDone = false
+    private var cacheWritten = false
+
+    private var pullRefreshJob: Job? = null
+
+    /**
+     * Pull to refresh: first asks Android to look through the media folders again (for files it
+     * missed, like ones copied in by cable), then reads the library. The spinner stays at least a
+     * second so it never just flickers, and a short message says what changed.
+     */
+    fun pullToRefresh(context: Context) {
+        if (pullRefreshJob?.isActive == true) return
+        val appCtx = context.applicationContext
+        val hasVideo = MediaStoreScanner.hasVideoPermission(appCtx)
+        val hasAudio = MediaStoreScanner.hasAudioPermission(appCtx)
+        _uiState.update {
+            it.copy(hasVideoPermission = hasVideo, hasAudioPermission = hasAudio, isRefreshing = true)
+        }
+        scanJob?.cancel()
+        pullRefreshJob = viewModelScope.launch {
+            val started = SystemClock.uptimeMillis()
+            val before = _uiState.value
+            val oldVideos = before.videos.mapTo(HashSet()) { it.id }
+            val oldSongs = before.audioTracks.mapTo(HashSet()) { it.id }
+            val folders = buildSet {
+                if (hasVideo) before.videos.forEach { add(it.folderPath) }
+                if (hasAudio) before.audioTracks.forEach { add(it.folderPath) }
             }
-            val scannedAudio = if (hasAudio) {
-                MediaStoreScanner.scanAudio(context)
-            } else {
-                emptyList()
+            if (hasVideo || hasAudio) {
+                withTimeoutOrNull(6_000L) { MediaStoreScanner.requestSystemScan(appCtx, folders) }
             }
-            if (scannedAudio.isNotEmpty()) {
-                getOrCreateAudioPlaybackManager(context).registerTracksCatalog(scannedAudio)
-            }
-            _uiState.update { state ->
-                // Unchanged results keep the same lists, so nothing on screen has to redraw.
-                val videos = if (scannedVideos == state.videos) state.videos else scannedVideos
-                val audio = if (scannedAudio == state.audioTracks) state.audioTracks else scannedAudio
-                val validIds = videos.mapTo(HashSet()) { it.id }
-                state.copy(
-                    videos = videos,
-                    audioTracks = audio,
-                    selectedIds = state.selectedIds.filter { it in validIds },
-                    videosLoaded = true,
-                    isRefreshing = false
-                )
-            }
+            scanLibrary(appCtx, hasVideo, hasAudio)
+            val left = 1_000L - (SystemClock.uptimeMillis() - started)
+            if (left > 0) delay(left)
+            _uiState.update { it.copy(isRefreshing = false) }
+            val after = _uiState.value
+            val newVideos = after.videos.count { it.id !in oldVideos }
+            val newSongs = after.audioTracks.count { it.id !in oldSongs }
+            val gone = (oldVideos.size + oldSongs.size + newVideos + newSongs) -
+                (after.videos.size + after.audioTracks.size)
+            val found = listOfNotNull(
+                newVideos.takeIf { it > 0 }?.let { if (it == 1) "1 new video" else "$it new videos" },
+                newSongs.takeIf { it > 0 }?.let { if (it == 1) "1 new song" else "$it new songs" }
+            )
+            triggerToast(
+                when {
+                    found.isNotEmpty() -> "Found " + found.joinToString(" and ")
+                    gone > 0 -> if (gone == 1) "1 file is gone" else "$gone files are gone"
+                    else -> "Up to date"
+                }
+            )
         }
     }
 
