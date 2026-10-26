@@ -506,7 +506,7 @@ internal fun VideoSettingsPage(
                     key = "autoplay",
                     icon = Symbols.Autoplay,
                     title = "Play next automatically",
-                    summary = "The next video in the same folder",
+                    summary = "The next video in the list",
                     checked = settings.autoplayNext,
                     onCheckedChange = { on -> onUpdateSettings { it.copy(autoplayNext = on) } }
                 ),
@@ -714,11 +714,19 @@ internal fun MusicSettingsPage(audioTracks: List<AudioTrackItem>, onBack: () -> 
                     onClick = { lookChoice = "background" }
                 ),
                 SettingRow.Toggle(
+                    key = "keep_screen_on_lyrics",
+                    icon = Symbols.Lyrics,
+                    title = "Keep screen on in lyrics",
+                    summary = "The screen won't turn off while you read along",
+                    checked = prefs.keepScreenOnLyrics,
+                    onCheckedChange = { on -> scope.launch { AppPreferencesRepository.setLyricsKeepScreenOn(context, on) } }
+                ),
+                SettingRow.Toggle(
                     key = "keep_screen_on",
                     icon = Symbols.LightMode,
-                    title = "Keep screen on",
-                    summary = "While Now Playing or lyrics are open and music plays",
-                    checked = prefs.keepScreenOn,
+                    title = "Keep screen on in Now Playing",
+                    summary = "Otherwise the screen turns off as usual",
+                    checked = prefs.keepScreenOnNowPlaying,
                     onCheckedChange = { on -> scope.launch { AppPreferencesRepository.setNowPlayingKeepScreenOn(context, on) } }
                 ),
                 SettingRow.Toggle(

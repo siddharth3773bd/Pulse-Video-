@@ -97,7 +97,14 @@ interface PlayerController {
     /** 0..1, used by the sleep timer's fade-out. */
     fun setVolume(volume: Float)
 
-    /** The video, drawn with the official Media3 Compose ContentFrame. */
+    /**
+     * The video, drawn with the official Media3 Compose ContentFrame. [placeholder] (the video's
+     * thumbnail) shows until the first frame is ready, instead of a black box.
+     */
     @Composable
-    fun RenderVideoSurface(modifier: Modifier, contentScale: ContentScale)
+    fun RenderVideoSurface(
+        modifier: Modifier,
+        contentScale: ContentScale,
+        placeholder: @Composable () -> Unit = {}
+    )
 }

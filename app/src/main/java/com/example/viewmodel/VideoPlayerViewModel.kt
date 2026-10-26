@@ -971,6 +971,8 @@ class VideoPlayerViewModel : ViewModel() {
         if (context != null) {
             val controller = getOrCreatePlayerController(context)
             val pb = state.playbackSettings
+            // Full volume again (closing the last video faded it out).
+            controller.setVolume(1f)
             controller.setPreferredLanguages(pb.preferredAudioLanguage, pb.preferredSubtitleLanguage)
             controller.prepareMedia(
                 uri = video.contentUri,
@@ -1099,12 +1101,16 @@ class VideoPlayerViewModel : ViewModel() {
                 context = context
             )
         }
-        // Paused now, released once the player has finished shrinking away, so the picture stays
-        // during the closing animation instead of turning black.
-        controller?.pause()
+        // The video keeps playing while it shrinks away (a live picture, not a frozen one); its
+        // sound fades out quickly, then it pauses, and it is released once the animation is over.
         _uiState.update { it.copy(playingVideo = null) }
         videoReleaseJob?.cancel()
         videoReleaseJob = viewModelScope.launch {
+            for (step in 5 downTo 0) {
+                controller?.setVolume(step / 5f)
+                delay(40L)
+            }
+            controller?.pause()
             delay(500L)
             if (_uiState.value.playingVideo == null) controller?.release()
         }
@@ -1135,19 +1141,19 @@ class VideoPlayerViewModel : ViewModel() {
     }
 
     /**
-     * Autoplay: plays the next video from the same folder, in the order the list shows.
-     * Returns false at the end of the folder.
+     * The list autoplay walks through: the one on screen (all videos, or the open folder), in its
+     * order. A video started from somewhere else (search, history) uses the whole library.
      */
-    /** The video that autoplay would play after the current one (same folder, list order). */
-    fun peekNextInFolder(): VideoItem? {
+    private fun autoplayList(state: VideoUiState, current: VideoItem): List<VideoItem> =
+        state.filteredAndSortedVideos.takeIf { list -> list.any { it.id == current.id } } ?: state.videos
+
+    /** The video autoplay would play after the current one: simply the next one in the list. */
+    fun peekNextVideo(): VideoItem? {
         val state = _uiState.value
         val current = state.playingVideo ?: return null
-        val inFolder = state.filteredAndSortedVideos.filter { it.folderPath == current.folderPath }
-            .ifEmpty {
-                state.videos.filter { it.folderPath == current.folderPath }.sortedBy { it.title.lowercase() }
-            }
-        val idx = inFolder.indexOfFirst { it.id == current.id }
-        return if (idx < 0) null else inFolder.getOrNull(idx + 1)
+        val list = autoplayList(state, current)
+        val idx = list.indexOfFirst { it.id == current.id }
+        return if (idx < 0) null else list.getOrNull(idx + 1)
     }
 
     /** The player moved on to the queued next video by itself: show it as the playing one. */
@@ -1175,16 +1181,9 @@ class VideoPlayerViewModel : ViewModel() {
         _uiState.update { it.copy(playingVideo = next, resumedFromMs = 0L) }
     }
 
-    fun playNextInFolder(context: Context): Boolean {
-        val state = _uiState.value
-        val current = state.playingVideo ?: return false
-        val inFolder = state.filteredAndSortedVideos.filter { it.folderPath == current.folderPath }
-            .ifEmpty {
-                // The list may be filtered (search, playlist): fall back to the whole folder by name.
-                state.videos.filter { it.folderPath == current.folderPath }.sortedBy { it.title.lowercase() }
-            }
-        val idx = inFolder.indexOfFirst { it.id == current.id }
-        val next = inFolder.getOrNull(idx + 1) ?: return false
+    /** Autoplay's fallback: plays the next video in the list. False at the end of the list. */
+    fun playNextVideo(context: Context): Boolean {
+        val next = peekNextVideo() ?: return false
         startVideoPlaybackAt(next, startPositionMs = 0L, context = context)
         return true
     }

@@ -55,9 +55,16 @@ class PredictiveBackState internal constructor() {
 /**
  * Handles back with Android's predictive back gesture. [onBack] runs when the gesture is finished
  * (or on a plain back press). The returned state drives the preview, see [predictiveBackPreview].
+ * [settleAfterBack]: after letting go the preview eases back to full size while the screen's own
+ * closing animation takes over (for a screen that flies into something, like the video player
+ * into its thumbnail).
  */
 @Composable
-fun rememberPredictiveBack(enabled: Boolean = true, onBack: () -> Unit): PredictiveBackState {
+fun rememberPredictiveBack(
+    enabled: Boolean = true,
+    settleAfterBack: Boolean = false,
+    onBack: () -> Unit
+): PredictiveBackState {
     val state = remember { PredictiveBackState() }
     val scope = rememberCoroutineScope()
     val onBackLatest by rememberUpdatedState(onBack)
@@ -73,6 +80,7 @@ fun rememberPredictiveBack(enabled: Boolean = true, onBack: () -> Unit): Predict
             }
             // The screen leaves from where the gesture left it; nothing jumps back first.
             onBackLatest()
+            if (settleAfterBack) scope.launch { state.raw.animateTo(0f, settleSpec) }
         } catch (cancelled: CancellationException) {
             scope.launch { state.raw.animateTo(0f, settleSpec) }
             throw cancelled

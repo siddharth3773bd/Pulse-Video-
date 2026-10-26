@@ -150,6 +150,9 @@ import com.example.ui.components.AudioMiniPlayer
 import com.example.ui.components.LocalPlayerTransition
 import com.example.ui.components.PlayerTransitionScopes
 import com.example.ui.components.playerContainer
+import com.example.ui.components.LocalVideoTransition
+import com.example.ui.components.VideoTransitionScope
+import com.example.ui.components.videoPlayerContainer
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.runtime.CompositionLocalProvider
 import com.example.player.AudioPlaybackManager
@@ -635,8 +638,14 @@ fun Material3VideoPlayerScreen(
         )
     }
 
-    // Screen on while Now Playing or lyrics are open and music plays (Me › Music › Keep screen on).
-    KeepScreenOn(enabled = libraryPrefs.keepScreenOn && nowPlayingVisible && uiState.isAudioPlaying)
+    // Screen on while music plays and lyrics (or Now Playing) are open, if chosen in Me › Music.
+    val lyricsOpen = showLyrics && nowPlayingVisible
+    KeepScreenOn(
+        enabled = uiState.isAudioPlaying && (
+            (lyricsOpen && libraryPrefs.keepScreenOnLyrics) ||
+                (nowPlayingVisible && !lyricsOpen && libraryPrefs.keepScreenOnNowPlaying)
+            )
+    )
 
     // Phone upright: the navigation bar at the bottom. Sideways (or a bigger screen): Material's
     // navigation rail on the side, so the lists keep their height.
@@ -680,6 +689,8 @@ fun Material3VideoPlayerScreen(
     // Shared transitions (mini player ⇄ Now Playing) happen inside this layout.
     SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
     val playerSharedScope = this
+    // Video thumbnails in the lists take part in the player's open/close animation.
+    val videoTransition = VideoTransitionScope(playerSharedScope, uiState.playingVideo?.id)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -771,6 +782,7 @@ fun Material3VideoPlayerScreen(
                         viewModel.updatePlaybackSettings(context, transform)
                     },
                     onLibraryChanged = { viewModel.refreshPermissionsAndScan(context) },
+                    videoTransition = videoTransition,
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -865,17 +877,21 @@ fun Material3VideoPlayerScreen(
                                     uiState.viewMode == ViewMode.TREE &&
                                         uiState.selectedFolderFilter == null &&
                                         uiState.selectedPlaylistFilter == null -> {
-                                        TreeHierarchyView(
-                                            videos = uiState.filteredAndSortedVideos,
-                                            expandedNodes = uiState.expandedTreeNodes,
-                                            onToggleNode = { viewModel.toggleTreeNode(it) },
-                                            onPlayVideo = { viewModel.playVideo(it, context) },
-                                            onOpenMenu = { viewModel.openVideoMenu(it) },
-                                            menu = videoMenu
-                                        )
+                                        CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
+                                            TreeHierarchyView(
+                                                videos = uiState.filteredAndSortedVideos,
+                                                expandedNodes = uiState.expandedTreeNodes,
+                                                onToggleNode = { viewModel.toggleTreeNode(it) },
+                                                onPlayVideo = { viewModel.playVideo(it, context) },
+                                                onOpenMenu = { viewModel.openVideoMenu(it) },
+                                                menu = videoMenu
+                                            )
+                                        }
                                     }
 
-                                    else -> videoList(uiState)
+                                    else -> CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
+                                        videoList(uiState)
+                                    }
                                 }
                             }
                         }
@@ -893,8 +909,9 @@ fun Material3VideoPlayerScreen(
                     visible = inVideoFolder,
                     enter = fadeIn(motionScheme.defaultEffectsSpec()) +
                         scaleIn(motionScheme.defaultSpatialSpec(), initialScale = 0.92f),
-                    exit = fadeOut(motionScheme.defaultEffectsSpec()) +
-                        scaleOut(motionScheme.fastSpatialSpec(), targetScale = 0.92f),
+                    // Leaving is quick and doesn't bounce, so the page is gone before the next tap.
+                    exit = fadeOut(motionScheme.fastEffectsSpec()) +
+                        scaleOut(motionScheme.fastEffectsSpec(), targetScale = 0.92f),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     val shown = folderUiState
@@ -920,7 +937,11 @@ fun Material3VideoPlayerScreen(
                                 onOpenSortSheet = { viewModel.openSortSheet() },
                                 onClearSubFilter = closeVideoFolder
                             )
-                            Box(Modifier.weight(1f).fillMaxWidth()) { videoList(shown) }
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
+                                    videoList(shown)
+                                }
+                            }
                         }
                     }
                 }
@@ -1119,7 +1140,8 @@ fun Material3VideoPlayerScreen(
         AnimatedVisibility(
             visible = showLyrics && showNowPlaying && miniTrack != null,
             enter = slideInVertically(motionScheme.defaultSpatialSpec()) { it / 3 } + fadeIn(motionScheme.defaultEffectsSpec()),
-            exit = slideOutVertically(motionScheme.fastSpatialSpec()) { it / 3 } + fadeOut(motionScheme.fastEffectsSpec()),
+            // Quick and without a bounce: the leaving screen must not catch the next tap on Now Playing.
+            exit = slideOutVertically(motionScheme.fastEffectsSpec()) { it / 6 } + fadeOut(motionScheme.fastEffectsSpec()),
             modifier = Modifier.fillMaxSize()
         ) {
             val lyricsTrack = miniTrack ?: lastNowPlayingTrack
@@ -1154,7 +1176,7 @@ fun Material3VideoPlayerScreen(
         AnimatedVisibility(
             visible = showAmbient,
             enter = fadeIn(motionScheme.slowEffectsSpec()),
-            exit = fadeOut(motionScheme.defaultEffectsSpec()),
+            exit = fadeOut(motionScheme.fastEffectsSpec()),
             modifier = Modifier.fillMaxSize()
         ) {
             val ambientTrack = miniTrack ?: lastNowPlayingTrack
@@ -1311,10 +1333,11 @@ fun Material3VideoPlayerScreen(
         if (uiState.playingVideo != null) lastPlayingVideo = uiState.playingVideo
         AnimatedVisibility(
             visible = uiState.playingVideo != null,
-            enter = fadeIn(motionScheme.defaultEffectsSpec()) +
-                scaleIn(motionScheme.defaultSpatialSpec(), initialScale = 0.92f),
-            exit = fadeOut(motionScheme.defaultEffectsSpec()) +
-                scaleOut(motionScheme.fastSpatialSpec(), targetScale = 0.86f),
+            // With its thumbnail on screen the player grows out of it and shrinks back into it
+            // (the frame moves; these fades cross over to and from the thumbnail on the way).
+            // Otherwise it simply fades in and out.
+            enter = fadeIn(androidx.compose.animation.core.tween(durationMillis = 150)),
+            exit = fadeOut(androidx.compose.animation.core.tween(durationMillis = 220, delayMillis = 120)),
             modifier = Modifier.fillMaxSize()
         ) {
             val activePlaying = uiState.playingVideo ?: lastPlayingVideo ?: return@AnimatedVisibility
@@ -1324,8 +1347,10 @@ fun Material3VideoPlayerScreen(
                 playerController = controller,
                 playbackSettings = uiState.playbackSettings,
                 resumedFromMs = uiState.resumedFromMs,
-                nextVideo = remember(activePlaying.id, uiState.videos, uiState.sortBy, uiState.sortDir) {
-                    viewModel.peekNextInFolder()
+                nextVideo = remember(
+                    activePlaying.id, uiState.videos, uiState.sortBy, uiState.sortDir, uiState.selectedFolderFilter
+                ) {
+                    viewModel.peekNextVideo()
                 },
                 onSavePosition = { posMs, durMs, forcePersist ->
                     viewModel.recordVideoPlaybackHistory(
@@ -1338,9 +1363,11 @@ fun Material3VideoPlayerScreen(
                 },
                 onPreviousVideo = { viewModel.playAdjacentVideo(-1, context) },
                 onNextVideo = { viewModel.playAdjacentVideo(1, context) },
-                onPlaybackEnded = { viewModel.playNextInFolder(context) },
+                onPlaybackEnded = { viewModel.playNextVideo(context) },
                 onUpdatePlaybackSettings = { transform -> viewModel.updatePlaybackSettings(context, transform) },
-                onClose = { if (uiState.playingVideo != null) viewModel.closeVideoPlayer(context) }
+                onClose = { if (uiState.playingVideo != null) viewModel.closeVideoPlayer(context) },
+                closing = uiState.playingVideo == null,
+                modifier = Modifier.videoPlayerContainer(playerSharedScope, this, activePlaying.id)
             )
         }
     }

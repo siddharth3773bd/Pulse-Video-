@@ -746,7 +746,8 @@ fun AudioLibraryScreen(
                 AnimatedVisibility(
                     visible = inDetail,
                     enter = fadeIn(motion.defaultEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.92f),
-                    exit = fadeOut(motion.defaultEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.92f),
+                    // Quick, no bounce: the page is gone before the next tap on the library.
+                    exit = fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastEffectsSpec(), targetScale = 0.92f),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     val detail = currentDetail ?: lastDetail

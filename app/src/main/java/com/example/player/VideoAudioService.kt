@@ -1,9 +1,15 @@
 package com.example.player
 
+import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Bundle
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.annotation.OptIn
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -64,12 +70,55 @@ class VideoAudioService : MediaSessionService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!ensureSession()) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        val hasSession = ensureSession()
+        // Media3 goes first: it also answers start requests left over from an instance that was
+        // already stopped (they arrive after the player closed), the safe way.
         super.onStartCommand(intent, flags, startId)
+        if (!hasSession) {
+            // Nothing to play any more. Android may have been promised a foreground service by
+            // that late start request, so keep the promise for a moment before stopping;
+            // stopping without it is what crashed the app ("did not call startForeground").
+            stopKeepingPromise()
+        }
         return START_NOT_STICKY
+    }
+
+    @SuppressLint("InlinedApi")
+    private fun stopKeepingPromise() {
+        try {
+            val manager = getSystemService(NotificationManager::class.java)
+            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL_ID, "Video sound", NotificationManager.IMPORTANCE_LOW)
+                )
+            }
+            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stop_playback)
+                .setContentTitle("Stopping")
+                .setSilent(true)
+                .build()
+            ServiceCompat.startForeground(
+                this,
+                STOP_NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        } catch (_: Exception) {
+            // Not allowed from the background (Android 12+): then no promise was made either.
+        } finally {
+            stopSelf()
+        }
+    }
+
+    /** Ends background sound: the session goes first (no more notification updates), then the service. */
+    private fun shutdown() {
+        session?.let { s ->
+            removeSession(s)
+            s.release()
+        }
+        session = null
+        stopSelf()
     }
 
     private fun ensureSession(): Boolean {
@@ -120,6 +169,8 @@ class VideoAudioService : MediaSessionService() {
     companion object {
         private const val ACTION_STOP = "app.doppler.player.VIDEO_AUDIO_STOP"
         private const val SESSION_ID = "doppler_video_audio"
+        private const val CHANNEL_ID = "doppler_video_audio_stop"
+        private const val STOP_NOTIFICATION_ID = 7341
 
         private var sharedPlayer: Player? = null
         private var instance: VideoAudioService? = null
@@ -148,7 +199,12 @@ class VideoAudioService : MediaSessionService() {
 
         fun stop(context: Context) {
             sharedPlayer = null
-            runCatching { context.stopService(Intent(context, VideoAudioService::class.java)) }
+            val running = instance
+            if (running != null) {
+                running.shutdown()
+            } else {
+                runCatching { context.stopService(Intent(context, VideoAudioService::class.java)) }
+            }
         }
     }
 }

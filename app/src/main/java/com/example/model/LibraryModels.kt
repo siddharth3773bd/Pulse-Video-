@@ -135,8 +135,10 @@ data class LibraryPreferences(
     val playlists: List<AudioPlaylist> = emptyList(),
     val ambient: AmbientSettings = AmbientSettings(),
     val lyrics: com.example.lyrics.LyricsSettings = com.example.lyrics.LyricsSettings(),
-    /** The screen stays on while Now Playing or lyrics are open and music plays. */
-    val keepScreenOn: Boolean = false
+    /** The screen stays on while Now Playing is open and music plays. */
+    val keepScreenOnNowPlaying: Boolean = false,
+    /** The screen stays on while lyrics are open and music plays. */
+    val keepScreenOnLyrics: Boolean = true
 ) {
     val blacklistedIds: Set<String> by lazy { blacklistedSongs.mapTo(HashSet()) { it.id } }
 

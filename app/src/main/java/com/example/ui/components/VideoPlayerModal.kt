@@ -93,6 +93,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -104,6 +105,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -131,6 +133,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.SubtitleView
 import com.example.R
+import com.example.data.MediaStoreScanner
 import com.example.model.PlaybackSettings
 import com.example.model.ScreenOrientationMode
 import com.example.model.SubtitleSize
@@ -170,7 +173,10 @@ fun VideoPlayerModal(
     onNextVideo: () -> Unit,
     onPlaybackEnded: () -> Boolean,
     onUpdatePlaybackSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** True while the player is shrinking away after being closed. */
+    closing: Boolean = false
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -249,7 +255,7 @@ fun VideoPlayerModal(
         onDispose {
             playerController.setBackgroundAudio(false)
             playerController.setVideoEnabled(true)
-            playerController.setVolume(1f)
+            // (Volume isn't reset here: closing fades it out, the next video sets it back.)
             playerController.setScrubbing(false)
         }
     }
@@ -336,7 +342,10 @@ fun VideoPlayerModal(
     }
     // Android's predictive back: while the gesture is held the player shrinks and follows the
     // finger with the library showing behind it; letting go closes it.
-    val back = rememberPredictiveBack(onBack = closeAndPersist)
+    val back = rememberPredictiveBack(enabled = !closing, settleAfterBack = true, onBack = closeAndPersist)
+    // While the back gesture is held or the player is closing, the buttons step aside so just the
+    // picture shrinks away.
+    val backInProgress by remember { derivedStateOf { back.progress > 0.01f } }
 
     // ---- Picture-in-picture ----
     PictureInPictureSupport(
@@ -362,21 +371,23 @@ fun VideoPlayerModal(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // The loading indicator only appears if loading takes a moment, so quick seeks don't flash it.
-    var showBuffering by remember { mutableStateOf(false) }
-    LaunchedEffect(playerState.isBuffering) {
-        if (playerState.isBuffering) {
-            delay(400L)
-            showBuffering = true
-        } else {
-            showBuffering = false
-        }
-    }
 
     val effectiveDurationMs = playerState.durationMs.takeIf { it > 0L } ?: video.durationMs.coerceAtLeast(1000L)
     val currentPositionMs = playerState.positionMs.coerceIn(0L, effectiveDurationMs)
     val progressFraction = (currentPositionMs.toFloat() / effectiveDurationMs.toFloat()).coerceIn(0f, 1f)
     var seekPreviewFraction by remember { mutableStateOf<Float?>(null) }
+    // The loading indicator only appears when loading really takes a while (a second), and never
+    // while the seek bar is being dragged: the picture already shows where you are.
+    var showBuffering by remember { mutableStateOf(false) }
+    val dragging = seekPreviewFraction != null
+    LaunchedEffect(playerState.isBuffering, dragging) {
+        if (playerState.isBuffering && !dragging) {
+            delay(1_000L)
+            showBuffering = true
+        } else {
+            showBuffering = false
+        }
+    }
     val displayedPositionMs = seekPreviewFraction?.let { (it.coerceIn(0f, 1f) * effectiveDurationMs).toLong() }
         ?: currentPositionMs
     val rightTimeLabel = if (playbackSettings.showRemainingTime) {
@@ -414,7 +425,7 @@ fun VideoPlayerModal(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .graphicsLayer { applyPredictiveBack(back, cornerRadius = 28.dp) }
             .background(Color.Black)
@@ -565,13 +576,40 @@ fun VideoPlayerModal(
                 VideoAspectMode.FIT -> ContentScale.Fit
                 VideoAspectMode.CROP -> ContentScale.Crop
                 VideoAspectMode.STRETCH -> ContentScale.FillBounds
+            },
+            // The video's own thumbnail until its first frame is ready (not a black box).
+            placeholder = {
+                val thumb = remember(video.id) { MediaStoreScanner.getCachedThumbnail(video.id) }
+                if (thumb != null) {
+                    val image = remember(thumb) { thumb.asImageBitmap() }
+                    androidx.compose.foundation.Image(
+                        bitmap = image,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         )
 
         if (audioOnly) {
             AudioOnlyCover(
                 title = video.title,
+                wide = wide,
                 onShowVideo = { audioOnly = false; poke() },
+                // Sideways the play buttons are part of the card (beside it), so nothing overlaps.
+                controls = if (wide) {
+                    {
+                        PlayerCentreControls(
+                            isPlaying = playerState.isPlaying,
+                            buffering = false,
+                            colorful = playbackSettings.colorfulControls,
+                            onPrevious = { onPreviousVideo(); poke() },
+                            onPlayPause = { playerController.togglePlayPause(); poke() },
+                            onNext = { onNextVideo(); poke() }
+                        )
+                    }
+                } else null,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -673,7 +711,7 @@ fun VideoPlayerModal(
 
         // 5. Controls
         AnimatedVisibility(
-            visible = controlsVisible && !inPip,
+            visible = controlsVisible && !inPip && !closing && !backInProgress,
             enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
             exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             modifier = Modifier.fillMaxSize()
@@ -784,7 +822,7 @@ fun VideoPlayerModal(
                         colorful = playbackSettings.colorfulControls,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
-                    if (wide) {
+                    if (wide && !audioOnly) {
                         PlayerCentreControls(
                             isPlaying = playerState.isPlaying,
                             buffering = showBuffering && !audioOnly,
@@ -1521,44 +1559,69 @@ private fun TrackSheet(
 
 /** Shown instead of the picture while only the sound plays. */
 @Composable
-private fun AudioOnlyCover(title: String, onShowVideo: () -> Unit, modifier: Modifier = Modifier) {
+private fun AudioOnlyCover(
+    title: String,
+    wide: Boolean,
+    onShowVideo: () -> Unit,
+    controls: (@Composable () -> Unit)?,
+    modifier: Modifier = Modifier
+) {
     val scheme = MaterialTheme.colorScheme
-    Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = scheme.primaryContainer,
-                contentColor = scheme.onPrimaryContainer,
-                modifier = Modifier.size(112.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Symbols.Headphones, contentDescription = null, modifier = Modifier.size(52.dp))
+    val details: @Composable (Alignment.Horizontal, androidx.compose.ui.text.style.TextAlign, androidx.compose.ui.unit.Dp) -> Unit =
+        { alignment, textAlign, badgeSize ->
+            Column(horizontalAlignment = alignment) {
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = scheme.primaryContainer,
+                    contentColor = scheme.onPrimaryContainer,
+                    modifier = Modifier.size(badgeSize)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Symbols.Headphones, contentDescription = null, modifier = Modifier.size(badgeSize * 0.46f))
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = textAlign
+                )
+                Spacer(Modifier.height(4.dp))
+                Text("Playing audio only", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onShowVideo,
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.testTag("player_show_video_btn")
+                ) {
+                    Icon(Symbols.Videocam, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text("Show video")
                 }
             }
-            Spacer(Modifier.height(20.dp))
-            Text(
-                title,
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-            Spacer(Modifier.height(4.dp))
-            Text("Playing audio only", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = onShowVideo,
-                shapes = ButtonDefaults.shapes(),
-                modifier = Modifier.height(ButtonDefaults.MediumContainerHeight).testTag("player_show_video_btn"),
-                contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight)
+        }
+    Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+        if (wide && controls != null) {
+            // Sideways: the song card on the left, the play buttons on the right.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(horizontal = 48.dp)
             ) {
-                Icon(Symbols.Videocam, contentDescription = null, modifier = Modifier.size(ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight)))
-                Spacer(Modifier.size(ButtonDefaults.iconSpacingFor(ButtonDefaults.MediumContainerHeight)))
-                Text("Show video", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    details(Alignment.Start, androidx.compose.ui.text.style.TextAlign.Start, 80.dp)
+                }
+                Spacer(Modifier.width(32.dp))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { controls() }
+            }
+        } else {
+            Box(Modifier.padding(horizontal = 32.dp)) {
+                details(Alignment.CenterHorizontally, androidx.compose.ui.text.style.TextAlign.Center, 112.dp)
             }
         }
     }

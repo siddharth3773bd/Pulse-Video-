@@ -5,13 +5,18 @@ import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.annotation.OptIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.media3.ui.compose.ContentFrame
+import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import kotlinx.coroutines.withContext
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -26,6 +31,7 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.ScrubbingModeParameters
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import com.example.model.DecoderMode
 import java.io.File
@@ -42,6 +48,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+/** How far (as a share of the video's length) a drag-seek may land from the finger: 1%. */
+private const val SCRUB_SEEK_TOLERANCE = 0.01
 
 /**
  * The single class in the codebase that references Media3 ExoPlayer.
@@ -161,6 +170,14 @@ class ExoPlayerController(
         val created = ExoPlayer.Builder(appContext, renderersFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            // While the seek bar (or a sideways swipe) is being dragged, jump to the nearest
+            // keyframe instead of decoding the exact frame every time, so the picture follows the
+            // finger straight away. Letting go does one exact seek.
+            .setScrubbingModeParameters(
+                ScrubbingModeParameters.Builder()
+                    .setFractionalSeekTolerance(SCRUB_SEEK_TOLERANCE, SCRUB_SEEK_TOLERANCE)
+                    .build()
+            )
             .build()
             .apply {
                 addListener(playerListener)
@@ -626,11 +643,23 @@ class ExoPlayerController(
     }
 
     @Composable
-    override fun RenderVideoSurface(modifier: Modifier, contentScale: ContentScale) {
+    override fun RenderVideoSurface(
+        modifier: Modifier,
+        contentScale: ContentScale,
+        placeholder: @Composable () -> Unit
+    ) {
         ContentFrame(
             player = activePlayerInstance,
             modifier = modifier,
-            contentScale = contentScale
+            // A TextureView is drawn as part of the screen, so the picture shrinks, fades and
+            // rounds its corners together with the player when it closes (a SurfaceView lags a
+            // frame behind and can't fade, which made closing look glitchy).
+            surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+            contentScale = contentScale,
+            keepContentOnReset = true,
+            shutter = {
+                Box(Modifier.fillMaxSize().background(Color.Black)) { placeholder() }
+            }
         )
     }
 }

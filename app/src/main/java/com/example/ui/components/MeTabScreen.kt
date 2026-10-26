@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -77,7 +78,9 @@ fun MeTabScreen(
     onToggleAmoledBlack: () -> Unit,
     onUpdatePlaybackSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit,
     onLibraryChanged: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** History thumbnails take part in the video player's open/close animation. */
+    videoTransition: VideoTransitionScope? = null
 ) {
     val scheme = MaterialTheme.colorScheme
     val motion = MaterialTheme.motionScheme
@@ -114,8 +117,9 @@ fun MeTabScreen(
                 } else {
                     ContentTransform(
                         targetContentEnter = EnterTransition.None,
-                        initialContentExit = fadeOut(motion.defaultEffectsSpec()) +
-                            scaleOut(motion.fastSpatialSpec(), targetScale = 0.92f)
+                        // Quick, no bounce: the page is gone before the next tap.
+                        initialContentExit = fadeOut(motion.fastEffectsSpec()) +
+                            scaleOut(motion.fastEffectsSpec(), targetScale = 0.92f)
                     )
                 }
             },
@@ -144,13 +148,15 @@ fun MeTabScreen(
                             onAddVideosToPlaylist = onAddVideosToPlaylist,
                             onRemoveVideoFromPlaylist = onRemoveVideoFromPlaylist
                         )
-                        MeSubPage.HISTORY -> WatchHistoryPage(
-                            historyPairs = historyPairs,
-                            onBack = onCloseSubPage,
-                            onPlayVideo = onPlayVideo,
-                            onClearHistory = onClearHistory,
-                            onRemove = onRemoveFromHistory
-                        )
+                        MeSubPage.HISTORY -> CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
+                            WatchHistoryPage(
+                                historyPairs = historyPairs,
+                                onBack = onCloseSubPage,
+                                onPlayVideo = onPlayVideo,
+                                onClearHistory = onClearHistory,
+                                onRemove = onRemoveFromHistory
+                            )
+                        }
                         MeSubPage.APPEARANCE -> AppearancePage(
                             uiState = uiState,
                             onBack = onCloseSubPage,
