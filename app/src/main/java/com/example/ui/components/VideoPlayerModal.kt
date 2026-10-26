@@ -3,7 +3,6 @@
 package com.example.ui.components
 
 import androidx.compose.animation.core.Animatable
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.platform.LocalDensity
@@ -214,9 +213,9 @@ fun VideoPlayerModal(
     var sleepEndOfVideo by remember { mutableStateOf(false) }
     var sleepRemainingMs by remember { mutableLongStateOf(0L) }
 
-    // ---- Next / previous: Material's shared-axis motion ----
-    // The picture slides a little the way you're going and fades out; the new video slides in
-    // and fades up once its first picture is really there (no thumbnail, no stretched frame).
+    // ---- Next / previous: Material's fade-through ----
+    // The picture fades out quickly, and the new video fades up once its first picture is
+    // really there (no thumbnail, no stretched frame, no sliding).
     // A video that follows on by itself (autoplay) just carries on.
     var switchDirection by remember { mutableIntStateOf(0) }
     var switchFrameCount by remember { mutableIntStateOf(0) }
@@ -231,13 +230,9 @@ fun VideoPlayerModal(
         onNextVideo()
     }
     val surfaceAlpha = remember { Animatable(1f) }
-    val surfaceShift = remember { Animatable(0f) }
-    val shiftPx = with(LocalDensity.current) { 48.dp.toPx() }
     val motion = MaterialTheme.motionScheme
     val fadeOutSpec = motion.fastEffectsSpec<Float>()
     val fadeInSpec = motion.defaultEffectsSpec<Float>()
-    val moveOutSpec = motion.fastSpatialSpec<Float>()
-    val moveInSpec = motion.defaultSpatialSpec<Float>()
     var shownVideoId by remember { mutableStateOf(video.id) }
     LaunchedEffect(video.id) {
         if (video.id == shownVideoId) return@LaunchedEffect
@@ -246,21 +241,13 @@ fun VideoPlayerModal(
         switchDirection = 0
         if (direction == 0 || audioOnly) {
             surfaceAlpha.snapTo(1f)
-            surfaceShift.snapTo(0f)
             return@LaunchedEffect
         }
-        coroutineScope {
-            launch { surfaceAlpha.animateTo(0f, fadeOutSpec) }
-            launch { surfaceShift.animateTo(-direction * shiftPx, moveOutSpec) }
-        }
+        surfaceAlpha.animateTo(0f, fadeOutSpec)
         withTimeoutOrNull(1_500L) {
             playerController.state.first { it.firstFrameCount > switchFrameCount }
         }
-        surfaceShift.snapTo(direction * shiftPx)
-        coroutineScope {
-            launch { surfaceAlpha.animateTo(1f, fadeInSpec) }
-            launch { surfaceShift.animateTo(0f, moveInSpec) }
-        }
+        surfaceAlpha.animateTo(1f, fadeInSpec)
     }
 
     // "Resumed from 0:10 · Start over" pill, shown for a few seconds after resuming.
@@ -629,10 +616,7 @@ fun VideoPlayerModal(
             modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxSize()
-                .graphicsLayer {
-                    alpha = surfaceAlpha.value
-                    translationX = surfaceShift.value
-                },
+                .graphicsLayer { alpha = surfaceAlpha.value },
             contentScale = when (aspectMode) {
                 VideoAspectMode.FIT -> ContentScale.Fit
                 VideoAspectMode.CROP -> ContentScale.Crop

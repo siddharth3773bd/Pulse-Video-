@@ -162,11 +162,6 @@ fun LyricsScreen(
     }
     // The lyrics stay between the top bar and the controls while those are shown (upright and
     // sideways), and get the whole screen when they step aside.
-    val controlsInset by animateDpAsState(
-        targetValue = if (controlsShown) 88.dp else 0.dp,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "lyricsControlsInset"
-    )
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     val topBarHeight = with(LocalDensity.current) { topBarHeightPx.toDp() }
     val topInset by animateDpAsState(
@@ -281,7 +276,7 @@ fun LyricsScreen(
                         contentColor = colors.content,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = topInset, bottom = controlsInset)
+                            .padding(top = topInset.coerceAtLeast(0.dp))
                     )
                     // "Always search online" is off and the song has none: offer both ways.
                     LyricsState.NeedsChoice -> MessagePanel(
@@ -329,28 +324,6 @@ fun LyricsScreen(
 
         }
 
-        // Play controls: a small Material 3 Expressive floating toolbar under the lyrics.
-        AnimatedVisibility(
-            visible = controlsShown,
-            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                slideInVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) { it / 2 },
-            exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()) +
-                slideOutVertically(MaterialTheme.motionScheme.slowSpatialSpec()) { it / 2 },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
-        ) {
-            LyricsTransportBar(
-                isPlaying = isPlaying,
-                colors = colors,
-                onPrevious = onSkipPrevious,
-                onPlayPause = onTogglePlayPause,
-                onNext = onSkipNext,
-                modifier = Modifier
-                    .padding(top = 8.dp, bottom = 16.dp)
-                    .testTag("lyrics_controls")
-            )
-        }
     }
 
     if (showSettings) {
@@ -835,53 +808,4 @@ private fun LyricsSearchSheet(
 }
 
 /** ⏮ ⏯ ⏭ in the official floating toolbar, in the Now Playing colours. */
-@Composable
-private fun LyricsTransportBar(
-    isPlaying: Boolean,
-    colors: NowPlayingColors,
-    onPrevious: () -> Unit,
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    HorizontalFloatingToolbar(
-        expanded = true,
-        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-            toolbarContainerColor = colors.soft,
-            toolbarContentColor = colors.onSoft
-        ),
-        modifier = modifier
-    ) {
-        IconButton(
-            onClick = onPrevious,
-            shapes = IconButtonDefaults.shapes(),
-            modifier = Modifier.testTag("lyrics_previous")
-        ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous") }
-        FilledIconToggleButton(
-            checked = !isPlaying,
-            onCheckedChange = { onPlayPause() },
-            shapes = IconButtonDefaults.toggleableShapes(),
-            colors = IconButtonDefaults.filledIconToggleButtonColors(
-                containerColor = colors.main,
-                contentColor = colors.onMain,
-                checkedContainerColor = colors.main,
-                checkedContentColor = colors.onMain
-            ),
-            modifier = Modifier
-                .padding(horizontal = 8.dp)
-                .size(width = 64.dp, height = 48.dp)
-                .testTag("lyrics_play_pause")
-        ) {
-            Icon(
-                imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play"
-            )
-        }
-        IconButton(
-            onClick = onNext,
-            shapes = IconButtonDefaults.shapes(),
-            modifier = Modifier.testTag("lyrics_next")
-        ) { Icon(Symbols.SkipNext, contentDescription = "Next") }
-    }
-}
 

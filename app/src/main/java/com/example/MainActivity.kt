@@ -1376,7 +1376,8 @@ fun Material3VideoPlayerScreen(
             // (the frame moves; these fades cross over to and from the thumbnail on the way).
             // Otherwise it simply fades in and out.
             enter = fadeIn(androidx.compose.animation.core.tween(durationMillis = 150)),
-            exit = fadeOut(androidx.compose.animation.core.tween(durationMillis = 220, delayMillis = 120)),
+            // Closing: the picture stays solid while it flies home and only hands over at the end.
+            exit = fadeOut(androidx.compose.animation.core.tween(durationMillis = 140, delayMillis = 300)),
             modifier = Modifier.fillMaxSize()
         ) {
             val activePlaying = uiState.playingVideo ?: lastPlayingVideo ?: return@AnimatedVisibility

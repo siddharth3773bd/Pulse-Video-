@@ -181,7 +181,7 @@ internal fun VideoThumbnailTransition(videoId: String, content: @Composable (Mod
     androidx.compose.animation.AnimatedVisibility(
         visible = scope.openVideoId != videoId,
         // Comes back at the end of the flight, as the moving picture fades into it.
-        enter = fadeIn(androidx.compose.animation.core.tween(durationMillis = 180, delayMillis = 220)),
+        enter = fadeIn(androidx.compose.animation.core.tween(durationMillis = 140, delayMillis = 260)),
         exit = fadeOut(androidx.compose.animation.core.tween(durationMillis = 120))
     ) {
         with(scope.shared) {

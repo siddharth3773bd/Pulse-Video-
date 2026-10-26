@@ -3,6 +3,8 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.model.formatDurationMs
@@ -62,6 +65,9 @@ fun SleepTimerSheet(
     val scheme = MaterialTheme.colorScheme
     var minutes by remember { mutableIntStateOf(30) }
     var atEnd by remember { mutableStateOf(atEndActive) }
+    // Sideways there's little height: one row of times, and "at the end" sits beside Start.
+    val windowSize = LocalWindowInfo.current.containerSize
+    val sideways = windowSize.width > windowSize.height
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -70,9 +76,10 @@ fun SleepTimerSheet(
         Column(
             Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(bottom = if (sideways) 12.dp else 24.dp),
+            verticalArrangement = Arrangement.spacedBy(if (sideways) 8.dp else 12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Sleep timer", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
@@ -87,7 +94,9 @@ fun SleepTimerSheet(
             }
             CompactRow("Stop after") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(listOf(15, 30, 45), listOf(60, 90, 120)).forEach { row ->
+                    val rows = if (sideways) listOf(listOf(15, 30, 45, 60, 90, 120))
+                    else listOf(listOf(15, 30, 45), listOf(60, 90, 120))
+                    rows.forEach { row ->
                         ChoiceButtonGroup(
                             options = row.map { it to (if (it == 90) "1.5 h" else minutesLabel(it)) },
                             selected = if (atEnd) null else minutes.takeIf { it in row },
@@ -102,19 +111,23 @@ fun SleepTimerSheet(
                     }
                 }
             }
-            FilledTonalToggleButton(
-                checked = atEnd,
-                onCheckedChange = { atEnd = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("sleep_at_end")
-            ) {
-                Icon(endIcon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text(endLabel)
+            val atEndButton: @Composable (Modifier) -> Unit = { mod ->
+                FilledTonalToggleButton(
+                    checked = atEnd,
+                    onCheckedChange = { atEnd = it },
+                    modifier = mod.testTag("sleep_at_end")
+                ) {
+                    Icon(endIcon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(endLabel, maxLines = 1)
+                }
             }
-            Spacer(Modifier.height(4.dp))
+            if (!sideways) {
+                atEndButton(Modifier.fillMaxWidth())
+                Spacer(Modifier.height(4.dp))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (sideways) atEndButton(Modifier.weight(1.4f))
                 if (active) {
                     OutlinedButton(
                         onClick = onTurnOff,
@@ -130,7 +143,7 @@ fun SleepTimerSheet(
                     modifier = Modifier
                         .weight(1f)
                         .testTag("sleep_start")
-                ) { Text(if (atEnd) "Start" else "Start · ${minutesLabel(minutes)}") }
+                ) { Text(if (atEnd) "Start" else "Start · ${minutesLabel(minutes)}", maxLines = 1) }
             }
         }
     }

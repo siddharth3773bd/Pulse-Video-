@@ -2,9 +2,7 @@
 
 package com.example.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -24,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -38,10 +35,9 @@ import com.example.ui.icons.Symbols
 
 /*
  * Sorting, the Material 3 Expressive way:
- * - At the top of a list, a chip shows how it's sorted ("Date added ▾") with an arrow beside it
- *   for the order. The chip opens the grouped menu of sort fields; the arrow flips the order.
- * - Picking a new field starts it in its usual order (newest, longest, A to Z); picking the
- *   selected field again flips the order, which its second line spells out.
+ * - At the top of a list, a chip shows how it's sorted ("Date added ▾"); it opens the grouped
+ *   menu of sort fields. Picking a new field starts it in its usual order (newest, longest,
+ *   A to Z); picking the selected field again flips the order, which its second line spells out.
  * - Videos' header button keeps the view options (what to show, list or grid, series groups).
  * Changes apply straight away.
  */
@@ -85,49 +81,29 @@ private fun <T> ChoiceGroup(
     }
 }
 
-/**
- * The sort controls at the top of a list: the field chip (opens [menu]) and the order arrow.
- * Without a field (albums, artists) only the arrow is shown.
- */
+/** The sort chip at the top of a list ("Date added ▾"); it opens [menu], which also flips the order. */
 @Composable
 internal fun SortControls(
-    fieldLabel: String?,
-    orderLabel: String,
-    ascending: Boolean,
-    onFlipOrder: () -> Unit,
-    menu: (@Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit)?,
+    fieldLabel: String,
+    menu: @Composable (expanded: Boolean, onDismiss: () -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        if (fieldLabel != null && menu != null) {
-            var open by remember { mutableStateOf(false) }
-            Box {
-                FilterChip(
-                    selected = true,
-                    onClick = { open = true },
-                    label = { Text(fieldLabel) },
-                    trailingIcon = {
-                        Icon(
-                            Symbols.ExpandMore,
-                            contentDescription = null,
-                            modifier = Modifier.size(FilterChipDefaults.IconSize)
-                        )
-                    },
-                    modifier = Modifier.testTag("sort_chip")
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        FilterChip(
+            selected = true,
+            onClick = { open = true },
+            label = { Text(fieldLabel) },
+            trailingIcon = {
+                Icon(
+                    Symbols.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier.size(FilterChipDefaults.IconSize)
                 )
-                menu(open) { open = false }
-            }
-        }
-        TooltipIconButton(
-            label = orderLabel,
-            icon = if (ascending) Symbols.ArrowUpward else Symbols.ArrowDownward,
-            onClick = onFlipOrder,
-            modifier = Modifier.testTag("sort_order_button")
+            },
+            modifier = Modifier.testTag("sort_chip")
         )
+        menu(open) { open = false }
     }
 }
 
@@ -200,9 +176,6 @@ fun VideoSortControls(
     val flip = { onSelectSortDir(if (sortDir == SortDir.ASC) SortDir.DESC else SortDir.ASC) }
     SortControls(
         fieldLabel = sortBy.label,
-        orderLabel = if (sortDir == SortDir.ASC) sortBy.ascFull else sortBy.descFull,
-        ascending = sortDir == SortDir.ASC,
-        onFlipOrder = flip,
         menu = { expanded, onDismiss ->
             DropdownMenuPopup(
                 expanded = expanded,
@@ -251,35 +224,44 @@ fun LibrarySortControls(
         ascending -> field.ascendingLabel
         else -> field.descendingLabel
     }
-    val fieldMenu: @Composable (Boolean, () -> Unit) -> Unit = { expanded, onDismiss ->
-        if (field != null) {
+    SortControls(
+        fieldLabel = field?.label ?: orderLabel,
+        menu = { expanded, onDismiss ->
             DropdownMenuPopup(
                 expanded = expanded,
                 onDismissRequest = onDismiss,
                 modifier = Modifier.testTag("library_sort_menu")
             ) {
-                ChoiceGroup(
-                    label = "Sort by",
-                    index = 0,
-                    count = 1,
-                    choices = LibrarySongSort.entries.map { MenuChoice(it, it.label, it.icon) },
-                    selected = field,
-                    onSelect = { picked ->
-                        if (picked == field) onSelectAscending(!ascending) else onSelectField(picked)
-                    },
-                    tag = { "sort_field_${it.id}" },
-                    selectedLine = orderLabel,
-                    flippable = true
-                )
+                if (field != null) {
+                    ChoiceGroup(
+                        label = "Sort by",
+                        index = 0,
+                        count = 1,
+                        choices = LibrarySongSort.entries.map { MenuChoice(it, it.label, it.icon) },
+                        selected = field,
+                        onSelect = { picked ->
+                            if (picked == field) onSelectAscending(!ascending) else onSelectField(picked)
+                        },
+                        tag = { "sort_field_${it.id}" },
+                        selectedLine = orderLabel,
+                        flippable = true
+                    )
+                } else {
+                    ChoiceGroup(
+                        label = "Order",
+                        index = 0,
+                        count = 1,
+                        choices = listOf(
+                            MenuChoice(true, "A to Z", Symbols.ArrowDownward),
+                            MenuChoice(false, "Z to A", Symbols.ArrowUpward)
+                        ),
+                        selected = ascending,
+                        onSelect = { onSelectAscending(it); onDismiss() },
+                        tag = { "sort_order_${if (it) "asc" else "desc"}" }
+                    )
+                }
             }
-        }
-    }
-    SortControls(
-        fieldLabel = field?.label,
-        orderLabel = orderLabel,
-        ascending = ascending,
-        onFlipOrder = { onSelectAscending(!ascending) },
-        menu = if (field == null) null else fieldMenu,
+        },
         modifier = modifier
     )
 }
