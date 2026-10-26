@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import com.example.data.MediaStoreScanner
 import com.example.model.AudioTrackItem
 import com.example.model.VideoItem
 import com.example.model.formatDurationMs
@@ -15,6 +16,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
 /** Everything the audio pop-up needs to know about a file opened from another app. */
 class ExternalAudioInfo(
@@ -23,7 +25,9 @@ class ExternalAudioInfo(
     val sampleRateHz: Int,
     val bitrateKbps: Int,
     val format: String,
-    val path: String
+    val path: String,
+    /** The file's name as the other app shows it, e.g. "Sahiba.mp3". */
+    val fileName: String = ""
 )
 
 /** Helpers to turn a file opened from a file manager (content:// or file://) into app models. */
@@ -69,6 +73,9 @@ object ExternalMedia {
             if (uri.scheme == "file") {
                 uri.path?.let { return it }
             }
+            // Many file managers put the real path in the link, e.g.
+            // content://com.coloros.filemanager/root/storage/emulated/0/My Documents/Sahiba.mp3
+            uri.path?.indexOf("/storage/")?.takeIf { it >= 0 }?.let { at -> return uri.path!!.substring(at) }
             if (uri.authority == "com.android.externalstorage.documents") {
                 val docId = DocumentsContract.getDocumentId(uri)
                 val parts = docId.split(":", limit = 2)
@@ -177,8 +184,54 @@ object ExternalMedia {
             sampleRateHz = sampleRate,
             bitrateKbps = bitrateKbps,
             format = ext.uppercase(Locale.US),
-            path = resolvePath(context, uri)
+            path = resolvePath(context, uri),
+            fileName = displayName
         )
+    }
+
+    /**
+     * The same song in the music library (MediaStore), if it's there. Doppler can always read
+     * library songs itself, while a file shared by another app only stays readable while that
+     * app's grant lasts (it ends when the pop-up closes). Matched by full path, then by file
+     * name with the same size / length. Needs the audio permission; null otherwise.
+     */
+    suspend fun findInLibrary(context: Context, info: ExternalAudioInfo): AudioTrackItem? {
+        if (!MediaStoreScanner.hasAudioPermission(context)) return null
+        val library = try {
+            MediaStoreScanner.scanAudio(context)
+        } catch (_: Throwable) {
+            return null
+        }
+        val path = info.path.takeIf { it.startsWith("/") }
+        if (path != null) library.firstOrNull { it.path == path }?.let { return it }
+        val name = info.fileName.takeIf { it.isNotBlank() } ?: return null
+        val size = info.track.sizeBytes
+        val duration = info.track.durationMs
+        return library.firstOrNull { song ->
+            song.path.substringAfterLast('/') == name &&
+                (size <= 0L || song.sizeBytes == size) &&
+                (duration <= 0L || abs(song.durationMs - duration) <= 2_000L)
+        }
+    }
+
+    /**
+     * A private copy of a file that isn't in the library, so it keeps playing in the app after
+     * the pop-up closes (when the other app's grant ends). Only the latest copy is kept.
+     */
+    fun copyToAppStorage(context: Context, info: ExternalAudioInfo): AudioTrackItem? {
+        return try {
+            val dir = File(context.cacheDir, "opened_audio").apply { mkdirs() }
+            dir.listFiles()?.forEach { it.delete() }
+            val name = info.fileName.ifBlank { "audio.${info.track.ext}" }.replace('/', '_')
+            val target = File(dir, name)
+            context.contentResolver.openInputStream(info.track.contentUri)?.use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            } ?: return null
+            val uri = Uri.fromFile(target)
+            info.track.copy(id = uri.toString(), contentUri = uri, path = target.absolutePath)
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     /** Builds a VideoItem for a video opened from another app. Call off the main thread. Returns null if it cannot be opened. */

@@ -549,21 +549,12 @@ fun Material3VideoPlayerScreen(
     }
     // "Open in Doppler" from the pop-up player: Music tab with Now Playing open, once the song is here.
     val miniTrackLatest by rememberUpdatedState(miniTrack)
-    val libraryTracksLatest by rememberUpdatedState(uiState.audioTracks)
     LaunchedEffect(openNowPlayingSignal) {
         if (openNowPlayingSignal == 0) return@LaunchedEffect
         val ready = kotlinx.coroutines.withTimeoutOrNull(3_000L) {
             androidx.compose.runtime.snapshotFlow { miniTrackLatest }.first { it != null }
         }
         if (ready != null) {
-            // A file from another app: carry on with the same song from the library when it's
-            // there (same size and length), so the cover shows and seeking keeps working.
-            if (ready.mediaId == 0L) {
-                libraryTracksLatest.firstOrNull { song ->
-                    song.sizeBytes == ready.sizeBytes && song.sizeBytes > 0L &&
-                        kotlin.math.abs(song.durationMs - ready.durationMs) <= 1_500L
-                }?.let { audioManager.continueWith(it) }
-            }
             viewModel.setBottomTab(BottomTab.AUDIO, context)
             showNowPlaying = true
         }

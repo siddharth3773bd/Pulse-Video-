@@ -78,6 +78,8 @@ import com.example.ui.components.PlaybackSeekBar
 import com.example.ui.components.SongInfoSheet
 import com.example.ui.theme.DopplerTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.withContext
 
 /**
@@ -224,11 +226,26 @@ private fun AudioPopupContent(
         if (loaded == null) {
             failed = true
         } else {
+            // Play the library's own copy when the song is in it: Doppler can always read that,
+            // while the file manager's link stops working once this pop-up closes.
+            val library = ExternalMedia.findInLibrary(context, loaded)
+            val playable = if (library != null) {
+                ExternalAudioInfo(
+                    track = library,
+                    cover = loaded.cover,
+                    sampleRateHz = loaded.sampleRateHz,
+                    bitrateKbps = loaded.bitrateKbps,
+                    format = loaded.format,
+                    path = library.path,
+                    fileName = loaded.fileName
+                )
+            } else loaded
             // The app's own screens (Now Playing after "Open in Doppler") reuse this cover.
-            loaded.cover?.let { AudioArtCache.put(loaded.track.contentUri.toString(), it) }
-            info = loaded
+            loaded.cover?.let { AudioArtCache.put(playable.track.contentUri.toString(), it) }
+            info = playable
             dragFraction = null
-            manager.playQueue(listOf(loaded.track), 0)
+            // A quick listen from a file manager doesn't replace the queue the app remembers.
+            manager.playQueue(listOf(playable.track), 0, remember = false)
         }
     }
     LaunchedEffect(failed) {
@@ -238,6 +255,25 @@ private fun AudioPopupContent(
         }
     }
 
+    val scope = rememberCoroutineScope()
+    // "Open in Doppler": a song that isn't in the library is copied into the app first (while
+    // the file manager still allows reading it), so it keeps playing and seeking in the app.
+    val openInApp: () -> Unit = {
+        val current = info
+        scope.launch {
+            if (current != null && current.track.mediaId == 0L) {
+                val copy = withContext(Dispatchers.IO) { ExternalMedia.copyToAppStorage(context, current) }
+                if (copy != null) {
+                    current.cover?.let { AudioArtCache.put(copy.contentUri.toString(), it) }
+                    manager.continueWith(copy)
+                }
+            } else if (current != null) {
+                // A library song: from now on it's the app's queue, remembered as usual.
+                manager.rememberCurrentQueue()
+            }
+            onOpenApp()
+        }
+    }
     val playback by manager.state.collectAsStateWithLifecycle()
     val error by manager.lastError.collectAsStateWithLifecycle()
     val loadedInfo = info ?: return
@@ -423,7 +459,7 @@ private fun AudioPopupContent(
                                 .animateWidth(openInteraction)
                         ) {
                             FilledTonalIconButton(
-                                onClick = onOpenApp,
+                                onClick = openInApp,
                                 shapes = IconButtonDefaults.shapes(),
                                 colors = sideColors,
                                 interactionSource = openInteraction,
@@ -435,7 +471,7 @@ private fun AudioPopupContent(
                         }
                     },
                     menuContent = { menuState ->
-                        DropdownMenuItem(text = { Text("Open in Doppler") }, onClick = { menuState.dismiss(); onOpenApp() })
+                        DropdownMenuItem(text = { Text("Open in Doppler") }, onClick = { menuState.dismiss(); openInApp() })
                     }
                 )
             }

@@ -80,6 +80,8 @@ class AudioPlaybackManager private constructor(context: Context) {
     private val sessionPrefs = appContext.getSharedPreferences("audio_session", Context.MODE_PRIVATE)
     private var restoreChecked = false
     private var lastSavedAt = 0L
+    /** False while the pop-up player plays a file from another app: that isn't the user's queue. */
+    private var rememberSession = true
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
@@ -214,6 +216,7 @@ class AudioPlaybackManager private constructor(context: Context) {
     // back while the app happened to still be in memory.
 
     private fun saveSession() {
+        if (!rememberSession) return
         val controller = mediaController ?: return
         val count = controller.mediaItemCount
         if (count == 0 || isLoadingQueue) return // Stopped: keep the last session for next time.
@@ -271,9 +274,12 @@ class AudioPlaybackManager private constructor(context: Context) {
     fun playQueue(
         tracks: List<AudioTrackItem>,
         startIndex: Int,
-        shuffle: Boolean = false
+        shuffle: Boolean = false,
+        /** False for the pop-up player: what it plays doesn't replace the remembered queue. */
+        remember: Boolean = true
     ) {
         if (tracks.isEmpty()) return
+        rememberSession = remember
         val safeStartIndex = startIndex.coerceIn(0, tracks.lastIndex)
         tracks.forEach { tracksById[it.id] = it }
 
@@ -593,6 +599,7 @@ class AudioPlaybackManager private constructor(context: Context) {
      */
     fun continueWith(track: AudioTrackItem) {
         tracksById[track.id] = track
+        rememberSession = true
         withController { controller ->
             val position = controller.currentPosition
             val keepPlaying = controller.playWhenReady
@@ -604,6 +611,12 @@ class AudioPlaybackManager private constructor(context: Context) {
                 syncFromController()
             }
         }
+    }
+
+    /** The pop-up's song became the app's queue ("Open in Doppler"): remember it from now on. */
+    fun rememberCurrentQueue() {
+        rememberSession = true
+        saveSession()
     }
 
     /** Hides the error dialog. */
