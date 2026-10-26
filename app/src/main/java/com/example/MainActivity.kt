@@ -136,6 +136,11 @@ import com.example.ui.components.AmbientModeScreen
 import com.example.ui.components.LyricsScreen
 import com.example.ui.components.NowPlayingScreen
 import com.example.ui.components.AudioMiniPlayer
+import com.example.ui.components.LocalPlayerTransition
+import com.example.ui.components.PlayerTransitionScopes
+import com.example.ui.components.playerContainer
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.runtime.CompositionLocalProvider
 import com.example.player.AudioPlaybackManager
 import com.example.model.LibraryPreferences
 import com.example.model.AudioTrackItem
@@ -533,6 +538,12 @@ fun Material3VideoPlayerScreen(
         )
     // Long-press selection in the Music tab: its own toolbar replaces the nav pill and mini player.
     var audioSelectionActive by remember { mutableStateOf(false) }
+    val nowPlayingVisible = showNowPlaying && miniTrack != null
+    // Where the mini player can show (Music tab). Now Playing grows out of it there; elsewhere
+    // Now Playing slides up instead.
+    val miniPlayerAllowed = uiState.bottomTab == BottomTab.AUDIO &&
+        uiState.hasAudioPermission &&
+        !audioSelectionActive
     var nowPlayingInfoTrack by remember { mutableStateOf<AudioTrackItem?>(null) }
     // Now Playing ⋮: add the song to a playlist (pick one, or name a new one).
     var nowPlayingAddToPlaylist by remember { mutableStateOf<AudioTrackItem?>(null) }
@@ -616,6 +627,9 @@ fun Material3VideoPlayerScreen(
         )
     }
 
+    // Shared transitions (mini player ⇄ Now Playing) happen inside this layout.
+    SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+    val playerSharedScope = this
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -813,25 +827,39 @@ fun Material3VideoPlayerScreen(
                 }
             }
 
-                // Music mini player, floating just above the navigation bar
-                if (uiState.bottomTab == BottomTab.AUDIO &&
-                    uiState.hasAudioPermission &&
-                    miniTrack != null &&
-                    !showNowPlaying &&
-                    !audioSelectionActive
+                // Music mini player, floating just above the navigation bar. Switching tabs fades it
+                // in and out; opening Now Playing grows it into the full screen (and back).
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = miniPlayerAllowed && miniTrack != null,
+                    enter = fadeIn(motionScheme.defaultEffectsSpec()) +
+                        slideInVertically(motionScheme.defaultSpatialSpec()) { it / 2 },
+                    exit = fadeOut(motionScheme.fastEffectsSpec()),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                 ) {
-                    // App theme colours (not the album's), so it sits calmly next to the bar.
-                    AudioMiniPlayer(
-                        track = miniTrack,
-                        isPlaying = uiState.isAudioPlaying,
-                        onOpen = { showNowPlaying = true },
-                        onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
-                        onSkipPrevious = { viewModel.skipAudioPrevious() },
-                        onSkipNext = { viewModel.skipAudioNext() },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                    )
+                    val pillTrack = miniTrack ?: lastNowPlayingTrack
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = !nowPlayingVisible,
+                        enter = fadeIn(motionScheme.defaultEffectsSpec()),
+                        exit = fadeOut(motionScheme.fastEffectsSpec())
+                    ) {
+                        if (pillTrack != null) {
+                            CompositionLocalProvider(
+                                LocalPlayerTransition provides PlayerTransitionScopes(playerSharedScope, this)
+                            ) {
+                                // App theme colours (not the album's), so it sits calmly next to the bar.
+                                AudioMiniPlayer(
+                                    track = pillTrack,
+                                    isPlaying = uiState.isAudioPlaying,
+                                    onOpen = { showNowPlaying = true },
+                                    onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
+                                    onSkipPrevious = { viewModel.skipAudioPrevious() },
+                                    onSkipNext = { viewModel.skipAudioNext() }
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // Selected videos: official floating toolbar (replaces the navigation bar)
@@ -911,14 +939,35 @@ fun Material3VideoPlayerScreen(
             )
         }
 
-        // 3c. Now Playing screen (slides up over everything except the video player)
+        // 3c. Now Playing: grows out of the mini player and shrinks back into it (Material's
+        // container transform). Where there's no mini player it slides up from the bottom instead.
         AnimatedVisibility(
-            visible = showNowPlaying && miniTrack != null,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            visible = nowPlayingVisible,
+            enter = if (miniPlayerAllowed) {
+                fadeIn(motionScheme.fastEffectsSpec())
+            } else {
+                slideInVertically(motionScheme.defaultSpatialSpec()) { it } + fadeIn(motionScheme.defaultEffectsSpec())
+            },
+            exit = if (miniPlayerAllowed) {
+                fadeOut(motionScheme.fastEffectsSpec())
+            } else {
+                slideOutVertically(motionScheme.defaultSpatialSpec()) { it } + fadeOut(motionScheme.fastEffectsSpec())
+            },
             modifier = Modifier.fillMaxSize()
         ) {
             val nowTrack = miniTrack ?: lastNowPlayingTrack
+            // The songs before and after get their colours ready, so Next/Previous change colour
+            // together with the cover.
+            LaunchedEffect(audioState.queueIndex, audioState.queue.size, libraryPrefs.nowPlayingColorSource) {
+                if (libraryPrefs.nowPlayingColorSource == NowPlayingColorSource.ALBUM_ART) {
+                    val queue = audioState.queue
+                    val index = audioState.queueIndex
+                    com.example.ui.theme.prefetchAlbumArtColors(
+                        context,
+                        listOfNotNull(queue.getOrNull(index + 1), queue.getOrNull(index - 1))
+                    )
+                }
+            }
             if (nowTrack != null) {
                 AlbumArtTheme(
                     track = nowTrack,
@@ -926,7 +975,12 @@ fun Material3VideoPlayerScreen(
                     // Gradient, blurred cover and black are always dark: use the dark colours there.
                     dark = libraryPrefs.nowPlayingBackground != NowPlayingBackground.FOLLOW_THEME
                 ) {
+                CompositionLocalProvider(
+                    LocalPlayerTransition provides
+                        if (miniPlayerAllowed) PlayerTransitionScopes(playerSharedScope, this@AnimatedVisibility) else null
+                ) {
                 NowPlayingScreen(
+                    modifier = Modifier.playerContainer(),
                     track = nowTrack,
                     isPlaying = uiState.isAudioPlaying,
                     positionMs = audioState.positionMs,
@@ -973,14 +1027,15 @@ fun Material3VideoPlayerScreen(
                     background = libraryPrefs.nowPlayingBackground
                 )
                 }
+                }
             }
         }
 
         // 3d. Lyrics (over Now Playing)
         AnimatedVisibility(
             visible = showLyrics && showNowPlaying && miniTrack != null,
-            enter = slideInVertically(initialOffsetY = { it / 3 }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it / 3 }) + fadeOut(),
+            enter = slideInVertically(motionScheme.defaultSpatialSpec()) { it / 3 } + fadeIn(motionScheme.defaultEffectsSpec()),
+            exit = slideOutVertically(motionScheme.fastSpatialSpec()) { it / 3 } + fadeOut(motionScheme.fastEffectsSpec()),
             modifier = Modifier.fillMaxSize()
         ) {
             val lyricsTrack = miniTrack ?: lastNowPlayingTrack
@@ -1014,8 +1069,8 @@ fun Material3VideoPlayerScreen(
         // 3e. Ambient mode (over Now Playing): from the tray button, or by turning the phone sideways.
         AnimatedVisibility(
             visible = showAmbient,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(motionScheme.slowEffectsSpec()),
+            exit = fadeOut(motionScheme.defaultEffectsSpec()),
             modifier = Modifier.fillMaxSize()
         ) {
             val ambientTrack = miniTrack ?: lastNowPlayingTrack
@@ -1194,6 +1249,7 @@ fun Material3VideoPlayerScreen(
                 onClose = { viewModel.closeVideoPlayer(context) }
             )
         }
+    }
     }
 }
 

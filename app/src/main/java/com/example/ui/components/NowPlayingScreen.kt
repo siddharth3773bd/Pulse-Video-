@@ -2,8 +2,27 @@
 
 package com.example.ui.components
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.unit.IntOffset
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -18,7 +37,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,7 +84,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -194,12 +211,40 @@ fun NowPlayingScreen(
     val colors = nowPlayingColors(background)
     val context = LocalContext.current
     val closeLatest by rememberUpdatedState(onClose)
-    val closeThresholdPx = with(LocalDensity.current) { 90.dp.toPx() }
+    val density = LocalDensity.current
+    val closeThresholdPx = with(density) { 120.dp.toPx() }
+    val flingClosePx = with(density) { 900.dp.toPx() }
+    val motion = MaterialTheme.motionScheme
+    val settleSpec = motion.defaultSpatialSpec<Float>()
+    val scope = rememberCoroutineScope()
 
-    BackHandler(onBack = onClose)
+    // Predictive back (Google's guidance for in-app surfaces): while the back gesture is held the
+    // screen shrinks to 90%, moves a little with the finger and rounds its corners. Let go and it
+    // shrinks into the mini player; change your mind and it springs back.
+    val backProgress = remember { Animatable(0f) }
+    var backFromLeft by remember { mutableStateOf(true) }
+    var backPull by remember { mutableFloatStateOf(0f) }
+    PredictiveBackHandler { events ->
+        var startY = Float.NaN
+        try {
+            events.collect { event ->
+                if (startY.isNaN()) startY = event.touchY
+                backFromLeft = event.swipeEdge != BackEventCompat.EDGE_RIGHT
+                backPull = event.touchY - startY
+                backProgress.snapTo(event.progress)
+            }
+            closeLatest()
+        } catch (cancelled: CancellationException) {
+            scope.launch { backProgress.animateTo(0f, settleSpec) }
+            throw cancelled
+        }
+    }
+    // Swipe down: the screen follows the finger, then closes or springs back.
+    var dragOffset by remember { mutableFloatStateOf(0f) }
 
     var dragFraction by remember { mutableStateOf<Float?>(null) }
-    var techLabel by remember(track.id) { mutableStateOf<String?>(null) }
+    // The old song's sound details stay until the new ones are known (no blink on every change).
+    var techLabel by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(track.id) {
         techLabel = try {
             audioTechLabel(context, track)
@@ -221,7 +266,42 @@ fun NowPlayingScreen(
     val shownPositionMs = (fraction * safeDuration).toLong()
     val sleepActive = sleepTimerRemainingMs > 0L || sleepAtEndOfSong
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            // The drag is read outside the moving layer, so the finger and the screen stay together.
+            .draggable(
+                orientation = Orientation.Vertical,
+                state = rememberDraggableState { delta -> dragOffset = (dragOffset + delta).coerceAtLeast(0f) },
+                onDragStopped = { velocity ->
+                    if (dragOffset > closeThresholdPx || velocity > flingClosePx) {
+                        closeLatest()
+                    } else {
+                        animate(dragOffset, 0f, velocity, settleSpec) { value, _ -> dragOffset = value }
+                    }
+                }
+            )
+            .graphicsLayer {
+                val back = PredictiveBackEasing.transform(backProgress.value)
+                val pull = (dragOffset / size.height).coerceIn(0f, 1f)
+                val scale = (1f - 0.1f * back) * (1f - 0.1f * pull)
+                scaleX = scale
+                scaleY = scale
+                val margin = 8.dp.toPx()
+                val maxShiftX = (size.width / 20f - margin).coerceAtLeast(0f)
+                val maxShiftY = (size.height / 20f - margin).coerceAtLeast(0f)
+                translationX = (if (backFromLeft) 1f else -1f) * maxShiftX * back
+                translationY = dragOffset +
+                    (backPull / (size.height / 2f)).coerceIn(-1f, 1f) * maxShiftY * back
+                val corner = (MiniPlayerHeight / 2).toPx() * maxOf(back, (pull * 6f).coerceAtMost(1f))
+                if (corner > 0f) {
+                    shape = RoundedCornerShape(corner)
+                    clip = true
+                } else {
+                    clip = false
+                }
+            }
+    ) {
         NowPlayingBackgroundLayer(
             style = background,
             track = track,
@@ -232,18 +312,6 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
-                    .pointerInput(closeThresholdPx) {
-                        // Swipe down to close.
-                        var total = 0f
-                        detectVerticalDragGestures(
-                            onDragStart = { total = 0f },
-                            onDragEnd = {
-                                if (total > closeThresholdPx) closeLatest()
-                                total = 0f
-                            },
-                            onDragCancel = { total = 0f }
-                        ) { _, dragAmount -> total += dragAmount }
-                    }
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(horizontal = 24.dp)
@@ -292,6 +360,8 @@ fun NowPlayingScreen(
                     onSkipToQueueItem = onSkipToQueueItem,
                     placeholderBackground = colors.soft,
                     placeholderTint = colors.content,
+                    // The mini player's cover grows into this one (and back).
+                    currentCoverModifier = Modifier.playerCover(),
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
@@ -305,21 +375,40 @@ fun NowPlayingScreen(
                         .padding(top = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = track.title,
-                            style = MaterialTheme.typography.headlineSmallEmphasized,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("now_playing_title")
-                        )
-                        Text(
-                            text = track.artist,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = colors.contentVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    // Material's lateral transition: the names slide the same way as the cover.
+                    val queueLatest by rememberUpdatedState(queue)
+                    val slideSpec = motion.defaultSpatialSpec<IntOffset>()
+                    val fadeInSpec = motion.defaultEffectsSpec<Float>()
+                    val fadeOutSpec = motion.fastEffectsSpec<Float>()
+                    val shiftPx = with(density) { 48.dp.roundToPx() }
+                    AnimatedContent(
+                        targetState = track,
+                        contentKey = { it.id },
+                        transitionSpec = {
+                            val direction = skipDirection(queueLatest, initialState, targetState)
+                            (slideInHorizontally(slideSpec) { direction * shiftPx } + fadeIn(fadeInSpec)) togetherWith
+                                (slideOutHorizontally(slideSpec) { -direction * shiftPx } + fadeOut(fadeOutSpec)) using
+                                SizeTransform(clip = false)
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = "nowPlayingTitle"
+                    ) { shown ->
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = shown.title,
+                                style = MaterialTheme.typography.headlineSmallEmphasized,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("now_playing_title")
+                            )
+                            Text(
+                                text = shown.artist,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.contentVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     FilledTonalIconButton(
@@ -364,17 +453,22 @@ fun NowPlayingScreen(
                             .padding(horizontal = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        val chip = techLabel
-                        if (!chip.isNullOrBlank()) {
-                            // A quiet pill so it reads as information, not a button.
-                            Surface(shape = CircleShape, color = colors.soft, contentColor = colors.contentVariant) {
-                                Text(
-                                    text = chip,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
+                        Crossfade(
+                            targetState = techLabel,
+                            animationSpec = motion.defaultEffectsSpec(),
+                            label = "nowPlayingTechChip"
+                        ) { chip ->
+                            if (!chip.isNullOrBlank()) {
+                                // A quiet pill so it reads as information, not a button.
+                                Surface(shape = CircleShape, color = colors.soft, contentColor = colors.contentVariant) {
+                                    Text(
+                                        text = chip,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -493,13 +587,21 @@ internal fun NowPlayingTopBar(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (title != null) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    // The album name cross-fades when the song changes.
+                    Crossfade(
+                        targetState = title,
+                        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                        label = "nowPlayingTopTitle"
+                    ) { shownTitle ->
+                        Text(
+                            text = shownTitle,
+                            style = MaterialTheme.typography.titleSmall,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
                 if (subtitle != null) {
                     Text(
@@ -692,6 +794,13 @@ private fun NowPlayingTray(
             )
         }
     }
+}
+
+/** +1 when [to] comes after [from] in the queue (Next, a later song), -1 for an earlier one. */
+private fun skipDirection(queue: List<AudioTrackItem>, from: AudioTrackItem, to: AudioTrackItem): Int {
+    val a = queue.indexOfFirst { it.id == from.id }
+    val b = queue.indexOfFirst { it.id == to.id }
+    return if (a >= 0 && b >= 0 && b < a) -1 else 1
 }
 
 /** "14:56" style countdown; shows hours as "1:05:00" when needed. */

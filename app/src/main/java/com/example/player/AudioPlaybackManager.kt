@@ -13,6 +13,8 @@ import android.util.Size
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
@@ -61,6 +63,7 @@ data class PlaybackErrorReport(
     val details: String
 )
 
+@androidx.annotation.OptIn(UnstableApi::class)
 class AudioPlaybackManager private constructor(context: Context) {
 
     private val appContext = context.applicationContext
@@ -82,6 +85,14 @@ class AudioPlaybackManager private constructor(context: Context) {
     private var lastSavedAt = 0L
     /** False while the pop-up player plays a file from another app: that isn't the user's queue. */
     private var rememberSession = true
+
+    // Shuffle reorders the queue itself (the current song first, the rest in random order), so the
+    // Queue, the cover strip and Next/Previous all follow the same order you can see. The player's
+    // own hidden shuffle mode stays off. Turning shuffle off puts the songs back in the order they
+    // had before, carrying on from the current song.
+    private var shuffleOn = false
+    /** Media ids in the order they had before shuffling; null while not shuffled. */
+    private var orderBeforeShuffle: List<String>? = null
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
@@ -157,6 +168,14 @@ class AudioPlaybackManager private constructor(context: Context) {
         override fun onEvents(player: Player, events: Player.Events) {
             syncFromController()
         }
+
+        // Shuffle asked for from outside the app (headphones, the system's media controls):
+        // do it our way, by reordering the queue, and keep the player's own shuffle mode off.
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            if (!shuffleModeEnabled) return
+            mediaController?.shuffleModeEnabled = false
+            if (!shuffleOn) setShuffle(true)
+        }
     }
 
     init {
@@ -177,6 +196,7 @@ class AudioPlaybackManager private constructor(context: Context) {
                     val controller = future.get()
                     mediaController = controller
                     controller.addListener(playerListener)
+                    if (controller.shuffleModeEnabled) controller.shuffleModeEnabled = false
                     rebuildQueueSnapshot()
                     startPositionPolling()
                     val pending = pendingControllerAction
@@ -232,7 +252,8 @@ class AudioPlaybackManager private constructor(context: Context) {
             .putString(SESSION_IDS, ids.joinToString("\n"))
             .putInt(SESSION_INDEX, controller.currentMediaItemIndex.coerceAtLeast(0))
             .putLong(SESSION_POSITION, controller.currentPosition.coerceAtLeast(0L))
-            .putBoolean(SESSION_SHUFFLE, controller.shuffleModeEnabled)
+            .putBoolean(SESSION_SHUFFLED, shuffleOn)
+            .putString(SESSION_IDS_BEFORE_SHUFFLE, orderBeforeShuffle?.joinToString("\n"))
             .putInt(SESSION_REPEAT, controller.repeatMode)
             .apply()
         lastSavedAt = SystemClock.elapsedRealtime()
@@ -261,7 +282,12 @@ class AudioPlaybackManager private constructor(context: Context) {
                     }
                 }
                 if (controller.mediaItemCount > 0) return@launch
-                controller.shuffleModeEnabled = sessionPrefs.getBoolean(SESSION_SHUFFLE, false)
+                controller.shuffleModeEnabled = false
+                shuffleOn = sessionPrefs.getBoolean(SESSION_SHUFFLED, false) && tracks.size > 1
+                orderBeforeShuffle = if (shuffleOn) {
+                    sessionPrefs.getString(SESSION_IDS_BEFORE_SHUFFLE, null)
+                        ?.split('\n')?.filter { it.isNotBlank() }
+                } else null
                 controller.repeatMode = sessionPrefs.getInt(SESSION_REPEAT, Player.REPEAT_MODE_OFF)
                 // Not prepared on purpose: nothing plays and no notification appears until Play.
                 controller.setMediaItems(items, startIndex, startPosition)
@@ -284,6 +310,16 @@ class AudioPlaybackManager private constructor(context: Context) {
         tracks.forEach { tracksById[it.id] = it }
 
         val targetTrack = tracks[safeStartIndex]
+        // Tapping a song plays the list in its own order; Shuffle starts with the chosen song and
+        // plays every other song once, in random order (the queue itself is reordered).
+        val ordered = if (shuffle && tracks.size > 1) {
+            listOf(targetTrack) + tracks.filterIndexed { i, _ -> i != safeStartIndex }.shuffled()
+        } else {
+            tracks
+        }
+        val orderedStart = if (shuffle && tracks.size > 1) 0 else safeStartIndex
+        shuffleOn = shuffle && tracks.size > 1
+        orderBeforeShuffle = if (shuffleOn) tracks.map { it.id } else null
         isLoadingQueue = true
         failuresInARow = 0
         _state.update {
@@ -300,17 +336,17 @@ class AudioPlaybackManager private constructor(context: Context) {
         queueBuildJob = scope.launch {
             // Preload artwork for the starting track and its immediate neighbors first so playback starts fast
             val initialMediaItems = withContext(Dispatchers.IO) {
-                tracks.mapIndexed { idx, track ->
-                    val preloadNow = abs(idx - safeStartIndex) <= 2 || artworkCache.get(track.id) != null
+                ordered.mapIndexed { idx, track ->
+                    val preloadNow = abs(idx - orderedStart) <= 2 || artworkCache.get(track.id) != null
                     val art = if (preloadNow) loadTrackArtworkBytes(track) else null
                     buildMediaItem(track, art)
                 }
             }
 
             withController { controller ->
-                // Keep the user's repeat / shuffle choice; only force shuffle on when asked to.
-                if (shuffle) controller.shuffleModeEnabled = true
-                controller.setMediaItems(initialMediaItems, safeStartIndex, 0L)
+                // Keep the user's repeat choice. Shuffle is already in the order of the songs.
+                if (controller.shuffleModeEnabled) controller.shuffleModeEnabled = false
+                controller.setMediaItems(initialMediaItems, orderedStart, 0L)
                 controller.prepare()
                 controller.play()
                 isLoadingQueue = false
@@ -318,9 +354,9 @@ class AudioPlaybackManager private constructor(context: Context) {
             }
 
             // Populate artwork for any remaining tracks in the queue in the background
-            tracks.forEachIndexed { idx, track ->
+            ordered.forEachIndexed { idx, track ->
                 if (!isActive) return@launch
-                if (abs(idx - safeStartIndex) > 2 && artworkCache.get(track.id) == null) {
+                if (abs(idx - orderedStart) > 2 && artworkCache.get(track.id) == null) {
                     val art = withContext(Dispatchers.IO) { loadTrackArtworkBytes(track) }
                     if (art != null && art.isNotEmpty()) {
                         val updatedItem = buildMediaItem(track, art)
@@ -489,7 +525,8 @@ class AudioPlaybackManager private constructor(context: Context) {
 
     fun togglePlayPause() {
         withController { controller ->
-            if (controller.isPlaying) {
+            // Same rule as the button: while the next song loads it still counts as playing.
+            if (!Util.shouldShowPlayButton(controller)) {
                 controller.pause()
             } else {
                 if (controller.playbackState == Player.STATE_ENDED) {
@@ -502,11 +539,87 @@ class AudioPlaybackManager private constructor(context: Context) {
         }
     }
 
-    fun toggleShuffle() {
+    fun toggleShuffle() = setShuffle(!shuffleOn)
+
+    /**
+     * On: the current song stays, every other song in the queue follows once in random order.
+     * Off: the songs go back to the order they had before, carrying on from the current song.
+     * The current song keeps playing either way.
+     */
+    private fun setShuffle(on: Boolean) {
         withController { controller ->
-            controller.shuffleModeEnabled = !controller.shuffleModeEnabled
+            if (controller.shuffleModeEnabled) controller.shuffleModeEnabled = false
+            val count = controller.mediaItemCount
+            val current = controller.currentMediaItemIndex
+            if (count <= 1 || current !in 0 until count || on == shuffleOn) {
+                shuffleOn = on && count > 1
+                if (!shuffleOn) orderBeforeShuffle = null
+                syncFromController()
+                saveSession()
+                return@withController
+            }
+            val items = (0 until count).map { controller.getMediaItemAt(it) }
+            val before: List<MediaItem>
+            val after: List<MediaItem>
+            if (on) {
+                orderBeforeShuffle = items.map { it.mediaId }
+                before = emptyList()
+                after = items.filterIndexed { i, _ -> i != current }.shuffled()
+            } else {
+                val restored = orderBefore(items, current, orderBeforeShuffle)
+                before = restored.first
+                after = restored.second
+                orderBeforeShuffle = null
+            }
+            shuffleOn = on
+            replaceAroundCurrent(controller, before, after)
+            rebuildQueueSnapshot()
             syncFromController()
+            saveSession()
         }
+    }
+
+    /**
+     * The queue's songs (all but the current one) split into the ones before and after the current
+     * song, in [original] order. Songs removed meanwhile stay removed; songs added while shuffled
+     * (Play next / Add to queue) follow the current song.
+     */
+    private fun orderBefore(
+        items: List<MediaItem>,
+        current: Int,
+        original: List<String>?
+    ): Pair<List<MediaItem>, List<MediaItem>> {
+        val others = items.filterIndexed { i, _ -> i != current }
+        val currentId = items[current].mediaId
+        if (original == null || currentId !in original) return emptyList<MediaItem>() to others
+        val pool = HashMap<String, ArrayDeque<MediaItem>>()
+        others.forEach { pool.getOrPut(it.mediaId) { ArrayDeque() }.addLast(it) }
+        val before = ArrayList<MediaItem>()
+        val after = ArrayList<MediaItem>()
+        var passedCurrent = false
+        for (id in original) {
+            if (!passedCurrent && id == currentId) {
+                passedCurrent = true
+                continue
+            }
+            val item = pool[id]?.removeFirstOrNull() ?: continue
+            if (passedCurrent) after += item else before += item
+        }
+        // Same object, not just the same song: the queue can hold a song twice.
+        val leftover = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<MediaItem, Boolean>())
+        pool.values.forEach { leftover.addAll(it) }
+        after.addAll(0, others.filter { it in leftover })
+        return before to after
+    }
+
+    /** Puts [before] and [after] around the current song without interrupting it. */
+    private fun replaceAroundCurrent(controller: MediaController, before: List<MediaItem>, after: List<MediaItem>) {
+        val current = controller.currentMediaItemIndex
+        val count = controller.mediaItemCount
+        if (current + 1 < count) controller.removeMediaItems(current + 1, count)
+        if (current > 0) controller.removeMediaItems(0, current)
+        if (before.isNotEmpty()) controller.addMediaItems(0, before)
+        if (after.isNotEmpty()) controller.addMediaItems(controller.mediaItemCount, after)
     }
 
     /** Cycles repeat: off -> repeat all -> repeat one -> off. */
@@ -600,6 +713,8 @@ class AudioPlaybackManager private constructor(context: Context) {
     suspend fun continueWith(track: AudioTrackItem) {
         tracksById[track.id] = track
         rememberSession = true
+        shuffleOn = false
+        orderBeforeShuffle = null
         val controller = mediaController ?: return
         val position = controller.currentPosition
         val keepPlaying = controller.playWhenReady
@@ -633,6 +748,9 @@ class AudioPlaybackManager private constructor(context: Context) {
                 after.mapIndexed { i, t -> buildMediaItem(t, if (i == 0) loadTrackArtworkBytes(t) else null) }
             }
             if (controller.mediaItemCount != 1 || controller.currentMediaItem?.mediaId != currentId) return@launch
+            // Like tapping that song in the Songs tab: the list in its own order.
+            shuffleOn = false
+            orderBeforeShuffle = null
             if (beforeItems.isNotEmpty()) controller.addMediaItems(0, beforeItems)
             if (afterItems.isNotEmpty()) controller.addMediaItems(controller.mediaItemCount, afterItems)
             rebuildQueueSnapshot()
@@ -759,11 +877,13 @@ class AudioPlaybackManager private constructor(context: Context) {
         _state.update {
             it.copy(
                 currentTrack = matchedTrack,
-                isPlaying = controller.isPlaying,
+                // Media3's own rule for the Play/Pause button: still "playing" while the next song
+                // loads, so the button, the cover and the wave don't blink on every skip.
+                isPlaying = !Util.shouldShowPlayButton(controller),
                 positionMs = pos,
                 durationMs = dur,
                 isEnded = ended,
-                shuffleEnabled = controller.shuffleModeEnabled,
+                shuffleEnabled = shuffleOn,
                 repeatMode = controller.repeatMode,
                 queue = queueSnapshot,
                 queueIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
@@ -798,7 +918,8 @@ class AudioPlaybackManager private constructor(context: Context) {
         private const val SESSION_IDS = "ids"
         private const val SESSION_INDEX = "index"
         private const val SESSION_POSITION = "position"
-        private const val SESSION_SHUFFLE = "shuffle"
+        private const val SESSION_SHUFFLED = "shuffled"
+        private const val SESSION_IDS_BEFORE_SHUFFLE = "ids_before_shuffle"
         private const val SESSION_REPEAT = "repeat"
 
         @Volatile

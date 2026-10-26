@@ -64,9 +64,11 @@ fun AudioMiniPlayer(
         color = scheme.surfaceContainerHighest,
         contentColor = scheme.onSurface,
         shadowElevation = 4.dp,
+        // Grows into Now Playing and back (container transform); size modifiers come after it.
         modifier = modifier
+            .playerContainer()
             .fillMaxWidth()
-            .height(64.dp)
+            .height(MiniPlayerHeight)
             .testTag("audio_mini_player")
             .pointerInput(thresholdPx) {
                 var total = 0f
@@ -88,7 +90,9 @@ fun AudioMiniPlayer(
                 uri = track.contentUri,
                 placeholderBackground = scheme.secondaryContainer,
                 placeholderTint = scheme.onSecondaryContainer,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier
+                    .playerCover()
+                    .size(48.dp),
                 shape = CircleShape
             )
             Spacer(modifier = Modifier.width(12.dp))

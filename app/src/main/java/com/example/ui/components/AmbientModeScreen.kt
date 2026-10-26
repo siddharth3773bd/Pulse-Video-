@@ -415,6 +415,9 @@ private fun AmbientMenu(
         )
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = 0, count = 3)) {
             show.forEachIndexed { index, option ->
+                // The official menu puts items edge to edge, so several ticked items in a row
+                // would melt into one block. The Material menu gap keeps each one its own shape.
+                if (index > 0) Spacer(Modifier.height(MenuDefaults.GroupSpacing))
                 CheckableDropdownMenuItem(
                     checked = option.checked,
                     onCheckedChange = option.onCheckedChange,

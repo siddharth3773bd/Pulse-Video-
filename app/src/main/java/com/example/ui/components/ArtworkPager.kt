@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +16,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,7 +62,9 @@ fun ArtworkPager(
     placeholderTint: Color,
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 28.dp,
-    testTag: String = "now_playing_cover"
+    testTag: String = "now_playing_cover",
+    /** Applied to the current song's cover only (Now Playing: the cover the mini player's grows into). */
+    currentCoverModifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -96,17 +100,53 @@ fun ArtworkPager(
         val skipLatest by rememberUpdatedState(onSkipToQueueItem)
         val coverIndexLatest by rememberUpdatedState(coverIndex)
         val hasQueue by rememberUpdatedState(queue.isNotEmpty())
+        val glideSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+        // Only a swipe by the user picks a song; covers that glide on their own never do.
+        var userSwiped by remember { mutableStateOf(false) }
+        LaunchedEffect(pagerState) {
+            pagerState.interactionSource.interactions.collect { if (it is DragInteraction.Start) userSwiped = true }
+        }
 
-        // The song changed some other way (buttons, auto-advance): glide the art along.
-        LaunchedEffect(coverIndex, coverTracks.size) {
-            if (pagerState.currentPage != coverIndex && coverIndex < coverTracks.size) {
-                pagerState.animateScrollToPage(coverIndex)
+        // Each cover is keyed by its song, so when the queue is reordered (shuffle on/off, a drag in
+        // the queue) the pager stays on the same song instead of showing another cover. The same
+        // song can be queued twice, so repeats get a number.
+        val pageKeys = remember(coverTracks) {
+            val seen = HashMap<String, Int>()
+            coverTracks.map { t ->
+                val n = seen.getOrDefault(t.id, 0)
+                seen[t.id] = n + 1
+                "${t.id}#$n"
+            }
+        }
+        val currentSongId = coverTracks.getOrNull(coverIndex)?.id
+        var shownSongId by remember { mutableStateOf(currentSongId) }
+
+        // The song changed some other way (buttons, auto-advance, the queue): glide the art along.
+        // A far jump glides just the last page, like Next, instead of racing through every cover.
+        LaunchedEffect(coverIndex, currentSongId) {
+            val sameSong = currentSongId == shownSongId
+            shownSongId = currentSongId
+            val from = pagerState.currentPage
+            if (from != coverIndex && coverIndex < coverTracks.size) {
+                userSwiped = false
+                // Same song, new place in the queue: just be there, nothing to animate.
+                if (sameSong) {
+                    pagerState.scrollToPage(coverIndex)
+                    return@LaunchedEffect
+                }
+                if (kotlin.math.abs(coverIndex - from) > 1) {
+                    pagerState.scrollToPage(if (coverIndex > from) coverIndex - 1 else coverIndex + 1)
+                }
+                pagerState.animateScrollToPage(coverIndex, animationSpec = glideSpec)
             }
         }
         // The user swiped to another cover: play that song.
         LaunchedEffect(pagerState) {
             snapshotFlow { pagerState.settledPage }.collect { page ->
-                if (hasQueue && page != coverIndexLatest) skipLatest(page)
+                if (userSwiped) {
+                    userSwiped = false
+                    if (hasQueue && page != coverIndexLatest) skipLatest(page)
+                }
             }
         }
 
@@ -114,6 +154,7 @@ fun ArtworkPager(
             state = pagerState,
             pageSpacing = 16.dp,
             beyondViewportPageCount = 1,
+            key = { page -> pageKeys.getOrElse(page) { "page#$page" } },
             modifier = Modifier.fillMaxSize()
         ) { page ->
             Box(
@@ -124,7 +165,7 @@ fun ArtworkPager(
                 contentAlignment = Alignment.Center
             ) {
                 val isCurrent = page == coverIndex
-                Box(modifier = Modifier.size(side)) {
+                Box(modifier = (if (isCurrent) currentCoverModifier else Modifier).size(side)) {
                     AudioArt(
                         uri = coverTracks[page].contentUri,
                         placeholderBackground = placeholderBackground,

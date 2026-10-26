@@ -8,7 +8,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.LruCache
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
@@ -59,6 +58,17 @@ private object AlbumArtColorCache {
     fun put(key: String, value: AlbumArtColors) { cache.put(key, value) }
     fun isMissing(key: String) = synchronized(missing) { key in missing }
     fun markMissing(key: String) = synchronized(missing) { missing.add(key) }
+}
+
+/** Colours already worked out for [track], without waiting; null if not ready yet. */
+fun cachedAlbumArtColors(track: AudioTrackItem?): AlbumArtColors? = track?.let { AlbumArtColorCache.get(it.id) }
+
+/**
+ * Works out the colours of [tracks] ahead of time (the songs before and after the current one), so
+ * on Next/Previous the colours change together with the cover instead of a beat later.
+ */
+suspend fun prefetchAlbumArtColors(context: Context, tracks: List<AudioTrackItem>) {
+    tracks.forEach { track -> runCatching { albumArtColorsFor(context, track) } }
 }
 
 /** Album-art colours for [track] (cached); null when the song has no cover. */
@@ -175,7 +185,8 @@ internal fun DynamicScheme.toComposeColorScheme(isDark: Boolean): ColorScheme {
 /** Smoothly fades every role when the song (and so the scheme) changes. */
 @Composable
 private fun animateColorScheme(target: ColorScheme): ColorScheme {
-    val spec = tween<Color>(durationMillis = 450)
+    // Material 3 Expressive: colour changes use the motion scheme's (non-bouncy) effects spring.
+    val spec = MaterialTheme.motionScheme.slowEffectsSpec<Color>()
     @Composable
     fun a(color: Color) = animateColorAsState(color, spec, label = "albumArtColor").value
     return target.copy(
@@ -217,8 +228,9 @@ fun AlbumArtTheme(
     val base = if (dark) LocalDarkColorScheme.current ?: appScheme else appScheme
     val isDark = dark || appScheme.surface.luminance() < 0.5f
 
-    // Keep the previous song's colours until the next ones are ready, so nothing flashes.
-    var colors by remember { mutableStateOf<AlbumArtColors?>(null) }
+    // Keep the previous song's colours until the next ones are ready, so nothing flashes. Colours
+    // worked out before are used from the first frame, so Now Playing opens in its own colours.
+    var colors by remember { mutableStateOf(if (applyScheme) cachedAlbumArtColors(track) else null) }
     LaunchedEffect(track?.id, applyScheme) {
         colors = if (applyScheme && track != null) albumArtColorsFor(context, track) else null
     }
