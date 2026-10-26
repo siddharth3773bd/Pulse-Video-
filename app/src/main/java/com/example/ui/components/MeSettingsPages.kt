@@ -414,70 +414,81 @@ internal fun VideoSettingsPage(
         settingsGroup(
             key = "gestures",
             title = "Gestures",
-            rows = listOf(
-                SettingRow.Toggle(
-                    key = "double_tap_seek",
-                    icon = Symbols.FastForward,
-                    title = "Double tap to skip",
-                    summary = "Left side goes back, right side forward",
-                    checked = settings.doubleTapToSeek,
-                    onCheckedChange = { on -> onUpdateSettings { it.copy(doubleTapToSeek = on) } }
-                ),
-                SettingRow.Custom("skip_time") {
-                    LabelledControl(
-                        icon = Symbols.Timer,
-                        title = "Skip time",
-                        summary = "For double tap and the skip buttons"
-                    ) {
-                        ChoiceButtonGroup(
-                            options = listOf(5, 10, 15, 20, 25, 30).map { it to "${it}s" },
-                            selected = settings.skipDurationSec,
-                            onSelect = { sec -> onUpdateSettings { it.copy(skipDurationSec = sec) } },
-                            tag = { "setting_skip_$it" }
-                        )
-                    }
-                },
-                SettingRow.Toggle(
-                    key = "double_tap_pause",
-                    icon = Symbols.TouchApp,
-                    title = "Double tap to pause",
-                    summary = "In the middle of the screen",
-                    checked = settings.doubleTapToPause,
-                    onCheckedChange = { on -> onUpdateSettings { it.copy(doubleTapToPause = on) } }
-                ),
-                SettingRow.Toggle(
-                    key = "hold_2x",
-                    icon = Symbols.Speed,
-                    title = "Hold for 2× speed",
-                    summary = "Plays faster while you hold",
-                    checked = settings.longPressFor2xSpeed,
-                    onCheckedChange = { on -> onUpdateSettings { it.copy(longPressFor2xSpeed = on) } }
-                ),
-                SettingRow.Toggle(
-                    key = "swipe_seek",
-                    icon = Symbols.Swipe,
-                    title = "Swipe to seek",
-                    summary = "Slide sideways across the video",
-                    checked = settings.horizontalSwipeToSeek,
-                    onCheckedChange = { on -> onUpdateSettings { it.copy(horizontalSwipeToSeek = on) } }
-                ),
-                SettingRow.Toggle(
-                    key = "swipe_brightness",
-                    icon = Symbols.Brightness,
-                    title = "Brightness swipe",
-                    summary = "Up and down on the left half",
-                    checked = settings.leftSwipeForBrightness,
-                    onCheckedChange = { on -> onUpdateSettings { it.copy(leftSwipeForBrightness = on) } }
-                ),
-                SettingRow.Toggle(
-                    key = "swipe_volume",
-                    icon = Symbols.VolumeUp,
-                    title = "Volume swipe",
-                    summary = "Up and down on the right half",
-                    checked = settings.rightSwipeForVolume,
-                    onCheckedChange = { on -> onUpdateSettings { it.copy(rightSwipeForVolume = on) } }
+            rows = buildList {
+                add(
+                    SettingRow.Toggle(
+                        key = "double_tap_seek",
+                        icon = Symbols.FastForward,
+                        title = "Double tap to skip",
+                        summary = "Left side goes back, right side forward",
+                        checked = settings.doubleTapToSeek,
+                        onCheckedChange = { on -> onUpdateSettings { it.copy(doubleTapToSeek = on) } }
+                    )
                 )
-            )
+                // How far a double tap skips: only there while double tap to skip is on.
+                if (settings.doubleTapToSeek) {
+                    add(
+                        SettingRow.Custom("skip_time") {
+                            LabelledControl(
+                                icon = Symbols.Timer,
+                                title = "Skip time",
+                                summary = "How far each double tap goes"
+                            ) {
+                                ChoiceButtonGroup(
+                                    options = listOf(5, 10, 15, 20, 30).map { it to "${it}s" },
+                                    selected = settings.skipDurationSec,
+                                    onSelect = { sec -> onUpdateSettings { it.copy(skipDurationSec = sec) } },
+                                    tag = { "setting_skip_$it" }
+                                )
+                            }
+                        }
+                    )
+                }
+                addAll(
+                    listOf(
+                        SettingRow.Toggle(
+                            key = "double_tap_pause",
+                            icon = Symbols.TouchApp,
+                            title = "Double tap to pause",
+                            summary = "In the middle of the screen",
+                            checked = settings.doubleTapToPause,
+                            onCheckedChange = { on -> onUpdateSettings { it.copy(doubleTapToPause = on) } }
+                        ),
+                        SettingRow.Toggle(
+                            key = "hold_2x",
+                            icon = Symbols.Speed,
+                            title = "Hold for 2× speed",
+                            summary = "Plays faster while you hold",
+                            checked = settings.longPressFor2xSpeed,
+                            onCheckedChange = { on -> onUpdateSettings { it.copy(longPressFor2xSpeed = on) } }
+                        ),
+                        SettingRow.Toggle(
+                            key = "swipe_seek",
+                            icon = Symbols.Swipe,
+                            title = "Swipe to seek",
+                            summary = "Slide sideways across the video",
+                            checked = settings.horizontalSwipeToSeek,
+                            onCheckedChange = { on -> onUpdateSettings { it.copy(horizontalSwipeToSeek = on) } }
+                        ),
+                        SettingRow.Toggle(
+                            key = "swipe_brightness",
+                            icon = Symbols.Brightness,
+                            title = "Brightness swipe",
+                            summary = "Up and down on the left half",
+                            checked = settings.leftSwipeForBrightness,
+                            onCheckedChange = { on -> onUpdateSettings { it.copy(leftSwipeForBrightness = on) } }
+                        ),
+                        SettingRow.Toggle(
+                            key = "swipe_volume",
+                            icon = Symbols.VolumeUp,
+                            title = "Volume swipe",
+                            summary = "Up and down on the right half",
+                            checked = settings.rightSwipeForVolume,
+                            onCheckedChange = { on -> onUpdateSettings { it.copy(rightSwipeForVolume = on) } }
+                        )
+                    )
+                )
+            }
         )
         settingsGroup(
             key = "playback",
@@ -703,10 +714,18 @@ internal fun MusicSettingsPage(audioTracks: List<AudioTrackItem>, onBack: () -> 
                     onClick = { lookChoice = "background" }
                 ),
                 SettingRow.Toggle(
+                    key = "keep_screen_on",
+                    icon = Symbols.LightMode,
+                    title = "Keep screen on",
+                    summary = "While Now Playing or lyrics are open and music plays",
+                    checked = prefs.keepScreenOn,
+                    onCheckedChange = { on -> scope.launch { AppPreferencesRepository.setNowPlayingKeepScreenOn(context, on) } }
+                ),
+                SettingRow.Toggle(
                     key = "ambient_rotate",
                     icon = Symbols.ScreenRotation,
                     title = "Ambient mode when sideways",
-                    summary = "Turn the phone on Now Playing. More options are in its ⋮ menu",
+                    summary = "Turning the phone on Now Playing opens ambient mode instead",
                     checked = prefs.ambient.openOnRotate,
                     onCheckedChange = { on ->
                         scope.launch {

@@ -18,7 +18,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.AppBarWithSearch
@@ -42,6 +41,7 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -65,7 +65,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -437,12 +436,15 @@ fun AudioLibraryScreen(
     DisposableEffect(Unit) { onDispose { onSelectionModeChange(false) } }
 
     BackHandler(enabled = selectionMode) { selectedIds = emptySet() }
-    BackHandler(enabled = inDetail && !selectionMode) { closeDetail() }
+    // Album, artist and playlist pages: Android's predictive back. While the gesture is held the
+    // page shrinks and follows the finger with the library showing behind it.
+    val detailBack = rememberPredictiveBack(enabled = inDetail && !selectionMode, onBack = { closeDetail() })
+    LaunchedEffect(inDetail) { if (inDetail) detailBack.reset() }
 
     val background = headerBackground
     // The search app bar shows on the main pages; album/artist/playlist pages and selection get a
     // pinned top app bar instead (same as Videos).
-    val searchHeader = !inDetail && !selectionMode
+    val searchHeader = !selectionMode
     val searchScroll = SearchBarDefaults.enterAlwaysSearchBarScrollBehavior()
     // Bring the search bar back whenever the page or mode changes.
     LaunchedEffect(currentTab, detailTabId, detailKey, selectionMode) {
@@ -477,19 +479,24 @@ fun AudioLibraryScreen(
         selectedIds = if (track.id in selectedIds) selectedIds - track.id else selectedIds + track.id
     }
 
-    // Delete uses Android's own confirmation dialog (MediaStore.createDeleteRequest).
+    // Delete moves songs to Android's bin (MediaStore.createTrashRequest), with Android's own
+    // confirmation dialog. They can be restored from Me › Bin for 30 days.
+    var pendingDeleteCount by remember { mutableStateOf(0) }
     val deleteLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             selectedIds = emptySet()
             onLibraryChanged()
+            val what = if (pendingDeleteCount == 1) "Song" else "$pendingDeleteCount songs"
+            Toast.makeText(context, "$what moved to the Bin", Toast.LENGTH_SHORT).show()
         }
     }
     val deleteTracks: (List<AudioTrackItem>) -> Unit = { list ->
         if (list.isNotEmpty()) {
             runCatching {
-                val request = MediaStore.createDeleteRequest(context.contentResolver, list.map { it.contentUri })
+                pendingDeleteCount = list.size
+                val request = MediaStore.createTrashRequest(context.contentResolver, list.map { it.contentUri }, true)
                 deleteLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
             }.onFailure {
                 Toast.makeText(context, "Couldn't delete these files", Toast.LENGTH_SHORT).show()
@@ -619,9 +626,9 @@ fun AudioLibraryScreen(
                         searchState = searchBarState,
                         textFieldState = textFieldState,
                         searchScrollBehavior = searchScroll,
-                        selectionCount = selectedIds.size,
+                        selectionCount = if (inDetail) 0 else selectedIds.size,
                         allSelected = currentSongList != null && selectedTracks.size == currentSongList.size,
-                        detailTitle = currentDetail?.title,
+                        detailTitle = null,
                         onClearSelection = { selectedIds = emptySet() },
                         onToggleSelectAll = {
                             selectedIds = if (currentSongList != null && selectedTracks.size < currentSongList.size) {
@@ -652,7 +659,7 @@ fun AudioLibraryScreen(
                         }
                     )
 
-                    if (!inDetail && visibleTabs.size > 1) {
+                    if (visibleTabs.size > 1) {
                         // Fixed tabs: Music has at most four, so they share the width evenly.
                         PrimaryTabRow(
                             selectedTabIndex = currentPage,
@@ -678,21 +685,7 @@ fun AudioLibraryScreen(
                             .fillMaxWidth()
                     ) { page ->
                         val tab = visibleTabs.getOrNull(page) ?: return@HorizontalPager
-                        val pageDetail = detailFor(tab)
                         when {
-                            pageDetail != null -> Songs(
-                                listKey = "detail",
-                                songs = pageDetail.tracks,
-                                playlist = pageDetail.playlist,
-                                header = {
-                                    DetailHero(
-                                        info = pageDetail,
-                                        onPlay = { onPlayQueue(pageDetail.tracks, 0, false) }
-                                            .takeIf { pageDetail.tracks.isNotEmpty() },
-                                        shuffle = shuffleFor(pageDetail.tracks)
-                                    )
-                                }
-                            )
                             tab == LibraryTab.SONGS -> {
                                 if (sortedSongs.isEmpty()) {
                                     LibraryEmptyState(
@@ -745,6 +738,65 @@ fun AudioLibraryScreen(
                     }
                 }
 
+                // An album, artist or playlist page sits on top of the library (which shows behind
+                // it during the back gesture). Opening grows it in; closing shrinks it away.
+                var lastDetail by remember { mutableStateOf<DetailInfo?>(null) }
+                if (currentDetail != null) lastDetail = currentDetail
+                val motion = MaterialTheme.motionScheme
+                AnimatedVisibility(
+                    visible = inDetail,
+                    enter = fadeIn(motion.defaultEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.92f),
+                    exit = fadeOut(motion.defaultEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.92f),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    val detail = currentDetail ?: lastDetail
+                    if (detail != null) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .predictiveBackPreview(detailBack)
+                                .background(background)
+                                // Opaque to touches too: nothing reaches the library behind.
+                                .clickable(interactionSource = null, indication = null) {}
+                                .testTag("music_detail_page")
+                        ) {
+                            MusicHeader(
+                                background = background,
+                                searchState = searchBarState,
+                                textFieldState = textFieldState,
+                                searchScrollBehavior = searchScroll,
+                                selectionCount = selectedIds.size,
+                                allSelected = selectedTracks.size == detail.tracks.size,
+                                detailTitle = detail.title,
+                                onClearSelection = { selectedIds = emptySet() },
+                                onToggleSelectAll = {
+                                    selectedIds = if (selectedTracks.size < detail.tracks.size) {
+                                        detail.tracks.mapTo(HashSet()) { it.id }
+                                    } else {
+                                        emptySet()
+                                    }
+                                },
+                                onBack = closeDetail,
+                                detailActions = detailActions,
+                                headerAction = {}
+                            )
+                            Songs(
+                                listKey = "detail",
+                                songs = detail.tracks,
+                                playlist = detail.playlist,
+                                header = {
+                                    DetailHero(
+                                        info = detail,
+                                        onPlay = { onPlayQueue(detail.tracks, 0, false) }
+                                            .takeIf { detail.tracks.isNotEmpty() },
+                                        shuffle = shuffleFor(detail.tracks)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+
                 if (selectionMode) {
                     AudioSelectionToolbar(
                         onPlayNext = {
@@ -765,16 +817,6 @@ fun AudioLibraryScreen(
                     )
                 }
 
-                // Status bar protection while the search bar is scrolled away (same as Videos).
-                if (searchHeader) {
-                    Spacer(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .windowInsetsTopHeight(WindowInsets.statusBars)
-                            .background(background.copy(alpha = 0.92f))
-                    )
-                }
             }
         }
     }
@@ -1487,7 +1529,8 @@ private fun AlbumsGrid(
     }
     val gridState = rememberLazyGridState()
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+        // Two columns upright, more when the phone is sideways.
+        columns = GridCells.Adaptive(minSize = 160.dp),
         state = gridState,
         modifier = Modifier
             .fillMaxSize()

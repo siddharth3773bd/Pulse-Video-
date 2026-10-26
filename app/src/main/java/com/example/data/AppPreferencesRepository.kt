@@ -114,6 +114,7 @@ object AppPreferencesRepository {
     private val KEY_AMB_ARTIST = booleanPreferencesKey("ambient_show_artist")
     private val KEY_AMB_LYRICS = booleanPreferencesKey("ambient_show_lyrics")
     private val KEY_AMB_ROTATE = booleanPreferencesKey("ambient_open_on_rotate")
+    private val KEY_NP_KEEP_SCREEN_ON = booleanPreferencesKey("now_playing_keep_screen_on")
     private val KEY_AMB_BLACK = booleanPreferencesKey("ambient_black")
     private val KEY_LIB_BLACKLIST_SONGS = stringPreferencesKey("lib_blacklist_songs_json")
     private val KEY_LIB_BLACKLIST_FOLDERS = stringSetPreferencesKey("lib_blacklist_folders")
@@ -239,8 +240,9 @@ object AppPreferencesRepository {
                     showArtist = prefs[KEY_AMB_ARTIST] ?: true,
                     showLyrics = prefs[KEY_AMB_LYRICS] ?: true,
                     black = prefs[KEY_AMB_BLACK] ?: false,
-                    openOnRotate = prefs[KEY_AMB_ROTATE] ?: true
+                    openOnRotate = prefs[KEY_AMB_ROTATE] ?: false
                 ),
+                keepScreenOn = prefs[KEY_NP_KEEP_SCREEN_ON] ?: false,
                 lyrics = com.example.lyrics.LyricsSettings(
                     autoSearch = prefs[KEY_LYR_AUTO] ?: true,
                     textSize = com.example.lyrics.LyricsTextSize.entries.find { it.id == prefs[KEY_LYR_SIZE] }
@@ -441,6 +443,10 @@ object AppPreferencesRepository {
             it[KEY_AMB_BLACK] = value.black
             it[KEY_AMB_ROTATE] = value.openOnRotate
         }
+    }
+
+    suspend fun setNowPlayingKeepScreenOn(context: Context, on: Boolean) {
+        context.appDataStore.edit { it[KEY_NP_KEEP_SCREEN_ON] = on }
     }
 
     suspend fun updateLibraryGroupAscending(context: Context, ascending: Boolean) {

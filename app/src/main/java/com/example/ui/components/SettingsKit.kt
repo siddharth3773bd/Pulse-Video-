@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -33,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.toShape
@@ -80,6 +83,8 @@ internal fun IconBadge(
 /**
  * A settings page: back arrow and title in the official medium flexible top app bar (it shrinks to
  * a small bar as you scroll and gets a tint once content is under it), then the [content] list.
+ * Sideways, where height is short, the small top app bar is used from the start, and the list
+ * keeps a comfortable reading width in the middle.
  */
 @Composable
 internal fun SettingsPage(
@@ -89,46 +94,81 @@ internal fun SettingsPage(
     subtitle: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
     floatingActionButton: (@Composable () -> Unit)? = null,
+    /** Room at the end of the list, e.g. for a floating toolbar the page draws itself. */
+    contentBottomPadding: Dp? = null,
     content: LazyListScope.() -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val compactHeight = currentWindowLayout().compactHeight
+    val scrollBehavior = if (compactHeight) {
+        TopAppBarDefaults.pinnedScrollBehavior()
+    } else {
+        TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    }
+    val titleText: @Composable () -> Unit = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    val subtitleText: (@Composable () -> Unit)? = if (subtitle != null) {
+        { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    } else null
+    val backButton: @Composable () -> Unit = {
+        TooltipIconButton(
+            label = "Back",
+            icon = Symbols.ArrowBack,
+            onClick = onBack,
+            modifier = Modifier.testTag("me_subpage_back_btn")
+        )
+    }
+    val barColors = TopAppBarDefaults.topAppBarColors(
+        containerColor = scheme.background,
+        scrolledContainerColor = scheme.surfaceContainer
+    )
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
         ) {
-            MediumFlexibleTopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                subtitle = if (subtitle != null) {
-                    { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                } else null,
-                navigationIcon = {
-                    TooltipIconButton(
-                        label = "Back",
-                        icon = Symbols.ArrowBack,
-                        onClick = onBack,
-                        modifier = Modifier.testTag("me_subpage_back_btn")
-                    )
-                },
-                actions = actions,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = scheme.background,
-                    scrolledContainerColor = scheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
-            )
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 4.dp,
-                    bottom = if (floatingActionButton != null) 104.dp else 24.dp
-                ),
-                content = content
-            )
+            if (compactHeight && subtitleText != null) {
+                TopAppBar(
+                    title = titleText,
+                    subtitle = subtitleText,
+                    navigationIcon = backButton,
+                    actions = actions,
+                    colors = barColors,
+                    scrollBehavior = scrollBehavior
+                )
+            } else if (compactHeight) {
+                TopAppBar(
+                    title = titleText,
+                    navigationIcon = backButton,
+                    actions = actions,
+                    colors = barColors,
+                    scrollBehavior = scrollBehavior
+                )
+            } else {
+                MediumFlexibleTopAppBar(
+                    title = titleText,
+                    subtitle = subtitleText,
+                    navigationIcon = backButton,
+                    actions = actions,
+                    colors = barColors,
+                    scrollBehavior = scrollBehavior
+                )
+            }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .widthIn(max = 720.dp)
+                        .fillMaxWidth(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 4.dp,
+                        bottom = contentBottomPadding ?: if (floatingActionButton != null) 104.dp else 24.dp
+                    ),
+                    content = content
+                )
+            }
         }
         if (floatingActionButton != null) {
             Box(
@@ -189,16 +229,20 @@ internal sealed class SettingRow(val key: String) {
 
 /** A titled group of joined rows, as list items. [title] null = no title. */
 internal fun LazyListScope.settingsGroup(key: String, title: String?, rows: List<SettingRow>) {
-    if (title != null) item(key = "$key:title") { SettingsSectionTitle(title) }
+    if (title != null) item(key = "$key:title") { SettingsSectionTitle(title, Modifier.animateItem()) }
     itemsIndexed(rows, key = { _, row -> "$key:${row.key}" }) { index, row ->
+        // Rows that come and go (like Skip time with double tap) fade in and out, and the rows
+        // below slide to make room.
         SettingRowItem(
             row = row,
             index = index,
             count = rows.size,
-            modifier = Modifier.padding(bottom = if (index < rows.lastIndex) ListItemDefaults.SegmentedGap else 0.dp)
+            modifier = Modifier
+                .animateItem()
+                .padding(bottom = if (index < rows.lastIndex) ListItemDefaults.SegmentedGap else 0.dp)
         )
     }
-    item(key = "$key:end") { Spacer(Modifier.height(12.dp)) }
+    item(key = "$key:end") { Spacer(Modifier.animateItem().height(12.dp)) }
 }
 
 /** The same group outside a lazy list (a sheet, a dialog). */

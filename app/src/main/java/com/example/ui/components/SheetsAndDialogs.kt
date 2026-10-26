@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -32,8 +32,6 @@ import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +41,6 @@ import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.AlertDialog
@@ -73,7 +70,6 @@ import com.example.model.SortBy
 import com.example.model.SortDir
 import com.example.model.VideoItem
 import com.example.model.ViewMode
-import com.example.model.formatDurationMs
 import com.example.model.formatSizeLabel
 import com.example.model.formatCompactDate
 import com.example.model.naturalDir
@@ -160,34 +156,52 @@ fun SortAndViewBottomSheet(
                     tag = { "view_mode_btn_${it.id}" }
                 )
             }
-            CompactRow("Layout") {
-                ChoiceButtonGroup(
-                    options = listOf(
-                        LayoutMode.LIST to "List",
-                        LayoutMode.GRID to "Grid"
-                    ),
-                    selected = layoutMode,
-                    onSelect = onSelectLayoutMode,
-                    tag = { "layout_mode_btn_${it.id}" }
-                )
+            val layoutRow: @Composable () -> Unit = {
+                CompactRow("Layout") {
+                    ChoiceButtonGroup(
+                        options = listOf(
+                            LayoutMode.LIST to "List",
+                            LayoutMode.GRID to "Grid"
+                        ),
+                        selected = layoutMode,
+                        onSelect = onSelectLayoutMode,
+                        tag = { "layout_mode_btn_${it.id}" }
+                    )
+                }
             }
-            CompactRow("Sort by") {
-                ChoiceButtonGroup(
-                    options = SortBy.entries.map { it to it.label },
-                    selected = sortBy,
-                    onSelect = onSelectSortField,
-                    tag = { "sort_option_btn_${it.id}" }
-                )
+            val orderRow: @Composable () -> Unit = {
+                CompactRow("Order") {
+                    val natural = sortBy.naturalDir
+                    val dirs = listOf(natural, if (natural == SortDir.ASC) SortDir.DESC else SortDir.ASC)
+                    ChoiceButtonGroup(
+                        options = dirs.map { it to if (it == SortDir.ASC) sortBy.ascFull else sortBy.descFull },
+                        selected = sortDir,
+                        onSelect = onSelectSortDir,
+                        tag = { "sort_dir_${it.name.lowercase()}" }
+                    )
+                }
             }
-            CompactRow("Order") {
-                val natural = sortBy.naturalDir
-                val dirs = listOf(natural, if (natural == SortDir.ASC) SortDir.DESC else SortDir.ASC)
-                ChoiceButtonGroup(
-                    options = dirs.map { it to if (it == SortDir.ASC) sortBy.ascFull else sortBy.descFull },
-                    selected = sortDir,
-                    onSelect = onSelectSortDir,
-                    tag = { "sort_dir_${it.name.lowercase()}" }
-                )
+            val sortRow: @Composable () -> Unit = {
+                CompactRow("Sort by") {
+                    ChoiceButtonGroup(
+                        options = SortBy.entries.map { it to it.label },
+                        selected = sortBy,
+                        onSelect = onSelectSortField,
+                        tag = { "sort_option_btn_${it.id}" }
+                    )
+                }
+            }
+            if (currentWindowLayout().compactHeight) {
+                // Sideways: the two-choice rows share a line, so everything fits without scrolling.
+                sortRow()
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(Modifier.weight(1f)) { layoutRow() }
+                    Box(Modifier.weight(1f)) { orderRow() }
+                }
+            } else {
+                layoutRow()
+                sortRow()
+                orderRow()
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -351,24 +365,45 @@ fun VideoDetailsSheet(
                 Triple(Symbols.Description, "Format", video.ext.uppercase().ifBlank { "Unknown" }),
                 Triple(Symbols.Folder, "Folder", friendlyFolderPath(video.folderPath))
             )
-            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-                rows.forEachIndexed { i, (icon, label, value) ->
-                    SegmentedListItem(
-                        shapes = ListItemDefaults.segmentedShapes(index = i, count = rows.size),
-                        leadingContent = { Icon(icon, contentDescription = null) },
-                        overlineContent = { Text(label) },
-                        colors = ListItemDefaults.segmentedColors(
-                            containerColor = scheme.surfaceContainerHigh,
-                            leadingContentColor = scheme.onSurfaceVariant,
-                            overlineContentColor = scheme.onSurfaceVariant
-                        ),
-                        modifier = Modifier.testTag("detail_row_${label.lowercase()}")
-                    ) {
-                        Text(value, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
+            InfoRows(rows = rows, tagPrefix = "detail_row_")
+        }
+    }
+}
+
+/**
+ * The rows of a details sheet (an icon, a small label, the value) as one joined Expressive list.
+ * Sideways there's little height, so they split into two joined lists side by side.
+ */
+@Composable
+internal fun InfoRows(rows: List<Triple<ImageVector, String, String>>, tagPrefix: String) {
+    val scheme = MaterialTheme.colorScheme
+    val group: @Composable (List<Triple<ImageVector, String, String>>, Modifier) -> Unit = { part, modifier ->
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+            part.forEachIndexed { i, (icon, label, value) ->
+                SegmentedListItem(
+                    shapes = ListItemDefaults.segmentedShapes(index = i, count = part.size),
+                    leadingContent = { Icon(icon, contentDescription = null) },
+                    overlineContent = { Text(label) },
+                    colors = ListItemDefaults.segmentedColors(
+                        containerColor = scheme.surfaceContainerHigh,
+                        leadingContentColor = scheme.onSurfaceVariant,
+                        overlineContentColor = scheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.testTag("$tagPrefix${label.lowercase()}")
+                ) {
+                    Text(value, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
+    }
+    if (currentWindowLayout().compactHeight && rows.size > 2) {
+        val split = (rows.size + 1) / 2
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            group(rows.take(split), Modifier.weight(1f))
+            group(rows.drop(split), Modifier.weight(1f))
+        }
+    } else {
+        group(rows, Modifier)
     }
 }
 

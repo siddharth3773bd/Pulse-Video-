@@ -9,7 +9,6 @@ import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
@@ -17,9 +16,7 @@ import android.graphics.drawable.Icon as PlatformIcon
 import android.media.AudioManager
 import android.provider.OpenableColumns
 import android.util.Rational
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -74,6 +71,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconToggleButton
@@ -150,11 +148,6 @@ private const val PIP_PLAY_PAUSE = 1
 private const val PIP_NEXT = 2
 private const val PIP_PREVIOUS = 3
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
 
 /**
  * Full-screen video player.
@@ -226,11 +219,7 @@ fun VideoPlayerModal(
     val poke: () -> Unit = { interactionTick++ }
 
     // ---- Window: screen on while playing, bars hidden, forced orientation ----
-    val keepScreenOn = playerState.isPlaying && !audioOnly
-    DisposableEffect(activity, keepScreenOn) {
-        if (keepScreenOn) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
-    }
+    KeepScreenOn(enabled = playerState.isPlaying && !audioOnly)
     val view = LocalView.current
     DisposableEffect(activity) {
         val window = activity?.window
@@ -345,7 +334,9 @@ fun VideoPlayerModal(
         playerController.setBackgroundAudio(false)
         onClose()
     }
-    BackHandler(onBack = closeAndPersist)
+    // Android's predictive back: while the gesture is held the player shrinks and follows the
+    // finger with the library showing behind it; letting go closes it.
+    val back = rememberPredictiveBack(onBack = closeAndPersist)
 
     // ---- Picture-in-picture ----
     PictureInPictureSupport(
@@ -392,6 +383,9 @@ fun VideoPlayerModal(
         "-${formatDurationMs((effectiveDurationMs - displayedPositionMs).coerceAtLeast(0L))}"
     } else formatDurationMs(effectiveDurationMs)
     val configuration = LocalConfiguration.current
+    // Sideways: play controls sit in the middle of the video and the bottom keeps just one row,
+    // so the picture isn't covered by a tall block of buttons.
+    val wide = surfaceWidthPx > surfaceHeightPx
     val skipMs = playbackSettings.skipDurationSec * 1000L
     val audioManager = remember(context) { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
 
@@ -422,6 +416,7 @@ fun VideoPlayerModal(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer { applyPredictiveBack(back, cornerRadius = 28.dp) }
             .background(Color.Black)
             .onSizeChanged { size ->
                 surfaceWidthPx = size.width.coerceAtLeast(1)
@@ -581,7 +576,8 @@ fun VideoPlayerModal(
             )
         }
 
-        if (showBuffering && !audioOnly) {
+        val centreControlsShown = wide && controlsVisible && !controlsLocked && !inPip
+        if (showBuffering && !audioOnly && !centreControlsShown) {
             ContainedLoadingIndicator(modifier = Modifier.align(Alignment.Center).size(56.dp))
         }
 
@@ -642,7 +638,15 @@ fun VideoPlayerModal(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(start = 16.dp, end = 16.dp, bottom = if (controlsVisible) 148.dp else 24.dp)
+                .padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    bottom = when {
+                        !controlsVisible -> 24.dp
+                        wide -> 88.dp
+                        else -> 148.dp
+                    }
+                )
         ) {
             androidx.compose.material3.Snackbar(
                 action = {
@@ -750,6 +754,7 @@ fun VideoPlayerModal(
                             poke()
                         },
                         onMore = { showMoreMenu = true; poke() },
+                        compact = wide,
                         moreMenu = {
                             PlayerMoreMenu(
                                 expanded = showMoreMenu,
@@ -779,6 +784,17 @@ fun VideoPlayerModal(
                         colorful = playbackSettings.colorfulControls,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
+                    if (wide) {
+                        PlayerCentreControls(
+                            isPlaying = playerState.isPlaying,
+                            buffering = showBuffering && !audioOnly,
+                            colorful = playbackSettings.colorfulControls,
+                            onPrevious = { onPreviousVideo(); poke() },
+                            onPlayPause = { playerController.togglePlayPause(); poke() },
+                            onNext = { onNextVideo(); poke() },
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
                 }
             }
         }
@@ -1029,8 +1045,61 @@ private fun PlayerBottomBar(
     moreMenu: @Composable () -> Unit,
     isPlayingForSeekBar: Boolean,
     colorful: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
+    // Rotate: tap flips portrait/landscape, hold goes back to auto-rotate.
+    val rotateButton: @Composable () -> Unit = {
+        PlayerIconButton(
+            onClick = onRotate,
+            onLongClick = onRotateLongPress,
+            contentDescription = "Rotate (hold for auto-rotate)",
+            active = rotationLocked,
+            modifier = Modifier.testTag("player_rotate_btn")
+        ) {
+            Icon(Symbols.ScreenRotation, contentDescription = null)
+        }
+    }
+    // ⋮ at the bottom right, under the thumb; its menu opens upwards.
+    val moreButton: @Composable () -> Unit = {
+        Box {
+            PlayerIconButton(onClick = onMore, contentDescription = "More", modifier = Modifier.testTag("player_more_btn")) {
+                Icon(Symbols.MoreVert, contentDescription = null)
+            }
+            moreMenu()
+        }
+    }
+    val scrim = androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))
+    if (compact) {
+        // Sideways: one slim row (rotate, time, seek bar, time, ⋮). Play, previous and next are
+        // in the middle of the video instead.
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(scrim)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (showRotate) {
+                rotateButton()
+                Spacer(Modifier.width(12.dp))
+            }
+            Text(positionLabel, color = Color.White, style = MaterialTheme.typography.labelLarge)
+            PlaybackSeekBar(
+                progress = progress,
+                onSeekPreview = onSeekPreview,
+                onSeekFinished = onSeekFinished,
+                isPlaying = isPlayingForSeekBar,
+                activeColor = if (colorful) MaterialTheme.colorScheme.primary else Color.White,
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp).testTag("player_seek_slider")
+            )
+            Text(rightLabel, color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.width(12.dp))
+            moreButton()
+        }
+        return
+    }
     // "Colourful player controls" (Me › Appearance): theme colours; otherwise plain white.
     val scheme = MaterialTheme.colorScheme
     val tonal = if (colorful) {
@@ -1056,7 +1125,7 @@ private fun PlayerBottomBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
+            .background(scrim)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
@@ -1077,20 +1146,9 @@ private fun PlayerBottomBar(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Rotate: tap flips portrait/landscape, hold goes back to auto-rotate. Same width
-            // kept in audio-only mode, so the play buttons don't move.
+            // Same width kept in audio-only mode, so the play buttons don't move.
             Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                if (showRotate) {
-                    PlayerIconButton(
-                        onClick = onRotate,
-                        onLongClick = onRotateLongPress,
-                        contentDescription = "Rotate (hold for auto-rotate)",
-                        active = rotationLocked,
-                        modifier = Modifier.testTag("player_rotate_btn")
-                    ) {
-                        Icon(Symbols.ScreenRotation, contentDescription = null)
-                    }
-                }
+                if (showRotate) rotateButton()
             }
             // Official Expressive button group: the pressed button springs wider and squeezes
             // its neighbours; the shapes morph on press.
@@ -1164,14 +1222,99 @@ private fun PlayerBottomBar(
                     }
                 )
             }
-            // ⋮ at the bottom right, under the thumb; its menu opens upwards.
-            Box {
-                PlayerIconButton(onClick = onMore, contentDescription = "More", modifier = Modifier.testTag("player_more_btn")) {
-                    Icon(Symbols.MoreVert, contentDescription = null)
-                }
-                moreMenu()
+            moreButton()
+        }
+    }
+}
+
+/**
+ * Sideways: previous, play/pause and next in the middle of the video, like Google's own players.
+ * Official Expressive icon buttons: a large play button (round while playing, a rounded square
+ * when paused, squeezing when pressed) between two medium ones. While the video loads, the play
+ * button shows Material's loading indicator.
+ */
+@Composable
+private fun PlayerCentreControls(
+    isPlaying: Boolean,
+    buffering: Boolean,
+    colorful: Boolean,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    val sideColors = if (colorful) {
+        IconButtonDefaults.filledTonalIconButtonColors()
+    } else {
+        IconButtonDefaults.filledTonalIconButtonColors(containerColor = OverlayContainer, contentColor = Color.White)
+    }
+    val playColors = if (colorful) {
+        IconButtonDefaults.filledIconToggleButtonColors(
+            containerColor = scheme.primary,
+            contentColor = scheme.onPrimary,
+            checkedContainerColor = scheme.primary,
+            checkedContentColor = scheme.onPrimary
+        )
+    } else {
+        IconButtonDefaults.filledIconToggleButtonColors(
+            containerColor = Color.White,
+            contentColor = Color.Black,
+            checkedContainerColor = Color.White,
+            checkedContentColor = Color.Black
+        )
+    }
+    val sideShapes = IconButtonDefaults.shapes(
+        shape = IconButtonDefaults.mediumRoundShape,
+        pressedShape = IconButtonDefaults.mediumPressedShape
+    )
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(40.dp)
+    ) {
+        FilledTonalIconButton(
+            onClick = onPrevious,
+            shapes = sideShapes,
+            colors = sideColors,
+            modifier = Modifier
+                .size(IconButtonDefaults.mediumContainerSize())
+                .testTag("player_previous_btn")
+        ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous video", modifier = Modifier.size(IconButtonDefaults.mediumIconSize)) }
+        FilledIconToggleButton(
+            checked = !isPlaying,
+            onCheckedChange = { onPlayPause() },
+            shapes = IconButtonDefaults.toggleableShapes(
+                shape = IconButtonDefaults.largeRoundShape,
+                pressedShape = IconButtonDefaults.largePressedShape,
+                checkedShape = IconButtonDefaults.largeSelectedSquareShape
+            ),
+            colors = playColors,
+            modifier = Modifier
+                .size(IconButtonDefaults.largeContainerSize())
+                .testTag("player_play_pause_btn")
+        ) {
+            if (buffering) {
+                LoadingIndicator(
+                    color = if (colorful) scheme.onPrimary else Color.Black,
+                    modifier = Modifier.size(48.dp)
+                )
+            } else {
+                Icon(
+                    if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    modifier = Modifier.size(IconButtonDefaults.largeIconSize)
+                )
             }
         }
+        FilledTonalIconButton(
+            onClick = onNext,
+            shapes = sideShapes,
+            colors = sideColors,
+            modifier = Modifier
+                .size(IconButtonDefaults.mediumContainerSize())
+                .testTag("player_next_btn")
+        ) { Icon(Symbols.SkipNext, contentDescription = "Next video", modifier = Modifier.size(IconButtonDefaults.mediumIconSize)) }
     }
 }
 

@@ -1,6 +1,20 @@
 package com.example
 
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.material3.WideNavigationRail
+import androidx.compose.material3.WideNavigationRailItem
+import com.example.ui.components.KeepScreenOn
+import com.example.ui.components.currentWindowLayout
+import com.example.ui.components.predictiveBackPreview
+import com.example.ui.components.rememberPredictiveBack
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -20,7 +34,6 @@ import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Snackbar
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.items
 import com.example.ui.components.LibrarySearchInputField
@@ -69,7 +82,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -110,7 +122,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -469,26 +480,32 @@ fun Material3VideoPlayerScreen(
 
     // Back steps out of whatever is open (selection, search, a sub-page, a folder). On a tab's main
     // screen it leaves the app like any Android app, instead of jumping to another tab first.
-    BackHandler(
-        enabled = uiState.isSelectionMode ||
-            uiState.searchOpen ||
-            uiState.selectedFolderFilter != null ||
-            uiState.selectedPlaylistFilter != null
-    ) {
+    BackHandler(enabled = uiState.isSelectionMode || uiState.searchOpen) {
         when {
             uiState.isSelectionMode -> viewModel.clearSelection()
             uiState.searchOpen -> viewModel.setSearchOpen(false)
-            uiState.selectedFolderFilter != null -> viewModel.selectFolderFilter(null)
-            uiState.selectedPlaylistFilter != null -> viewModel.selectPlaylistFilter(null)
         }
     }
+    // A folder's videos sit on top of the folder list. Android's predictive back: while the
+    // gesture is held the folder page shrinks and follows the finger with the folders behind it.
+    val inVideoFolder = uiState.bottomTab == BottomTab.VIDEOS && uiState.hasVideoPermission &&
+        (uiState.selectedFolderFilter != null || uiState.selectedPlaylistFilter != null)
+    val closeVideoFolder = {
+        viewModel.selectFolderFilter(null)
+        viewModel.selectPlaylistFilter(null)
+    }
+    val folderBack = rememberPredictiveBack(
+        enabled = inVideoFolder && !uiState.isSelectionMode && !uiState.searchOpen,
+        onBack = closeVideoFolder
+    )
+    LaunchedEffect(inVideoFolder) { if (inVideoFolder) folderBack.reset() }
 
     val pullToRefreshState = rememberPullToRefreshState()
 
     // Videos header: the official search app bar (scrolls away, comes back on scroll up) with the
     // official full-screen search. Selection and folder views get a pinned top app bar instead.
     val videosSearchHeader = uiState.bottomTab == BottomTab.VIDEOS && uiState.hasVideoPermission &&
-        !uiState.isSelectionMode && uiState.selectedFolderFilter == null && uiState.selectedPlaylistFilter == null
+        !uiState.isSelectionMode
     val videosSearchScroll = SearchBarDefaults.enterAlwaysSearchBarScrollBehavior()
     LaunchedEffect(uiState.bottomTab, uiState.selectedFolderFilter, uiState.viewMode, uiState.isSelectionMode) {
         videosSearchScroll.scrollState.scrollOffset = 0f
@@ -618,6 +635,48 @@ fun Material3VideoPlayerScreen(
         )
     }
 
+    // Screen on while Now Playing or lyrics are open and music plays (Me › Music › Keep screen on).
+    KeepScreenOn(enabled = libraryPrefs.keepScreenOn && nowPlayingVisible && uiState.isAudioPlaying)
+
+    // Phone upright: the navigation bar at the bottom. Sideways (or a bigger screen): Material's
+    // navigation rail on the side, so the lists keep their height.
+    val windowLayout = currentWindowLayout()
+    val useRail = windowLayout.useRail
+    val navVisible = !uiState.isSelectionMode && !(audioSelectionActive && uiState.bottomTab == BottomTab.AUDIO)
+    val navBar: @Composable () -> Unit = {
+        MainNavigation(
+            rail = useRail,
+            bottomTab = uiState.bottomTab,
+            activeTabs = uiState.activeTabs,
+            onSelectTab = { viewModel.setBottomTab(it, context) },
+            onLongPress = { showTabsSheet = true },
+            musicPlaying = uiState.playingAudio != null && uiState.isAudioPlaying
+        )
+    }
+
+    /** The videos (all of them, or one folder's) as a list or a grid. */
+    val videoList: @Composable (VideoUiState) -> Unit = { state ->
+        VideosContentListOrGrid(
+            uiState = state,
+            onVideoClick = { video ->
+                if (state.isSelectionMode) {
+                    viewModel.toggleSelectId(video.id)
+                } else {
+                    viewModel.playVideo(video, context)
+                }
+            },
+            onVideoLongClick = { video ->
+                viewModel.clearAllOverlays()
+                viewModel.toggleSelectId(video.id)
+            },
+            onVideoMenuClick = { video ->
+                viewModel.openVideoMenu(video)
+            },
+            menu = videoMenu,
+            onRescan = { viewModel.refreshPermissionsAndScan(context, showSpinner = true) }
+        )
+    }
+
     // Shared transitions (mini player ⇄ Now Playing) happen inside this layout.
     SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
     val playerSharedScope = this
@@ -627,12 +686,41 @@ fun Material3VideoPlayerScreen(
             .background(outerChromeBg)
             .testTag("main_player_root")
     ) {
+        Row(Modifier.fillMaxSize()) {
+        if (useRail) {
+            AnimatedVisibility(
+                visible = navVisible,
+                enter = expandHorizontally(motionScheme.defaultSpatialSpec()),
+                exit = shrinkHorizontally(motionScheme.fastSpatialSpec())
+            ) { navBar() }
+        }
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .widthIn(max = 600.dp)
-                .align(Alignment.TopCenter)
+                .weight(1f)
+                .fillMaxHeight()
+                // The headers start below the status bar, so nothing can scroll up under it.
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .then(
+                    when {
+                        // The rail looks after the left side (and the camera cut-out there).
+                        useRail && navVisible -> Modifier
+                            .consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start))
+                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.End))
+                        else -> Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    }
+                )
         ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    // With the rail there's no bar at the bottom: keep clear of the gesture bar.
+                    .then(
+                        if (useRail) Modifier.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
+                        else Modifier
+                    )
+            ) {
+            Column(Modifier.fillMaxSize()) {
             // 1. Header (the Me tab and the Music library draw their own)
             val hideMainHeader = uiState.bottomTab == BottomTab.ME ||
                 (uiState.bottomTab == BottomTab.AUDIO && uiState.hasAudioPermission)
@@ -647,13 +735,9 @@ fun Material3VideoPlayerScreen(
                     onClearSelection = { viewModel.clearSelection() },
                     onToggleSelectAll = { viewModel.toggleSelectAll() },
                     onOpenSortSheet = { viewModel.openSortSheet() },
-                    onClearSubFilter = {
-                        viewModel.selectFolderFilter(null)
-                        viewModel.selectPlaylistFilter(null)
-                    }
+                    onClearSubFilter = closeVideoFolder
                 )
             }
-
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -686,6 +770,7 @@ fun Material3VideoPlayerScreen(
                     onUpdatePlaybackSettings = { transform ->
                         viewModel.updatePlaybackSettings(context, transform)
                     },
+                    onLibraryChanged = { viewModel.refreshPermissionsAndScan(context) },
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -769,9 +854,8 @@ fun Material3VideoPlayerScreen(
                                 )
                             } else {
                                 when {
-                                    uiState.viewMode == ViewMode.FOLDERS &&
-                                        uiState.selectedFolderFilter == null &&
-                                        uiState.selectedPlaylistFilter == null -> {
+                                    // Inside a folder too: its videos are drawn on top (below).
+                                    uiState.viewMode == ViewMode.FOLDERS -> {
                                         FoldersLibraryView(
                                             videos = uiState.videos,
                                             onSelectFolder = { folder -> viewModel.selectFolderFilter(folder) }
@@ -791,33 +875,55 @@ fun Material3VideoPlayerScreen(
                                         )
                                     }
 
-                                    else -> {
-                                        VideosContentListOrGrid(
-                                            uiState = uiState,
-                                            onVideoClick = { video ->
-                                                if (uiState.isSelectionMode) {
-                                                    viewModel.toggleSelectId(video.id)
-                                                } else {
-                                                    viewModel.playVideo(video, context)
-                                                }
-                                            },
-                                            onVideoLongClick = { video ->
-                                                viewModel.clearAllOverlays()
-                                                viewModel.toggleSelectId(video.id)
-                                            },
-                                            onVideoMenuClick = { video ->
-                                                viewModel.openVideoMenu(video)
-                                            },
-                                            menu = videoMenu,
-                                            onRescan = { viewModel.refreshPermissionsAndScan(context, showSpinner = true) }
-                                        )
-                                    }
+                                    else -> videoList(uiState)
                                 }
                             }
                         }
                     }
                 }
             }
+            }
+            }
+
+                // A folder's videos, on top of the folder list: grows in when opened, and shrinks
+                // away (following the back gesture) when closed.
+                var folderUiState by remember { mutableStateOf<VideoUiState?>(null) }
+                if (inVideoFolder) folderUiState = uiState
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = inVideoFolder,
+                    enter = fadeIn(motionScheme.defaultEffectsSpec()) +
+                        scaleIn(motionScheme.defaultSpatialSpec(), initialScale = 0.92f),
+                    exit = fadeOut(motionScheme.defaultEffectsSpec()) +
+                        scaleOut(motionScheme.fastSpatialSpec(), targetScale = 0.92f),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    val shown = folderUiState
+                    if (shown != null) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .predictiveBackPreview(folderBack)
+                                .background(outerChromeBg)
+                                // Opaque to touches too: nothing reaches the folder list behind.
+                                .clickable(interactionSource = null, indication = null) {}
+                                .testTag("video_folder_page")
+                        ) {
+                            MainHeader(
+                                uiState = shown,
+                                containerColor = outerChromeBg,
+                                videosSearchHeader = false,
+                                searchState = videoSearchState,
+                                searchText = videoSearchText,
+                                searchScrollBehavior = videosSearchScroll,
+                                onClearSelection = { viewModel.clearSelection() },
+                                onToggleSelectAll = { viewModel.toggleSelectAll() },
+                                onOpenSortSheet = { viewModel.openSortSheet() },
+                                onClearSubFilter = closeVideoFolder
+                            )
+                            Box(Modifier.weight(1f).fillMaxWidth()) { videoList(shown) }
+                        }
+                    }
+                }
 
                 // Music mini player, floating just above the navigation bar. Switching tabs fades it
                 // in and out; opening Now Playing grows it into the full screen (and back).
@@ -829,6 +935,8 @@ fun Material3VideoPlayerScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                        // Sideways it stays a pill instead of a bar across the whole screen.
+                        .widthIn(max = 560.dp)
                 ) {
                     val pillTrack = miniTrack ?: lastNowPlayingTrack
                     androidx.compose.animation.AnimatedVisibility(
@@ -905,30 +1013,14 @@ fun Material3VideoPlayerScreen(
             }
 
             // 2. Official Material 3 Expressive navigation bar (hidden while selecting)
-            AnimatedVisibility(
-                visible = !uiState.isSelectionMode && !(audioSelectionActive && uiState.bottomTab == BottomTab.AUDIO),
-                enter = expandVertically(motionScheme.defaultSpatialSpec()),
-                exit = shrinkVertically(motionScheme.fastSpatialSpec())
-            ) {
-                MainNavigationBar(
-                    bottomTab = uiState.bottomTab,
-                    activeTabs = uiState.activeTabs,
-                    onSelectTab = { viewModel.setBottomTab(it, context) },
-                    onLongPress = { showTabsSheet = true },
-                    musicPlaying = uiState.playingAudio != null && uiState.isAudioPlaying
-                )
+            if (!useRail) {
+                AnimatedVisibility(
+                    visible = navVisible,
+                    enter = expandVertically(motionScheme.defaultSpatialSpec()),
+                    exit = shrinkVertically(motionScheme.fastSpatialSpec())
+                ) { navBar() }
             }
         }
-
-        // Status bar protection while the Videos header is scrolled away
-        if (videosSearchHeader) {
-            Spacer(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(outerChromeBg.copy(alpha = 0.92f))
-            )
         }
 
         // 3c. Now Playing: grows out of the mini player and shrinks back into it (Material's
@@ -1213,9 +1305,19 @@ fun Material3VideoPlayerScreen(
             )
         }
 
-        // 5. Fullscreen Video Player Modal (Media3 ExoPlayer via PlayerController)
-        if (uiState.playingVideo != null) {
-            val activePlaying = uiState.playingVideo
+        // 5. Fullscreen Video Player Modal (Media3 ExoPlayer via PlayerController). It opens by
+        // growing in, and closes by shrinking away (carrying on from the back gesture's shrink).
+        var lastPlayingVideo by remember { mutableStateOf<VideoItem?>(null) }
+        if (uiState.playingVideo != null) lastPlayingVideo = uiState.playingVideo
+        AnimatedVisibility(
+            visible = uiState.playingVideo != null,
+            enter = fadeIn(motionScheme.defaultEffectsSpec()) +
+                scaleIn(motionScheme.defaultSpatialSpec(), initialScale = 0.92f),
+            exit = fadeOut(motionScheme.defaultEffectsSpec()) +
+                scaleOut(motionScheme.fastSpatialSpec(), targetScale = 0.86f),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val activePlaying = uiState.playingVideo ?: lastPlayingVideo ?: return@AnimatedVisibility
             val controller = viewModel.getOrCreatePlayerController(context)
             VideoPlayerModal(
                 video = activePlaying,
@@ -1238,7 +1340,7 @@ fun Material3VideoPlayerScreen(
                 onNextVideo = { viewModel.playAdjacentVideo(1, context) },
                 onPlaybackEnded = { viewModel.playNextInFolder(context) },
                 onUpdatePlaybackSettings = { transform -> viewModel.updatePlaybackSettings(context, transform) },
-                onClose = { viewModel.closeVideoPlayer(context) }
+                onClose = { if (uiState.playingVideo != null) viewModel.closeVideoPlayer(context) }
             )
         }
     }
@@ -1470,13 +1572,17 @@ private fun VideosContentListOrGrid(
             }
         }
     } else {
-        LazyColumn(
+        // One column on a phone held upright; sideways (or on a bigger screen) the rows sit in two
+        // columns, so the screen isn't one long stretch of mostly empty rows.
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 340.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("videos_list_container"),
             contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = bottomPad),
             // The Expressive list gap: selected rows stay separate rounded tiles instead of merging.
-            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             fun listItems(list: List<VideoItem>, episodes: Boolean) {
                 items(list, key = { it.id }, contentType = { "video" }) { v ->
@@ -1494,13 +1600,13 @@ private fun VideosContentListOrGrid(
             }
             if (grouped) {
                 seriesData.groups.forEach { (seriesTitle, eps) ->
-                    item(key = "series_header_$seriesTitle", contentType = "header") {
+                    item(key = "series_header_$seriesTitle", span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
                         SeriesGroupHeader(seriesTitle = seriesTitle, modifier = Modifier.padding(top = 8.dp))
                     }
                     listItems(eps, episodes = true)
                 }
                 if (seriesData.standalone.isNotEmpty()) {
-                    item(key = "standalone_header", contentType = "header") {
+                    item(key = "standalone_header", span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
                         SeriesGroupHeader(
                             seriesTitle = "Other videos",
                             icon = Symbols.VideoLibrary,
@@ -1563,12 +1669,14 @@ private val NavTabs = listOf(
 )
 
 /**
- * The tabs: official Material 3 Expressive short navigation bar. Long-press anywhere on it to
- * choose which tabs show.
+ * The tabs, official Material 3 Expressive navigation: the short navigation bar at the bottom, or
+ * ([rail]) the navigation rail on the side when the phone is sideways. Long-press anywhere on
+ * either to choose which tabs show.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun MainNavigationBar(
+private fun MainNavigation(
+    rail: Boolean,
     bottomTab: BottomTab,
     activeTabs: List<BottomTab>,
     onSelectTab: (BottomTab) -> Unit,
@@ -1576,53 +1684,82 @@ private fun MainNavigationBar(
     musicPlaying: Boolean = false
 ) {
     val tabs = NavTabs.filter { it.first in activeTabs }.ifEmpty { NavTabs.filter { it.first == BottomTab.VIDEOS } }
+    // From another tab, the Music icon turns into moving sound bars while a song plays. Nothing
+    // when it's paused, and nothing on the Music tab itself.
+    val tabIcon: @Composable (BottomTab, ImageVector) -> Unit = { tab, icon ->
+        if (tab == BottomTab.AUDIO && musicPlaying && bottomTab != BottomTab.AUDIO) {
+            PlayingBarsIcon(contentDescription = "Music is playing")
+        } else {
+            Icon(icon, contentDescription = null)
+        }
+    }
+    if (rail) {
+        WideNavigationRail(
+            arrangement = Arrangement.Center,
+            windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start),
+            modifier = Modifier
+                .fillMaxHeight()
+                .longPressToChooseTabs(onLongPress)
+                .testTag("main_navigation_rail")
+        ) {
+            tabs.forEach { (tab, label, icon) ->
+                WideNavigationRailItem(
+                    selected = bottomTab == tab,
+                    onClick = { onSelectTab(tab) },
+                    icon = { tabIcon(tab, icon) },
+                    label = { Text(label) },
+                    railExpanded = false,
+                    modifier = Modifier.testTag("nav_tab_${tab.id}")
+                )
+            }
+        }
+    } else {
+        ShortNavigationBar(
+            modifier = Modifier
+                .longPressToChooseTabs(onLongPress)
+                .testTag("main_navigation_bar")
+        ) {
+            tabs.forEach { (tab, label, icon) ->
+                ShortNavigationBarItem(
+                    selected = bottomTab == tab,
+                    onClick = { onSelectTab(tab) },
+                    icon = { tabIcon(tab, icon) },
+                    label = { Text(label) },
+                    modifier = Modifier.testTag("nav_tab_${tab.id}")
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Watches for a long press before the tab buttons see it; once it fires, the rest of that touch is
+ * used up so the tab under the finger doesn't also get tapped.
+ */
+@Composable
+private fun Modifier.longPressToChooseTabs(onLongPress: () -> Unit): Modifier {
     val haptics = LocalHapticFeedback.current
     val longPressLatest by rememberUpdatedState(onLongPress)
-
-    ShortNavigationBar(
-        modifier = Modifier
-            .testTag("main_navigation_bar")
-            // Watches for a long press before the tab buttons see it; once it fires, the rest of
-            // that touch is used up so the tab under the finger doesn't also get tapped.
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    val released = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
-                        }
-                        true
-                    }
-                    if (released == null) {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        longPressLatest()
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            event.changes.forEach { it.consume() }
-                        } while (event.changes.any { it.pressed })
-                    }
+    return pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val released = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) break
+                    if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
                 }
+                true
             }
-    ) {
-        tabs.forEach { (tab, label, icon) ->
-            ShortNavigationBarItem(
-                selected = bottomTab == tab,
-                onClick = { onSelectTab(tab) },
-                icon = {
-                    // From another tab, the Music icon turns into moving sound bars while a song
-                    // plays. Nothing when it's paused, and nothing on the Music tab itself.
-                    if (tab == BottomTab.AUDIO && musicPlaying && bottomTab != BottomTab.AUDIO) {
-                        PlayingBarsIcon(contentDescription = "Music is playing")
-                    } else {
-                        Icon(icon, contentDescription = null)
-                    }
-                },
-                label = { Text(label) },
-                modifier = Modifier.testTag("nav_tab_${tab.id}")
-            )
+            if (released == null) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                longPressLatest()
+                do {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    event.changes.forEach { it.consume() }
+                } while (event.changes.any { it.pressed })
+            }
         }
     }
 }
@@ -1675,21 +1812,20 @@ internal fun ChooseTabsSheet(
             Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                 NavTabs.forEachIndexed { i, (tab, label, icon) ->
                     val on = tab in activeTabs
-                    // Me holds the settings, so it always stays; one other tab must stay on too.
-                    val locked = tab == BottomTab.ME
+                    // One tab always stays on.
                     val isLast = on && activeTabs.size <= 1
                     SegmentedListItem(
                         checked = on,
                         onCheckedChange = { checked -> onSetTabActive(tab, checked) },
-                        enabled = !isLast && !locked,
+                        enabled = !isLast,
                         shapes = ListItemDefaults.segmentedShapes(index = i, count = NavTabs.size),
                         leadingContent = { Icon(icon, contentDescription = null) },
-                        supportingContent = when {
-                            locked -> { { Text("Always shown: settings live here") } }
-                            isLast -> { { Text("At least one tab stays on") } }
-                            else -> null
+                        supportingContent = if (isLast) {
+                            { Text("At least one tab stays on") }
+                        } else {
+                            null
                         },
-                        trailingContent = { Switch(checked = on, onCheckedChange = null, enabled = !isLast && !locked) },
+                        trailingContent = { Switch(checked = on, onCheckedChange = null, enabled = !isLast) },
                         colors = ListItemDefaults.segmentedColors(containerColor = scheme.surfaceContainerHigh),
                         modifier = Modifier.testTag("tab_switch_${tab.id}")
                     ) { Text(label) }

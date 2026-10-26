@@ -38,7 +38,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -270,127 +273,116 @@ fun NowPlayingScreen(
             track = track,
             modifier = Modifier.matchParentSize()
         )
-        CompositionLocalProvider(LocalContentColor provides colors.content) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(horizontal = 24.dp)
-                    .testTag("audio_now_playing")
-            ) {
-                NowPlayingTopBar(
-                    colors = colors,
-                    title = track.realAlbum,
-                    subtitle = null,
-                    onClose = onClose,
-                    closeLabel = "Close Now Playing",
-                    action = {
-                        Box {
-                            TooltipIconButton(
-                                label = "More options",
-                                icon = Symbols.MoreVert,
-                                onClick = { showMenu = true },
-                                modifier = Modifier.testTag("now_playing_more")
-                            )
-                            ExpressiveMenu(
-                                expanded = showMenu,
-                                onDismiss = { showMenu = false },
-                                groups = listOf(
-                                    listOf(
-                                        MenuEntry("Add to playlist", Symbols.PlaylistAdd, "np_menu_add_playlist", onClick = onAddToPlaylist),
-                                        MenuEntry("Share", Symbols.Share, "np_menu_share", onClick = onShare)
-                                    ),
-                                    listOfNotNull(
-                                        onGoToAlbum?.let { MenuEntry("Go to album", Symbols.Album, "np_menu_album", onClick = it) },
-                                        onGoToArtist?.let { MenuEntry("Go to artist", Symbols.Person, "np_menu_artist", onClick = it) },
-                                        MenuEntry("Song info", Symbols.Info, "np_menu_info", onClick = onSongInfo)
-                                    )
+        // The pieces of the screen; upright they stack, sideways the cover goes on the left.
+        val topBar: @Composable () -> Unit = {
+            NowPlayingTopBar(
+                colors = colors,
+                title = track.realAlbum,
+                subtitle = null,
+                onClose = onClose,
+                closeLabel = "Close Now Playing",
+                action = {
+                    Box {
+                        TooltipIconButton(
+                            label = "More options",
+                            icon = Symbols.MoreVert,
+                            onClick = { showMenu = true },
+                            modifier = Modifier.testTag("now_playing_more")
+                        )
+                        ExpressiveMenu(
+                            expanded = showMenu,
+                            onDismiss = { showMenu = false },
+                            groups = listOf(
+                                listOf(
+                                    MenuEntry("Add to playlist", Symbols.PlaylistAdd, "np_menu_add_playlist", onClick = onAddToPlaylist),
+                                    MenuEntry("Share", Symbols.Share, "np_menu_share", onClick = onShare)
+                                ),
+                                listOfNotNull(
+                                    onGoToAlbum?.let { MenuEntry("Go to album", Symbols.Album, "np_menu_album", onClick = it) },
+                                    onGoToArtist?.let { MenuEntry("Go to artist", Symbols.Person, "np_menu_artist", onClick = it) },
+                                    MenuEntry("Song info", Symbols.Info, "np_menu_info", onClick = onSongInfo)
                                 )
                             )
-                        }
-                    }
-                )
-
-                // Cover: takes the room that's left, always square.
-                ArtworkPager(
-                    track = track,
-                    queue = queue,
-                    queueIndex = queueIndex,
-                    isPlaying = isPlaying,
-                    onTogglePlayPause = onTogglePlayPause,
-                    onSkipToQueueItem = onSkipToQueueItem,
-                    placeholderBackground = colors.soft,
-                    placeholderTint = colors.content,
-                    // The mini player's cover grows into this one (and back).
-                    currentCoverModifier = Modifier.playerCover(),
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                )
-
-                // Title and artist, with Lyrics on the right.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Material's lateral transition: the names slide the same way as the cover.
-                    val queueLatest by rememberUpdatedState(queue)
-                    val slideSpec = motion.defaultSpatialSpec<IntOffset>()
-                    val fadeInSpec = motion.defaultEffectsSpec<Float>()
-                    val fadeOutSpec = motion.fastEffectsSpec<Float>()
-                    val shiftPx = with(density) { 48.dp.roundToPx() }
-                    AnimatedContent(
-                        targetState = track,
-                        contentKey = { it.id },
-                        transitionSpec = {
-                            val direction = skipDirection(queueLatest, initialState, targetState)
-                            (slideInHorizontally(slideSpec) { direction * shiftPx } + fadeIn(fadeInSpec)) togetherWith
-                                (slideOutHorizontally(slideSpec) { -direction * shiftPx } + fadeOut(fadeOutSpec)) using
-                                SizeTransform(clip = false)
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = "nowPlayingTitle"
-                    ) { shown ->
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = shown.title,
-                                style = MaterialTheme.typography.headlineSmallEmphasized,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.testTag("now_playing_title")
-                            )
-                            Text(
-                                text = shown.artist,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = colors.contentVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    FilledTonalIconButton(
-                        onClick = onLyrics,
-                        shapes = IconButtonDefaults.shapes(),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = colors.soft,
-                            contentColor = colors.onSoft
-                        ),
-                        modifier = Modifier
-                            .size(IconButtonDefaults.mediumContainerSize())
-                            .testTag("now_playing_lyrics")
-                    ) {
-                        Icon(Symbols.Lyrics, contentDescription = "Lyrics")
+                        )
                     }
                 }
-
-                // Wavy seek bar, times and the sound details in between.
-                Spacer(modifier = Modifier.height(16.dp))
+            )
+        }
+        val cover: @Composable (Modifier) -> Unit = { coverModifier ->
+            ArtworkPager(
+                track = track,
+                queue = queue,
+                queueIndex = queueIndex,
+                isPlaying = isPlaying,
+                onTogglePlayPause = onTogglePlayPause,
+                onSkipToQueueItem = onSkipToQueueItem,
+                placeholderBackground = colors.soft,
+                placeholderTint = colors.content,
+                // The mini player's cover grows into this one (and back).
+                currentCoverModifier = Modifier.playerCover(),
+                modifier = coverModifier
+            )
+        }
+        // Title and artist, with Lyrics on the right.
+        val titleRow: @Composable () -> Unit = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Material's lateral transition: the names slide the same way as the cover.
+                val queueLatest by rememberUpdatedState(queue)
+                val slideSpec = motion.defaultSpatialSpec<IntOffset>()
+                val fadeInSpec = motion.defaultEffectsSpec<Float>()
+                val fadeOutSpec = motion.fastEffectsSpec<Float>()
+                val shiftPx = with(density) { 48.dp.roundToPx() }
+                AnimatedContent(
+                    targetState = track,
+                    contentKey = { it.id },
+                    transitionSpec = {
+                        val direction = skipDirection(queueLatest, initialState, targetState)
+                        (slideInHorizontally(slideSpec) { direction * shiftPx } + fadeIn(fadeInSpec)) togetherWith
+                            (slideOutHorizontally(slideSpec) { -direction * shiftPx } + fadeOut(fadeOutSpec)) using
+                            SizeTransform(clip = false)
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = "nowPlayingTitle"
+                ) { shown ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = shown.title,
+                            style = MaterialTheme.typography.headlineSmallEmphasized,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("now_playing_title")
+                        )
+                        Text(
+                            text = shown.artist,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colors.contentVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                FilledTonalIconButton(
+                    onClick = onLyrics,
+                    shapes = IconButtonDefaults.shapes(),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = colors.soft,
+                        contentColor = colors.onSoft
+                    ),
+                    modifier = Modifier
+                        .size(IconButtonDefaults.mediumContainerSize())
+                        .testTag("now_playing_lyrics")
+                ) {
+                    Icon(Symbols.Lyrics, contentDescription = "Lyrics")
+                }
+            }
+        }
+        // Wavy seek bar, times and the sound details in between.
+        val seekBlock: @Composable () -> Unit = {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 PlaybackSeekBar(
                     progress = fraction,
                     onSeekPreview = { dragFraction = it },
@@ -441,41 +433,106 @@ fun NowPlayingScreen(
                         color = colors.contentVariant
                     )
                 }
-
-                Spacer(modifier = Modifier.height(20.dp))
-                NowPlayingControls(
-                    isPlaying = isPlaying,
-                    colors = colors,
-                    onPrevious = onSkipPrevious,
-                    onPlayPause = onTogglePlayPause,
-                    onNext = onSkipNext
-                )
-
-                if (trayActions.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    NowPlayingTray(
-                        actions = trayActions,
-                        colors = colors,
-                        shuffleEnabled = shuffleEnabled,
-                        repeatMode = repeatMode,
-                        sleepActive = sleepActive,
-                        sleepLabel = if (sleepAtEndOfSong) {
-                            formatCountdown((safeDuration - positionMs).coerceAtLeast(0L))
-                        } else {
-                            formatCountdown(sleepTimerRemainingMs)
-                        },
-                        onAction = { action ->
-                            when (action) {
-                                NowPlayingAction.SHUFFLE -> onToggleShuffle()
-                                NowPlayingAction.REPEAT -> onCycleRepeat()
-                                NowPlayingAction.QUEUE -> showQueueSheet = true
-                                NowPlayingAction.AMBIENT -> onOpenAmbient()
-                                NowPlayingAction.SLEEP -> showSleepSheet = true
-                            }
-                        }
-                    )
+            }
+        }
+        val controls: @Composable (compact: Boolean) -> Unit = { compact ->
+            NowPlayingControls(
+                isPlaying = isPlaying,
+                colors = colors,
+                onPrevious = onSkipPrevious,
+                onPlayPause = onTogglePlayPause,
+                onNext = onSkipNext,
+                compact = compact
+            )
+        }
+        val tray: @Composable (height: Dp) -> Unit = { height ->
+            NowPlayingTray(
+                actions = trayActions,
+                colors = colors,
+                shuffleEnabled = shuffleEnabled,
+                repeatMode = repeatMode,
+                sleepActive = sleepActive,
+                sleepLabel = if (sleepAtEndOfSong) {
+                    formatCountdown((safeDuration - positionMs).coerceAtLeast(0L))
+                } else {
+                    formatCountdown(sleepTimerRemainingMs)
+                },
+                height = height,
+                onAction = { action ->
+                    when (action) {
+                        NowPlayingAction.SHUFFLE -> onToggleShuffle()
+                        NowPlayingAction.REPEAT -> onCycleRepeat()
+                        NowPlayingAction.QUEUE -> showQueueSheet = true
+                        NowPlayingAction.AMBIENT -> onOpenAmbient()
+                        NowPlayingAction.SLEEP -> showSleepSheet = true
+                    }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+            )
+        }
+
+        val window = currentWindowLayout()
+        CompositionLocalProvider(LocalContentColor provides colors.content) {
+            if (window.width > window.height) {
+                // Sideways: the cover on the left at full height, everything else beside it, so
+                // nothing is squeezed or cut off.
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(start = 16.dp, end = 24.dp, top = 12.dp, bottom = 12.dp)
+                        .testTag("audio_now_playing"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    cover(
+                        Modifier
+                            .fillMaxHeight()
+                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                    )
+                    Spacer(modifier = Modifier.width(32.dp))
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        topBar()
+                        titleRow()
+                        seekBlock()
+                        controls(true)
+                        if (trayActions.isNotEmpty()) tray(48.dp)
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(horizontal = 24.dp)
+                        .testTag("audio_now_playing")
+                ) {
+                    topBar()
+                    // Cover: takes the room that's left, always square.
+                    cover(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    titleRow()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    seekBlock()
+                    Spacer(modifier = Modifier.height(20.dp))
+                    controls(false)
+                    if (trayActions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        tray(56.dp)
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
         }
 
@@ -685,7 +742,8 @@ private fun NowPlayingTray(
     repeatMode: Int,
     sleepActive: Boolean,
     sleepLabel: String,
-    onAction: (NowPlayingAction) -> Unit
+    onAction: (NowPlayingAction) -> Unit,
+    height: Dp = 56.dp
 ) {
     val sleepWeight by animateFloatAsState(
         targetValue = if (sleepActive) 2f else 1f,
@@ -718,7 +776,7 @@ private fun NowPlayingTray(
                         checked = checked,
                         onCheckedChange = { onAction(action) },
                         shapes = when {
-                            actions.size == 1 -> ToggleButtonDefaults.shapesFor(buttonHeight = 56.dp)
+                            actions.size == 1 -> ToggleButtonDefaults.shapesFor(buttonHeight = height)
                             index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                             index == actions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                             else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
@@ -734,7 +792,7 @@ private fun NowPlayingTray(
                         modifier = Modifier
                             .weight(if (action == NowPlayingAction.SLEEP) sleepWeight else 1f)
                             .animateWidth(interaction)
-                            .height(56.dp)
+                            .height(height)
                             .testTag("now_playing_tray_${action.id}")
                     ) {
                         Icon(icon, contentDescription = action.label, modifier = Modifier.size(24.dp))

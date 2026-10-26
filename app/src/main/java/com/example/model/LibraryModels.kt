@@ -40,8 +40,8 @@ data class AmbientSettings(
     val showLyrics: Boolean = true,
     /** Black background for the night, whatever Now Playing uses. */
     val black: Boolean = false,
-    /** Turning the phone sideways on Now Playing opens ambient mode. */
-    val openOnRotate: Boolean = true
+    /** Turning the phone sideways on Now Playing opens ambient mode (off: Now Playing turns too). */
+    val openOnRotate: Boolean = false
 )
 
 enum class LibrarySongSort(val id: String, val label: String) {
@@ -134,7 +134,9 @@ data class LibraryPreferences(
     val blacklistedFolders: Set<String> = emptySet(),
     val playlists: List<AudioPlaylist> = emptyList(),
     val ambient: AmbientSettings = AmbientSettings(),
-    val lyrics: com.example.lyrics.LyricsSettings = com.example.lyrics.LyricsSettings()
+    val lyrics: com.example.lyrics.LyricsSettings = com.example.lyrics.LyricsSettings(),
+    /** The screen stays on while Now Playing or lyrics are open and music plays. */
+    val keepScreenOn: Boolean = false
 ) {
     val blacklistedIds: Set<String> by lazy { blacklistedSongs.mapTo(HashSet()) { it.id } }
 

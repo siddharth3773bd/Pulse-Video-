@@ -3,9 +3,6 @@
 package com.example.ui.components
 
 import com.example.ui.icons.Symbols
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
@@ -467,22 +464,16 @@ private class AmbientOption(
 /** Keeps the screen awake and hides the status and navigation bars while shown. */
 @Composable
 private fun KeepScreenOnAndHideSystemBars() {
+    KeepScreenOn()
     val view = LocalView.current
     DisposableEffect(view) {
-        view.keepScreenOn = true
         val window = view.context.findActivity()?.window
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose {
-            view.keepScreenOn = false
             controller?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 }
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}

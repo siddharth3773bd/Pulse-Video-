@@ -5,8 +5,6 @@ import androidx.compose.runtime.Immutable
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.max
-import kotlin.math.min
 
 const val MAX_HISTORY_ITEMS = 300
 
@@ -168,7 +166,8 @@ enum class MeSubPage(val id: String, val title: String) {
     HISTORY("history", "Video History"),
     APPEARANCE("appearance", "Appearance"),
     VIDEO_SETTINGS("video_settings", "Video"),
-    MUSIC_SETTINGS("music_settings", "Music")
+    MUSIC_SETTINGS("music_settings", "Music"),
+    BIN("bin", "Bin")
 }
 
 enum class ThemeMode(val id: String, val label: String) {

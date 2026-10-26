@@ -187,6 +187,7 @@ class VideoPlayerViewModel : ViewModel() {
 
     private var toastJob: Job? = null
     private var scanJob: Job? = null
+    private var videoReleaseJob: Job? = null
     private var audioProgressJob: Job? = null
     private var videoPlayerController: ExoPlayerController? = null
     private var audioPlaybackManager: AudioPlaybackManager? = null
@@ -239,9 +240,7 @@ class VideoPlayerViewModel : ViewModel() {
                 val stored = AppPreferencesRepository.observePreferences(appContext).first()
                 val cappedHistory = stored.historyEntries.take(MAX_HISTORY_ITEMS)
                 val progressMap = cappedHistory.associate { it.mediaUri to it.progress }
-                // Me always shows: the settings live there.
-                val storedTabs = stored.activeTabs.ifEmpty { BottomTab.entries }
-                val validTabs = BottomTab.entries.filter { it in storedTabs || it == BottomTab.ME }
+                val validTabs = stored.activeTabs.ifEmpty { BottomTab.entries }
                 val startTab = if (stored.lastBottomTab in validTabs) stored.lastBottomTab else validTabs.first()
 
                 _uiState.update { state ->
@@ -478,8 +477,6 @@ class VideoPlayerViewModel : ViewModel() {
         var changed = false
         _uiState.update { state ->
             val currentSet = state.activeTabs.toSet()
-            // Me holds the settings, so it can't be hidden.
-            if (!active && tab == BottomTab.ME) return@update state
             if (!active && currentSet.size <= 1 && tab in currentSet) {
                 // Minimum one tab rule: cannot remove the last active tab
                 return@update state
@@ -698,11 +695,13 @@ class VideoPlayerViewModel : ViewModel() {
         clearAllOverlays()
 
         try {
-            val deleteRequest = MediaStore.createDeleteRequest(
+            // To Android's bin, not gone for good: restorable from Me › Bin for 30 days.
+            val trashRequest = MediaStore.createTrashRequest(
                 context.contentResolver,
-                uris
+                uris,
+                true
             )
-            onLaunchIntentSender(deleteRequest.intentSender)
+            onLaunchIntentSender(trashRequest.intentSender)
         } catch (_: Exception) {
             clearPendingWriteState()
             triggerToast("Could not open system delete dialog")
@@ -737,7 +736,7 @@ class VideoPlayerViewModel : ViewModel() {
                 clearPendingWriteState()
                 _uiState.update { it.copy(selectedIds = emptyList()) }
                 refreshPermissionsAndScan(context)
-                triggerToast("Deleted $count video${if (count == 1) "" else "s"}")
+                triggerToast(if (count == 1) "Video moved to the Bin" else "$count videos moved to the Bin")
             }
 
             PendingMediaWriteAction.NONE -> Unit
@@ -944,6 +943,7 @@ class VideoPlayerViewModel : ViewModel() {
      * otherwise skips the sheet and starts from 0:00.
      */
     fun playVideo(video: VideoItem, context: Context? = null) {
+        videoReleaseJob?.cancel()
         val state = _uiState.value
         val existingEntry = state.historyEntries.find { it.mediaUri == video.id }
         val durMs = (existingEntry?.durationMs?.takeIf { it > 0L } ?: video.durationMs).coerceAtLeast(1L)
@@ -1099,8 +1099,15 @@ class VideoPlayerViewModel : ViewModel() {
                 context = context
             )
         }
-        controller?.release()
+        // Paused now, released once the player has finished shrinking away, so the picture stays
+        // during the closing animation instead of turning black.
+        controller?.pause()
         _uiState.update { it.copy(playingVideo = null) }
+        videoReleaseJob?.cancel()
+        videoReleaseJob = viewModelScope.launch {
+            delay(500L)
+            if (_uiState.value.playingVideo == null) controller?.release()
+        }
     }
 
     fun playAdjacentVideo(offset: Int, context: Context? = null) {

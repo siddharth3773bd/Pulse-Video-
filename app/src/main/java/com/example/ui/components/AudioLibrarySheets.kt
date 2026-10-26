@@ -310,23 +310,7 @@ fun SongInfoSheet(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-                rows.forEachIndexed { i, (icon, label, value) ->
-                    SegmentedListItem(
-                        shapes = ListItemDefaults.segmentedShapes(index = i, count = rows.size),
-                        leadingContent = { Icon(icon, contentDescription = null) },
-                        overlineContent = { Text(label) },
-                        colors = ListItemDefaults.segmentedColors(
-                            containerColor = scheme.surfaceContainerHigh,
-                            leadingContentColor = scheme.onSurfaceVariant,
-                            overlineContentColor = scheme.onSurfaceVariant
-                        ),
-                        modifier = Modifier.testTag("song_info_row_${label.lowercase()}")
-                    ) {
-                        Text(value, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            InfoRows(rows = rows, tagPrefix = "song_info_row_")
         }
     }
 }

@@ -18,10 +18,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,6 +36,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -73,6 +76,7 @@ fun MeTabScreen(
     onSelectCustomColor: (Int) -> Unit,
     onToggleAmoledBlack: () -> Unit,
     onUpdatePlaybackSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit,
+    onLibraryChanged: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -165,6 +169,10 @@ fun MeTabScreen(
                             audioTracks = uiState.audioTracks,
                             onBack = onCloseSubPage
                         )
+                        MeSubPage.BIN -> BinPage(
+                            onBack = onCloseSubPage,
+                            onLibraryChanged = onLibraryChanged
+                        )
                         MeSubPage.NONE -> Unit
                     }
                 }
@@ -173,7 +181,10 @@ fun MeTabScreen(
     }
 }
 
-/** Home of the Me tab: two shortcuts (playlists, history), then the settings. */
+/**
+ * Home of the Me tab: two shortcuts (playlists, history), then the settings. Sideways the
+ * shortcuts and the settings sit side by side, so everything fits on one screen.
+ */
 @Composable
 private fun MeHome(
     playlistCount: Int,
@@ -182,96 +193,143 @@ private fun MeHome(
     onOpenTabsSheet: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val twoPane = currentWindowLayout().twoPane
+    val playlistsCard: @Composable (Modifier, Boolean) -> Unit = { modifier, compact ->
+        MeShortcutCard(
+            icon = Symbols.PlaylistPlay,
+            title = "Playlists",
+            subtitle = if (playlistCount == 1) "1 video playlist" else "$playlistCount video playlists",
+            onClick = { onOpenSubPage(MeSubPage.PLAYLISTS) },
+            compact = compact,
+            modifier = modifier.testTag("me_card_video_playlist")
+        )
+    }
+    val historyCard: @Composable (Modifier, Boolean) -> Unit = { modifier, compact ->
+        MeShortcutCard(
+            icon = Symbols.History,
+            title = "History",
+            subtitle = if (historyCount == 1) "1 video watched" else "$historyCount videos watched",
+            onClick = { onOpenSubPage(MeSubPage.HISTORY) },
+            compact = compact,
+            modifier = modifier.testTag("me_card_video_history")
+        )
+    }
+    val settingsRows = listOf(
+        SettingRow.Link(
+            key = "appearance",
+            icon = Symbols.Palette,
+            title = "Appearance",
+            summary = "Theme and colours",
+            badge = true,
+            onClick = { onOpenSubPage(MeSubPage.APPEARANCE) }
+        ),
+        SettingRow.Link(
+            key = "video",
+            icon = Symbols.VideoSettings,
+            title = "Video",
+            summary = "Gestures, playback and languages",
+            badge = true,
+            onClick = { onOpenSubPage(MeSubPage.VIDEO_SETTINGS) }
+        ),
+        SettingRow.Link(
+            key = "music",
+            icon = Symbols.LibraryMusic,
+            title = "Music",
+            summary = "Library, Now Playing and hidden songs",
+            badge = true,
+            onClick = { onOpenSubPage(MeSubPage.MUSIC_SETTINGS) }
+        ),
+        SettingRow.Link(
+            key = "bin",
+            icon = Symbols.Delete,
+            title = "Bin",
+            summary = "Deleted videos and songs, kept for 30 days",
+            badge = true,
+            onClick = { onOpenSubPage(MeSubPage.BIN) }
+        ),
+        SettingRow.Link(
+            key = "navigation",
+            icon = Symbols.BottomNavigation,
+            title = "Navigation bar",
+            summary = "Choose which tabs show",
+            badge = true,
+            onClick = onOpenTabsSheet
+        )
+    )
     Column(
         modifier = Modifier
             .fillMaxSize()
             .testTag("me_tab_home_screen")
     ) {
         TopAppBar(
-            title = { Text("Me", style = MaterialTheme.typography.headlineLargeEmphasized, maxLines = 1) },
+            title = {
+                Text(
+                    "Me",
+                    style = if (twoPane) MaterialTheme.typography.headlineMediumEmphasized
+                    else MaterialTheme.typography.headlineLargeEmphasized,
+                    maxLines = 1
+                )
+            },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.background)
         )
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp)
-        ) {
-            item(key = "shortcuts") {
-                Row(
+        if (twoPane) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .weight(0.8f)
+                        .padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    MeShortcutCard(
-                        icon = Symbols.PlaylistPlay,
-                        title = "Playlists",
-                        subtitle = if (playlistCount == 1) "1 video playlist" else "$playlistCount video playlists",
-                        onClick = { onOpenSubPage(MeSubPage.PLAYLISTS) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("me_card_video_playlist")
-                    )
-                    MeShortcutCard(
-                        icon = Symbols.History,
-                        title = "History",
-                        subtitle = if (historyCount == 1) "1 video watched" else "$historyCount videos watched",
-                        onClick = { onOpenSubPage(MeSubPage.HISTORY) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("me_card_video_history")
-                    )
+                    playlistsCard(Modifier.fillMaxWidth(), true)
+                    historyCard(Modifier.fillMaxWidth(), true)
+                }
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .fillMaxHeight(),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    settingsGroup(key = "settings", title = null, rows = settingsRows)
                 }
             }
-            settingsGroup(
-                key = "settings",
-                title = "Settings",
-                rows = listOf(
-                    SettingRow.Link(
-                        key = "appearance",
-                        icon = Symbols.Palette,
-                        title = "Appearance",
-                        summary = "Theme and colours",
-                        badge = true,
-                        onClick = { onOpenSubPage(MeSubPage.APPEARANCE) }
-                    ),
-                    SettingRow.Link(
-                        key = "video",
-                        icon = Symbols.VideoSettings,
-                        title = "Video",
-                        summary = "Gestures, playback and languages",
-                        badge = true,
-                        onClick = { onOpenSubPage(MeSubPage.VIDEO_SETTINGS) }
-                    ),
-                    SettingRow.Link(
-                        key = "music",
-                        icon = Symbols.LibraryMusic,
-                        title = "Music",
-                        summary = "Library, Now Playing and hidden songs",
-                        badge = true,
-                        onClick = { onOpenSubPage(MeSubPage.MUSIC_SETTINGS) }
-                    ),
-                    SettingRow.Link(
-                        key = "navigation",
-                        icon = Symbols.BottomNavigation,
-                        title = "Navigation bar",
-                        summary = "Choose which tabs show",
-                        badge = true,
-                        onClick = onOpenTabsSheet
-                    )
-                )
-            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp)
+            ) {
+                item(key = "shortcuts") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        playlistsCard(Modifier.weight(1f), false)
+                        historyCard(Modifier.weight(1f), false)
+                    }
+                }
+                settingsGroup(key = "settings", title = "Settings", rows = settingsRows)
+            }
         }
     }
 }
 
-/** A big shortcut card on the Me home page. */
+/**
+ * A shortcut card on the Me home page: badge above the text, or ([compact], sideways) beside it.
+ */
 @Composable
 private fun MeShortcutCard(
     icon: ImageVector,
     title: String,
     subtitle: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
     Card(
         onClick = onClick,
@@ -279,17 +337,30 @@ private fun MeShortcutCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = modifier
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            IconBadge(icon = icon, size = 48.dp)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        val text: @Composable () -> Unit = {
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (compact) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconBadge(icon = icon, size = 48.dp)
+                Spacer(modifier = Modifier.width(16.dp))
+                text()
+            }
+        } else {
+            Column(modifier = Modifier.padding(16.dp)) {
+                IconBadge(icon = icon, size = 48.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+                text()
+            }
         }
     }
 }
