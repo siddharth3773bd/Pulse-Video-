@@ -1163,7 +1163,9 @@ class VideoPlayerViewModel : ViewModel() {
             )
         }
         // The video keeps playing while it shrinks away (a live picture, not a frozen one); its
-        // sound fades out quickly, then it pauses, and it is released once the animation is over.
+        // sound fades out quickly (silent from then on), and it only pauses once the picture has
+        // landed in its thumbnail. (Pausing right after the sound fade froze the picture halfway
+        // through the flight, which made the closing feel stiff.)
         _uiState.update { it.copy(playingVideo = null) }
         videoReleaseJob?.cancel()
         videoReleaseJob = viewModelScope.launch {
@@ -1171,8 +1173,9 @@ class VideoPlayerViewModel : ViewModel() {
                 controller?.setVolume(step / 5f)
                 delay(40L)
             }
+            delay(450L)
             controller?.pause()
-            delay(500L)
+            delay(150L)
             if (_uiState.value.playingVideo == null) controller?.release()
         }
     }

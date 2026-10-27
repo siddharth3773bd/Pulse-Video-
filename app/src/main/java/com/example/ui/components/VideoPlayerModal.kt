@@ -275,6 +275,13 @@ fun VideoPlayerModal(
         controller?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
     }
+    // The bars return as the player starts to shrink away (not at the very end of the flight),
+    // so the status/navigation bars don't pop in after the animation is over.
+    LaunchedEffect(closing) {
+        if (closing) {
+            activity?.window?.let { WindowCompat.getInsetsController(it, view).show(WindowInsetsCompat.Type.systemBars()) }
+        }
+    }
     DisposableEffect(activity) {
         val prev = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         onDispose { activity?.requestedOrientation = prev }

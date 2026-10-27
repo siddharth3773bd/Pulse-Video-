@@ -80,6 +80,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -125,6 +127,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -751,7 +754,12 @@ fun Material3VideoPlayerScreen(
                 .weight(1f)
                 .fillMaxHeight()
                 // The headers start below the status bar, so nothing can scroll up under it.
-                .windowInsetsPadding(WindowInsets.statusBars)
+                // "IgnoringVisibility": the bar's size stays the same while the video player hides
+                // the system bars, so the library behind it doesn't jump when the player opens or
+                // closes (the thumbnail the video flies back to stays where it is).
+                .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
+                // A header scrolled (partly) away must not draw up into the status bar area.
+                .clipToBounds()
                 .then(
                     when {
                         // The rail looks after the left side (and the camera cut-out there).
@@ -1847,6 +1855,9 @@ private fun MainNavigation(
         }
     } else {
         ShortNavigationBar(
+            // Stable height: it doesn't change while the video player hides/shows the system bars.
+            windowInsets = WindowInsets.systemBarsIgnoringVisibility
+                .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
             modifier = Modifier
                 .longPressToChooseTabs(onLongPress)
                 .testTag("main_navigation_bar")
