@@ -156,10 +156,14 @@ class AudioPlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val currentPlayer = mediaSession?.player
-        if (currentPlayer == null || !currentPlayer.isPlaying) {
-            stopSelf()
+        // The app was swiped out of recents (or "Clear all" was used): end playback completely,
+        // like the video "audio only" service does. Previously a playing song kept the
+        // foreground service alive, so music carried on after the app was removed.
+        try {
+            AudioPlaybackManager.existingInstance()?.stopAndClear()
+        } catch (_: Throwable) {
         }
+        stopPlaybackAndService()
     }
 
     override fun onDestroy() {

@@ -90,6 +90,7 @@
         <service
             android:name=".player.AudioPlaybackService"
             android:exported="true"
+            android:stopWithTask="false"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
@@ -99,6 +100,7 @@
         <service
             android:name=".player.VideoAudioService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="mediaPlayback" />
     </application>
 
