@@ -139,12 +139,14 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
     return if (background == NowPlayingBackground.FOLLOW_THEME) {
         NowPlayingColors(
             background = background,
-            content = scheme.onPrimaryContainer,
-            contentVariant = scheme.onPrimaryContainer.copy(alpha = 0.72f),
+            // Material's media-player roles: a calm tinted surface, primary for play, secondary
+            // container for the rest.
+            content = scheme.onSurface,
+            contentVariant = scheme.onSurfaceVariant,
             main = scheme.primary,
             onMain = scheme.onPrimary,
-            soft = scheme.primary.copy(alpha = 0.18f),
-            onSoft = scheme.onPrimaryContainer
+            soft = scheme.secondaryContainer,
+            onSoft = scheme.onSecondaryContainer
         )
     } else {
         NowPlayingColors(
@@ -943,7 +945,7 @@ internal fun NowPlayingBackgroundLayer(
         }
     }
     when (style) {
-        NowPlayingBackground.FOLLOW_THEME -> Box(modifier.background(MaterialTheme.colorScheme.primaryContainer))
+        NowPlayingBackground.FOLLOW_THEME -> Box(modifier.background(MaterialTheme.colorScheme.surfaceContainer))
         NowPlayingBackground.AMOLED -> Box(modifier.background(Color.Black))
         NowPlayingBackground.GRADIENT -> {
             // The colours glide to the next song's; the layer itself never fades, so the screen
