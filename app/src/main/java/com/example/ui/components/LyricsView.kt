@@ -431,9 +431,8 @@ private fun SungLine(
         return fraction * text.length
     }
 
-    // Each word lifts a little as it's sung and settles back after; a held note glows.
+    // A held note glows (and rises a touch) while it's held.
     val density = LocalDensity.current
-    val liftPx = with(density) { 2.5.dp.toPx() }
     val heldLiftPx = with(density) { 1.dp.toPx() }
     val segments = remember(line, endMs, wordsMatch) { wordSegments(line, endMs, wordsMatch) }
     val cells = remember(layout, segments) { layout?.let { wordCells(it, segments) } ?: emptyList() }
@@ -449,7 +448,7 @@ private fun SungLine(
                 .fillMaxWidth()
                 .drawWithContent {
                     if (cells.isEmpty()) drawContent()
-                    else drawWords(cells, segments, live.value - offsetMs, liftPx, heldLiftPx) { drawContent() }
+                    else drawWords(cells, segments, live.value - offsetMs, heldLiftPx) { drawContent() }
                 }
         )
         // Sung so far: bright, with a soft glow, revealed up to the singing point.
@@ -494,7 +493,7 @@ private fun SungLine(
                     if (cells.isEmpty()) {
                         sung()
                     } else {
-                        drawWords(cells, segments, live.value - offsetMs, liftPx, heldLiftPx) { glow ->
+                        drawWords(cells, segments, live.value - offsetMs, heldLiftPx) { glow ->
                             sung()
                             if (glow > 0.01f) {
                                 // A held note: its glow builds up the longer it's held.
@@ -802,14 +801,6 @@ private fun ease(x: Float): Float {
     return t * t * (3f - 2f * t)
 }
 
-/** How lifted a word is: rises as it's sung, settles back softly after. */
-private fun wordLift(seg: WordSegment, pos: Long): Float {
-    val riseMs = (seg.endMs - seg.startMs).coerceIn(1L, 280L).toFloat()
-    val rise = ease((pos - seg.startMs) / riseMs)
-    val fall = ease((pos - seg.endMs) / 600f)
-    return rise * (1f - fall)
-}
-
 /** How much a held note glows: builds up while it's held, fades after. */
 private fun wordGlow(seg: WordSegment, pos: Long): Float {
     val span = seg.endMs - seg.startMs
@@ -818,19 +809,18 @@ private fun wordGlow(seg: WordSegment, pos: Long): Float {
     return grow * (1f - ease((pos - seg.endMs) / 500f))
 }
 
-/** Draws [draw] once per word cell, moved up by that word's lift. */
+/** Draws [draw] once per word cell, a held note moved up a touch. */
 private fun ContentDrawScope.drawWords(
     cells: List<WordCell>,
     segments: List<WordSegment>,
     pos: Long,
-    liftPx: Float,
     heldLiftPx: Float,
     draw: (glow: Float) -> Unit
 ) {
     for (cell in cells) {
         val seg = segments[cell.segment]
         val glow = wordGlow(seg, pos)
-        val dy = -(liftPx * wordLift(seg, pos) + heldLiftPx * glow)
+        val dy = -heldLiftPx * glow
         clipRect(cell.rect.left, cell.rect.top, cell.rect.right, cell.rect.bottom) {
             translate(top = dy) { draw(glow) }
         }
