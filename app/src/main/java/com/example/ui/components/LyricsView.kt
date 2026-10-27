@@ -71,6 +71,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.ResolvedTextDirection
@@ -94,6 +99,7 @@ import com.example.lyrics.LyricsState
 import com.example.model.AudioTrackItem
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.pow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.gestures.scrollBy
 import kotlinx.coroutines.delay
@@ -172,7 +178,8 @@ fun LyricsView(
     }
     val currentIndex by remember(lines, offsetMs) {
         derivedStateOf {
-            val pos = live.value - offsetMs
+            // A line shows a moment before it's sung: exactly on time feels late to the eye.
+            val pos = live.value - offsetMs + LineLeadMs
             lines.indexOfLast { it.timeMs <= pos }
         }
     }
@@ -313,28 +320,19 @@ private fun SyncedLine(
 ) {
     val motion = MaterialTheme.motionScheme
     val alpha by animateFloatAsState(
-        targetValue = when {
-            isActive -> 1f
-            distance == 1 -> 0.55f
-            distance == 2 -> 0.42f
-            else -> 0.32f
-        },
+        // Depth of field: dimmer, smaller and softer the further a line is, gradually.
+        targetValue = if (isActive) 1f else (0.58f * 0.84f.pow(distance - 1)).coerceAtLeast(0.24f),
         animationSpec = motion.slowEffectsSpec(),
         label = "lyricAlpha"
     )
     // The line being sung grows in with a soft spring (Material 3 Expressive spatial motion).
     val scale by animateFloatAsState(
-        targetValue = if (isActive) 1f else if (distance <= 1) 0.93f else 0.88f,
+        targetValue = if (isActive) 1f else (1f - 0.035f * distance).coerceAtLeast(0.86f),
         animationSpec = motion.slowSpatialSpec(),
         label = "lyricScale"
     )
-    // Near lines stay sharp; blur starts three lines away and grows gently (depth of field).
-    val blurTarget = if (!settings.blur || isActive) 0f else when (distance) {
-        0, 1, 2 -> 0f
-        3 -> 1.5f
-        4 -> 3f
-        else -> 4.5f
-    }
+    // The next line stays sharp; blur grows gently from two lines away.
+    val blurTarget = if (!settings.blur || isActive) 0f else ((distance - 1.5f) * 1.3f).coerceIn(0f, 4.5f)
     val blur by animateFloatAsState(
         targetValue = blurTarget,
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
@@ -433,13 +431,26 @@ private fun SungLine(
         return fraction * text.length
     }
 
+    // Each word lifts a little as it's sung and settles back after; a held note glows.
+    val density = LocalDensity.current
+    val liftPx = with(density) { 2.5.dp.toPx() }
+    val heldLiftPx = with(density) { 1.dp.toPx() }
+    val segments = remember(line, endMs, wordsMatch) { wordSegments(line, endMs, wordsMatch) }
+    val cells = remember(layout, segments) { layout?.let { wordCells(it, segments) } ?: emptyList() }
+    val glowPaint = remember { Paint() }
+
     Box {
         // Not yet sung: quieter.
         Text(
             text = text,
             style = style.copy(color = style.color.copy(alpha = 0.42f)),
             onTextLayout = { layout = it },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawWithContent {
+                    if (cells.isEmpty()) drawContent()
+                    else drawWords(cells, segments, live.value - offsetMs, liftPx, heldLiftPx) { drawContent() }
+                }
         )
         // Sung so far: bright, with a soft glow, revealed up to the singing point.
         Text(
@@ -452,35 +463,48 @@ private fun SungLine(
                     val l = layout ?: return@drawWithContent
                     val upTo = sungChars()
                     if (upTo <= 0f) return@drawWithContent
-                    if (upTo >= text.length) {
-                        drawContent()
-                        return@drawWithContent
+                    val reveal = if (upTo >= text.length) null else sweepReveal(l, upTo, feather)
+                    val sung: () -> Unit = {
+                        if (reveal == null) {
+                            drawContent()
+                        } else {
+                            clipPath(reveal.path) { this@drawWithContent.drawContent() }
+                            // Soft edge where the singing is.
+                            val brush = if (reveal.rtl) {
+                                Brush.horizontalGradient(
+                                    listOf(Color.Transparent, Color.Black),
+                                    startX = reveal.x - feather,
+                                    endX = reveal.x + feather
+                                )
+                            } else {
+                                Brush.horizontalGradient(
+                                    listOf(Color.Black, Color.Transparent),
+                                    startX = reveal.x - feather,
+                                    endX = reveal.x + feather
+                                )
+                            }
+                            drawRect(
+                                brush = brush,
+                                topLeft = Offset(reveal.x - feather, reveal.top),
+                                size = Size(feather * 2f, reveal.bottom - reveal.top),
+                                blendMode = BlendMode.DstIn
+                            )
+                        }
                     }
-                    val reveal = sweepReveal(l, upTo, feather) ?: run {
-                        drawContent()
-                        return@drawWithContent
-                    }
-                    clipPath(reveal.path) { this@drawWithContent.drawContent() }
-                    // Soft edge where the singing is.
-                    val brush = if (reveal.rtl) {
-                        Brush.horizontalGradient(
-                            listOf(Color.Transparent, Color.Black),
-                            startX = reveal.x - feather,
-                            endX = reveal.x + feather
-                        )
+                    if (cells.isEmpty()) {
+                        sung()
                     } else {
-                        Brush.horizontalGradient(
-                            listOf(Color.Black, Color.Transparent),
-                            startX = reveal.x - feather,
-                            endX = reveal.x + feather
-                        )
+                        drawWords(cells, segments, live.value - offsetMs, liftPx, heldLiftPx) { glow ->
+                            sung()
+                            if (glow > 0.01f) {
+                                // A held note: its glow builds up the longer it's held.
+                                glowPaint.alpha = glow * 0.8f
+                                drawContext.canvas.saveLayer(size.toRect(), glowPaint)
+                                sung()
+                                drawContext.canvas.restore()
+                            }
+                        }
                     }
-                    drawRect(
-                        brush = brush,
-                        topLeft = Offset(reveal.x - feather, reveal.top),
-                        size = Size(feather * 2f, reveal.bottom - reveal.top),
-                        blendMode = BlendMode.DstIn
-                    )
                 }
         )
     }
@@ -552,6 +576,9 @@ private fun LyricsAlign.originX(): Float = when (this) {
 
 /** A gap longer than this before the first line gets a "music only" row. */
 private const val IntroGapMs = 4_000L
+private const val LineLeadMs = 150L
+/** A word held at least this long glows while it's held. */
+private const val HeldNoteMs = 1_000L
 
 /** The line again in English letters, smaller and quieter, under the original. */
 @Composable
@@ -710,5 +737,102 @@ private class LyricWaves {
         const val WaveMaxSteps = 6
         const val WaveSpeed = 11f
         const val WaveLifeMs = 1_200L
+    }
+}
+
+/** One word of the line being sung (with the spaces after it), and when it's sung. */
+private class WordSegment(val start: Int, val end: Int, val startMs: Long, val endMs: Long)
+
+/** Where a word is drawn: cells cover the whole line without gaps or overlaps. */
+private class WordCell(val rect: Rect, val segment: Int)
+
+/** The line's words with their times: real word timings, or spread evenly over the line. */
+private fun wordSegments(line: LyricLine, endMs: Long, timed: Boolean): List<WordSegment> {
+    val text = line.text
+    if (timed) {
+        var i = 0
+        return line.words.map { w -> WordSegment(i, i + w.text.length, w.startMs, w.endMs).also { i += w.text.length } }
+    }
+    val total = text.length.coerceAtLeast(1)
+    val span = (endMs - line.timeMs).coerceAtLeast(1L)
+    return Regex("\\s*\\S+\\s*").findAll(text).map { m ->
+        WordSegment(
+            m.range.first,
+            m.range.last + 1,
+            line.timeMs + span * m.range.first / total,
+            line.timeMs + span * (m.range.last + 1) / total
+        )
+    }.toList()
+}
+
+/**
+ * Splits the text area into one cell per word per wrapped line, edge to edge (outer cells reach
+ * far out), so moving words by their cells draws every pixel, glow included, exactly once.
+ */
+private fun wordCells(layout: TextLayoutResult, segments: List<WordSegment>): List<WordCell> {
+    val far = 100_000f
+    val length = layout.layoutInput.text.length
+    if (length == 0) return emptyList()
+    val lastLine = layout.lineCount - 1
+    val cells = ArrayList<WordCell>()
+    segments.forEachIndexed { index, seg ->
+        if (seg.end <= seg.start || seg.start >= length) return@forEachIndexed
+        val first = layout.getLineForOffset(seg.start)
+        val last = layout.getLineForOffset((seg.end - 1).coerceIn(0, length - 1))
+        for (li in first..last) {
+            val lineStart = layout.getLineStart(li)
+            val lineEnd = layout.getLineEnd(li)
+            val from = maxOf(seg.start, lineStart)
+            val to = minOf(seg.end, lineEnd)
+            if (to <= from) continue
+            val rtl = layout.getParagraphDirection(from) == ResolvedTextDirection.Rtl
+            val a = if (from == lineStart) (if (rtl) far else -far) else layout.getHorizontalPosition(from, true)
+            val b = if (to == lineEnd) (if (rtl) -far else far) else layout.getHorizontalPosition(to, true)
+            val top = if (li == 0) -far else layout.getLineTop(li)
+            val bottom = if (li == lastLine) far else layout.getLineBottom(li)
+            cells.add(WordCell(Rect(minOf(a, b), top, maxOf(a, b), bottom), index))
+        }
+    }
+    return cells
+}
+
+/** Smooth 0→1 with no overshoot. */
+private fun ease(x: Float): Float {
+    val t = x.coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
+}
+
+/** How lifted a word is: rises as it's sung, settles back softly after. */
+private fun wordLift(seg: WordSegment, pos: Long): Float {
+    val riseMs = (seg.endMs - seg.startMs).coerceIn(1L, 280L).toFloat()
+    val rise = ease((pos - seg.startMs) / riseMs)
+    val fall = ease((pos - seg.endMs) / 600f)
+    return rise * (1f - fall)
+}
+
+/** How much a held note glows: builds up while it's held, fades after. */
+private fun wordGlow(seg: WordSegment, pos: Long): Float {
+    val span = seg.endMs - seg.startMs
+    if (span < HeldNoteMs || pos < seg.startMs) return 0f
+    val grow = ((pos - seg.startMs).toFloat() / span).coerceIn(0f, 1f)
+    return grow * (1f - ease((pos - seg.endMs) / 500f))
+}
+
+/** Draws [draw] once per word cell, moved up by that word's lift. */
+private fun ContentDrawScope.drawWords(
+    cells: List<WordCell>,
+    segments: List<WordSegment>,
+    pos: Long,
+    liftPx: Float,
+    heldLiftPx: Float,
+    draw: (glow: Float) -> Unit
+) {
+    for (cell in cells) {
+        val seg = segments[cell.segment]
+        val glow = wordGlow(seg, pos)
+        val dy = -(liftPx * wordLift(seg, pos) + heldLiftPx * glow)
+        clipRect(cell.rect.left, cell.rect.top, cell.rect.right, cell.rect.bottom) {
+            translate(top = dy) { draw(glow) }
+        }
     }
 }
