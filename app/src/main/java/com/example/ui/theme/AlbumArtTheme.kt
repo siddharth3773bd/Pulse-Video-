@@ -35,7 +35,6 @@ import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
 import com.google.android.material.color.utilities.QuantizerCelebi
-import com.google.android.material.color.utilities.SchemeContent
 import com.google.android.material.color.utilities.SchemeMonochrome
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.Score
@@ -103,7 +102,7 @@ suspend fun albumArtColorsFor(context: Context, track: AudioTrackItem): AlbumArt
 
 /**
  * Same pipeline Android uses for wallpaper colours: quantize the image (Celebi), score the
- * candidates to pick a seed, then build a Material 3 "Content" scheme (Google's style for colours taken from images) from that seed.
+ * candidates to pick a seed, then build a Tonal Spot Material 3 scheme from that seed.
  */
 private fun extractAlbumArtColors(source: Bitmap): AlbumArtColors {
     val software = if (source.config == Bitmap.Config.HARDWARE) {
@@ -121,8 +120,8 @@ private fun extractAlbumArtColors(source: Bitmap): AlbumArtColors {
     val seed = Score.score(quantized).firstOrNull() ?: 0xFF4285F4.toInt()
     val hct = Hct.fromInt(seed)
 
-    val light = SchemeContent(hct, false, 0.0).toComposeColorScheme(isDark = false)
-    val dark = SchemeContent(hct, true, 0.0).toComposeColorScheme(isDark = true)
+    val light = SchemeTonalSpot(hct, false, 0.0).toComposeColorScheme(isDark = false)
+    val dark = SchemeTonalSpot(hct, true, 0.0).toComposeColorScheme(isDark = true)
 
     return AlbumArtColors(light = light, dark = dark, gradient = gradientColors(small, seed))
 }
