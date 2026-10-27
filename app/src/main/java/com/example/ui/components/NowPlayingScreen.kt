@@ -130,7 +130,10 @@ data class NowPlayingColors(
     val onMain: Color,
     /** Previous / Next and switched-off toggles. */
     val soft: Color,
-    val onSoft: Color
+    val onSoft: Color,
+    /** Lyrics button, so it stands apart from the transport buttons. */
+    val accent: Color,
+    val onAccent: Color
 )
 
 @Composable
@@ -146,17 +149,25 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             main = scheme.primary,
             onMain = scheme.onPrimary,
             soft = scheme.secondaryContainer,
-            onSoft = scheme.onSecondaryContainer
+            onSoft = scheme.onSecondaryContainer,
+            accent = scheme.tertiaryContainer,
+            onAccent = scheme.onTertiaryContainer
         )
     } else {
+        // Gradient / Blur / Black: the secondary container is dark too and nearly melts into the
+        // background, so the soft buttons are the on-surface colour at 20%: a light veil that
+        // shows over any cover colour.
+        val soft = scheme.onSurface.copy(alpha = 0.20f)
         NowPlayingColors(
             background = background,
             content = Color.White,
             contentVariant = Color.White.copy(alpha = 0.72f),
             main = scheme.primary,
             onMain = scheme.onPrimary,
-            soft = scheme.secondaryContainer,
-            onSoft = scheme.onSecondaryContainer
+            soft = soft,
+            onSoft = scheme.onSurface,
+            accent = soft,
+            onAccent = scheme.tertiary
         )
     }
 }
@@ -372,8 +383,8 @@ fun NowPlayingScreen(
                     onClick = onLyrics,
                     shapes = IconButtonDefaults.shapes(),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = colors.soft,
-                        contentColor = colors.onSoft
+                        containerColor = colors.accent,
+                        contentColor = colors.onAccent
                     ),
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
