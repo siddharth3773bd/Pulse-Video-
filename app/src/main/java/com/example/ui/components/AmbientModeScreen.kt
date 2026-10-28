@@ -2,10 +2,16 @@
 
 package com.example.ui.components
 
+import kotlinx.coroutines.coroutineScope
+import androidx.compose.runtime.mutableFloatStateOf
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.expandVertically
-import androidx.compose.animation.core.animateFloatAsState
 import com.example.ui.icons.Symbols
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -239,63 +245,112 @@ fun AmbientModeScreen(
                 )
             }
             landscape -> {
-                // The artwork takes the whole height when nothing sits under it, and makes room
-                // when the song name / artist do; it grows and shrinks smoothly as they are
-                // switched, so the screen never looks empty.
-                val artFraction by animateFloatAsState(
-                    targetValue = when {
-                        showTitle && showArtist -> 0.64f
-                        showTitle -> 0.72f
-                        showArtist -> 0.84f
-                        else -> 1f
-                    },
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                    label = "ambientArtworkSize"
-                )
+                // How much of the height the artwork takes: all of it when nothing sits under it,
+                // less when the song name / artist do.
+                val targetFraction = when {
+                    showTitle && showArtist -> 0.64f
+                    showTitle -> 0.72f
+                    showArtist -> 0.84f
+                    else -> 1f
+                }
+                // Smooth by design: ONLY the artwork animates (one non-bouncy spring, read while
+                // laying out, so nothing is recomposed per frame). The text area under it simply
+                // takes the leftover height, so the group never wobbles. The lyrics don't follow the
+                // artwork frame by frame (that made them re-wrap and shake): they fade out, jump to
+                // their final place unseen, and fade back in once the artwork has settled.
+                val artFraction = remember { Animatable(targetFraction) }
+                var slotFraction by remember { mutableFloatStateOf(targetFraction) }
+                val lyricsAlpha = remember { Animatable(1f) }
+                val sizeSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+                LaunchedEffect(targetFraction) {
+                    if (artFraction.targetValue == targetFraction) return@LaunchedEffect
+                    coroutineScope {
+                        launch { artFraction.animateTo(targetFraction, sizeSpec) }
+                        launch {
+                            lyricsAlpha.animateTo(0f, tween(90))
+                            slotFraction = targetFraction
+                            delay(170)
+                            lyricsAlpha.animateTo(1f, tween(240))
+                        }
+                    }
+                }
                 BoxWithConstraints(
                     modifier = safe.padding(start = 36.dp, end = 48.dp, top = 32.dp, bottom = 32.dp)
                 ) {
-                    val artSide = minOf(maxHeight * artFraction, maxWidth * 0.5f)
+                    val hPx = constraints.maxHeight
+                    val wPx = constraints.maxWidth
+                    fun sideFor(f: Float) = minOf(hPx * f, wPx * 0.5f).roundToInt()
                     Row(
                         modifier = Modifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = if (showLyrics) Arrangement.Start else Arrangement.Center
                     ) {
-                        // Artwork with the song name and artist right under it.
-                        Column(
-                            modifier = Modifier.width(artSide),
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            art(Modifier.size(artSide))
-                            val appear = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                                expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec())
-                            val disappear = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) +
-                                shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec())
-                            androidx.compose.animation.AnimatedVisibility(visible = showTitle, enter = appear, exit = disappear) {
-                                Text(
-                                    text = track.title,
-                                    color = colors.content,
-                                    style = MaterialTheme.typography.titleLargeEmphasized,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 14.dp)
-                                )
+                        // The artwork's slot: with lyrics it already has its final width (so the
+                        // lyrics don't move while the artwork animates); without lyrics it follows it.
+                        Box(
+                            modifier = Modifier.layout { measurable, c ->
+                                val w = sideFor(if (showLyrics) slotFraction else artFraction.value)
+                                val placeable = measurable.measure(Constraints.fixed(w, c.maxHeight))
+                                layout(w, c.maxHeight) { placeable.placeRelative(0, 0) }
                             }
-                            androidx.compose.animation.AnimatedVisibility(visible = showArtist, enter = appear, exit = disappear) {
-                                Text(
-                                    text = track.artist,
-                                    color = colors.contentVariant,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = if (showTitle) 2.dp else 14.dp)
+                        ) {
+                            Column(modifier = Modifier.wrapContentSize(Alignment.TopStart, unbounded = true)) {
+                                art(
+                                    Modifier.layout { measurable, _ ->
+                                        val side = sideFor(artFraction.value)
+                                        val placeable = measurable.measure(Constraints.fixed(side, side))
+                                        layout(side, side) { placeable.placeRelative(0, 0) }
+                                    }
                                 )
+                                // The song name and artist: they take whatever height the artwork leaves.
+                                Box(
+                                    modifier = Modifier
+                                        .layout { measurable, _ ->
+                                            val side = sideFor(artFraction.value)
+                                            val h = (hPx - side).coerceAtLeast(0)
+                                            val placeable = measurable.measure(Constraints.fixed(side, h))
+                                            layout(side, h) { placeable.placeRelative(0, 0) }
+                                        }
+                                        .clipToBounds()
+                                ) {
+                                    val appear = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                        expandVertically(MaterialTheme.motionScheme.defaultEffectsSpec())
+                                    val disappear = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                        shrinkVertically(MaterialTheme.motionScheme.defaultEffectsSpec())
+                                    Column {
+                                        androidx.compose.animation.AnimatedVisibility(visible = showTitle, enter = appear, exit = disappear) {
+                                            Text(
+                                                text = track.title,
+                                                color = colors.content,
+                                                style = MaterialTheme.typography.titleLargeEmphasized,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(top = 14.dp)
+                                            )
+                                        }
+                                        androidx.compose.animation.AnimatedVisibility(visible = showArtist, enter = appear, exit = disappear) {
+                                            Text(
+                                                text = track.artist,
+                                                color = colors.contentVariant,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(top = if (showTitle) 2.dp else 14.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         // The lyrics get the full height of the screen.
                         if (showLyrics) {
                             Spacer(modifier = Modifier.width(40.dp))
-                            lyrics(Modifier.weight(1f).fillMaxHeight(), TextAlign.Start)
+                            lyrics(
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .graphicsLayer { alpha = lyricsAlpha.value },
+                                TextAlign.Start
+                            )
                         }
                     }
                 }
