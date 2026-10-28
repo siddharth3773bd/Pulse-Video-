@@ -386,6 +386,9 @@ private fun AudioPopupContent(
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 ButtonGroup(
                     overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
+                    // These buttons are small, so the default 15% growth is barely visible; 35%
+                    // gives the same clear "pressed button grows, neighbours squeeze" as the player.
+                    expandedRatio = 0.35f,
                     horizontalArrangement = Arrangement.spacedBy(36.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
