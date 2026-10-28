@@ -2,6 +2,10 @@
 
 package com.example.ui.components
 
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.animateFloatAsState
 import com.example.ui.icons.Symbols
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -11,7 +15,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.clickable
 import androidx.compose.material3.CheckableDropdownMenuItem
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
@@ -86,8 +89,8 @@ import kotlinx.coroutines.launch
  * Ambient mode: a calm, full-screen, always-on view of the current song, on the same background
  * as Now Playing. It opens in landscape when started from the button ([forceLandscape]); the
  * screen stays on and the system bars hide while it is open. Double-tap the artwork to play/pause
- * and swipe it to change song (anywhere on screen when the artwork is hidden). A tap on empty space
- * shows the play controls for a few seconds. The top corners hold "back to Now Playing" and ⋮.
+ * and swipe it to change song (anywhere on screen when the artwork is hidden). A double tap on empty
+ * space shows the play controls for a few seconds. The top corners hold "back to Now Playing" and ⋮.
  */
 @Composable
 fun AmbientModeScreen(
@@ -130,11 +133,14 @@ fun AmbientModeScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            // Taps on empty space stop here (they used to reach Now Playing underneath) and
-            // show or hide the controls.
-            .clickable(interactionSource = null, indication = null, onClick = {
-                if (controlsShown) controlsShown = false else touchControls()
-            })
+            // Taps on empty space stop here (they used to reach Now Playing underneath). A double
+            // tap shows or hides the controls; a single tap does nothing, so touching the song
+            // name or artist by accident no longer pops them up.
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = {
+                    if (controlsShown) controlsShown = false else touchControls()
+                })
+            }
             .testTag("ambient_mode")
     ) {
         // The colours move very slowly, so the screen feels alive without drawing attention.
@@ -233,31 +239,63 @@ fun AmbientModeScreen(
                 )
             }
             landscape -> {
-                val sideContent = showTitle || showArtist || showLyrics
-                Row(
-                    modifier = safe.padding(horizontal = 48.dp, vertical = 32.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = if (sideContent) Arrangement.Start else Arrangement.Center
+                // The artwork takes the whole height when nothing sits under it, and makes room
+                // when the song name / artist do; it grows and shrinks smoothly as they are
+                // switched, so the screen never looks empty.
+                val artFraction by animateFloatAsState(
+                    targetValue = when {
+                        showTitle && showArtist -> 0.64f
+                        showTitle -> 0.72f
+                        showArtist -> 0.84f
+                        else -> 1f
+                    },
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    label = "ambientArtworkSize"
+                )
+                BoxWithConstraints(
+                    modifier = safe.padding(start = 36.dp, end = 48.dp, top = 32.dp, bottom = 32.dp)
                 ) {
-                    // Square artwork as tall as the screen allows.
-                    art(
-                        Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                    )
-                    if (sideContent) {
-                        Spacer(modifier = Modifier.width(48.dp))
+                    val artSide = minOf(maxHeight * artFraction, maxWidth * 0.5f)
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = if (showLyrics) Arrangement.Start else Arrangement.Center
+                    ) {
+                        // Artwork with the song name and artist right under it.
                         Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            verticalArrangement = if (showLyrics) Arrangement.Top else Arrangement.Center
+                            modifier = Modifier.width(artSide),
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            info()
-                            if (showLyrics) {
-                                if (showTitle || showArtist) Spacer(modifier = Modifier.height(24.dp))
-                                lyrics(Modifier.weight(1f).fillMaxWidth(), TextAlign.Start)
+                            art(Modifier.size(artSide))
+                            val appear = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec())
+                            val disappear = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) +
+                                shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec())
+                            androidx.compose.animation.AnimatedVisibility(visible = showTitle, enter = appear, exit = disappear) {
+                                Text(
+                                    text = track.title,
+                                    color = colors.content,
+                                    style = MaterialTheme.typography.titleLargeEmphasized,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 14.dp)
+                                )
                             }
+                            androidx.compose.animation.AnimatedVisibility(visible = showArtist, enter = appear, exit = disappear) {
+                                Text(
+                                    text = track.artist,
+                                    color = colors.contentVariant,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = if (showTitle) 2.dp else 14.dp)
+                                )
+                            }
+                        }
+                        // The lyrics get the full height of the screen.
+                        if (showLyrics) {
+                            Spacer(modifier = Modifier.width(40.dp))
+                            lyrics(Modifier.weight(1f).fillMaxHeight(), TextAlign.Start)
                         }
                     }
                 }
