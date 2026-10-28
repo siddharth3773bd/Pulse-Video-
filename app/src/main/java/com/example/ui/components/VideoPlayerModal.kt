@@ -1270,11 +1270,16 @@ private fun PlayerBottomBar(
                 )
                 customItem(
                     buttonGroupContent = {
-                        // Toggle button: round while playing, morphs to a rounded square when paused.
+                        // Toggle button: keeps its round shape (play and pause look the same); it
+                        // squishes to the official pressed shape while touched.
                         FilledIconToggleButton(
                             checked = !isPlaying,
                             onCheckedChange = { onPlayPause() },
-                            shapes = IconButtonDefaults.toggleableShapes(),
+                            shapes = IconButtonDefaults.toggleableShapes(
+                                shape = IconButtonDefaults.mediumRoundShape,
+                                pressedShape = IconButtonDefaults.mediumPressedShape,
+                                checkedShape = IconButtonDefaults.mediumRoundShape
+                            ),
                             colors = playColors,
                             interactionSource = playInteraction,
                             modifier = Modifier
@@ -1319,8 +1324,8 @@ private fun PlayerBottomBar(
 
 /**
  * Sideways: previous, play/pause and next in the middle of the video, like Google's own players.
- * Official Expressive icon buttons: a large play button (round while playing, a rounded square
- * when paused, squeezing when pressed) between two medium ones. While the video loads, the play
+ * Official Expressive icon buttons in a button group: a large round play button (squishing when
+ * pressed, the pressed button springs wider and squeezes its neighbours) between two medium ones. While the video loads, the play
  * button shows Material's loading indicator.
  */
 @Composable
@@ -1358,53 +1363,86 @@ private fun PlayerCentreControls(
         shape = IconButtonDefaults.mediumRoundShape,
         pressedShape = IconButtonDefaults.mediumPressedShape
     )
-    Row(
+    // Official Expressive button group, like the portrait bar: the pressed button springs wider
+    // and squeezes its neighbours (that's the "tactile" feel), and the shapes morph on press.
+    val prevInteraction = remember { MutableInteractionSource() }
+    val playInteraction = remember { MutableInteractionSource() }
+    val nextInteraction = remember { MutableInteractionSource() }
+    ButtonGroup(
+        overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(40.dp)
+        horizontalArrangement = Arrangement.spacedBy(40.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        FilledTonalIconButton(
-            onClick = onPrevious,
-            shapes = sideShapes,
-            colors = sideColors,
-            modifier = Modifier
-                .size(IconButtonDefaults.mediumContainerSize())
-                .testTag("player_previous_btn")
-        ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous video", modifier = Modifier.size(IconButtonDefaults.mediumIconSize)) }
-        FilledIconToggleButton(
-            checked = !isPlaying,
-            onCheckedChange = { onPlayPause() },
-            shapes = IconButtonDefaults.toggleableShapes(
-                shape = IconButtonDefaults.largeRoundShape,
-                pressedShape = IconButtonDefaults.largePressedShape,
-                checkedShape = IconButtonDefaults.largeSelectedSquareShape
-            ),
-            colors = playColors,
-            modifier = Modifier
-                .size(IconButtonDefaults.largeContainerSize())
-                .testTag("player_play_pause_btn")
-        ) {
-            if (buffering) {
-                LoadingIndicator(
-                    color = if (colorful) scheme.onPrimary else Color.Black,
-                    modifier = Modifier.size(48.dp)
-                )
-            } else {
-                Icon(
-                    if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    modifier = Modifier.size(IconButtonDefaults.largeIconSize)
-                )
+        customItem(
+            buttonGroupContent = {
+                FilledTonalIconButton(
+                    onClick = onPrevious,
+                    shapes = sideShapes,
+                    colors = sideColors,
+                    interactionSource = prevInteraction,
+                    modifier = Modifier
+                        .animateWidth(prevInteraction)
+                        .size(IconButtonDefaults.mediumContainerSize())
+                        .testTag("player_previous_btn")
+                ) { Icon(Symbols.SkipPrevious, contentDescription = "Previous video", modifier = Modifier.size(IconButtonDefaults.mediumIconSize)) }
+            },
+            menuContent = { menuState ->
+                DropdownMenuItem(text = { Text("Previous") }, onClick = { onPrevious(); menuState.dismiss() })
             }
-        }
-        FilledTonalIconButton(
-            onClick = onNext,
-            shapes = sideShapes,
-            colors = sideColors,
-            modifier = Modifier
-                .size(IconButtonDefaults.mediumContainerSize())
-                .testTag("player_next_btn")
-        ) { Icon(Symbols.SkipNext, contentDescription = "Next video", modifier = Modifier.size(IconButtonDefaults.mediumIconSize)) }
+        )
+        customItem(
+            buttonGroupContent = {
+                FilledIconToggleButton(
+                    checked = !isPlaying,
+                    onCheckedChange = { onPlayPause() },
+                    shapes = IconButtonDefaults.toggleableShapes(
+                        shape = IconButtonDefaults.largeRoundShape,
+                        pressedShape = IconButtonDefaults.largePressedShape,
+                        checkedShape = IconButtonDefaults.largeRoundShape
+                    ),
+                    colors = playColors,
+                    interactionSource = playInteraction,
+                    modifier = Modifier
+                        .animateWidth(playInteraction)
+                        .size(IconButtonDefaults.largeContainerSize())
+                        .testTag("player_play_pause_btn")
+                ) {
+                    if (buffering) {
+                        LoadingIndicator(
+                            color = if (colorful) scheme.onPrimary else Color.Black,
+                            modifier = Modifier.size(48.dp)
+                        )
+                    } else {
+                        Icon(
+                            if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier.size(IconButtonDefaults.largeIconSize)
+                        )
+                    }
+                }
+            },
+            menuContent = { menuState ->
+                DropdownMenuItem(text = { Text(if (isPlaying) "Pause" else "Play") }, onClick = { onPlayPause(); menuState.dismiss() })
+            }
+        )
+        customItem(
+            buttonGroupContent = {
+                FilledTonalIconButton(
+                    onClick = onNext,
+                    shapes = sideShapes,
+                    colors = sideColors,
+                    interactionSource = nextInteraction,
+                    modifier = Modifier
+                        .animateWidth(nextInteraction)
+                        .size(IconButtonDefaults.mediumContainerSize())
+                        .testTag("player_next_btn")
+                ) { Icon(Symbols.SkipNext, contentDescription = "Next video", modifier = Modifier.size(IconButtonDefaults.mediumIconSize)) }
+            },
+            menuContent = { menuState ->
+                DropdownMenuItem(text = { Text("Next") }, onClick = { onNext(); menuState.dismiss() })
+            }
+        )
     }
 }
 

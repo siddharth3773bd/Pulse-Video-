@@ -394,7 +394,12 @@ private fun AudioPopupContent(
                     onCheckedChange = {
                         if (isCurrent) manager.togglePlayPause() else manager.playQueue(listOf(track), 0)
                     },
-                    shapes = IconButtonDefaults.toggleableShapes(),
+                    // Stays round for both play and pause; squishes to the pressed shape on touch.
+                    shapes = IconButtonDefaults.toggleableShapes(
+                        shape = IconButtonDefaults.largeRoundShape,
+                        pressedShape = IconButtonDefaults.largePressedShape,
+                        checkedShape = IconButtonDefaults.largeRoundShape
+                    ),
                     colors = IconButtonDefaults.filledIconToggleButtonColors(
                         containerColor = scheme.primary,
                         contentColor = scheme.onPrimary,
