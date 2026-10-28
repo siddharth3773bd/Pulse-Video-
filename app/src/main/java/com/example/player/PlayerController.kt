@@ -59,6 +59,13 @@ interface PlayerController {
      */
     fun queueNext(uri: Uri?, filePath: String? = null, title: String? = null)
 
+    /**
+     * Jumps straight to the video lined up by [queueNext], if it is the one with this [uri]: it is
+     * already waiting inside the player, so it starts almost instantly. False if it isn't queued
+     * (the caller then loads it the normal way).
+     */
+    fun skipToQueuedNext(uri: Uri): Boolean
+
     fun prepareMedia(
         uri: Uri,
         filePath: String? = null,

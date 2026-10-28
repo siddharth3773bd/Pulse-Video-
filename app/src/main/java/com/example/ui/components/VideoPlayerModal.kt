@@ -426,10 +426,11 @@ fun VideoPlayerModal(
     val progressFraction = (currentPositionMs.toFloat() / effectiveDurationMs.toFloat()).coerceIn(0f, 1f)
     var seekPreviewFraction by remember { mutableStateOf<Float?>(null) }
     // The loading indicator only appears when loading really takes a while (a second), and never
-    // while the seek bar is being dragged: the picture already shows where you are.
+    // while the seek bar is being dragged: the picture already shows where you are. The wait starts
+    // over for every new video, so tapping next/previous quickly doesn't add up to a "long" load.
     var showBuffering by remember { mutableStateOf(false) }
     val dragging = seekPreviewFraction != null
-    LaunchedEffect(playerState.isBuffering, dragging) {
+    LaunchedEffect(playerState.isBuffering, dragging, video.id) {
         if (playerState.isBuffering && !dragging) {
             delay(1_000L)
             showBuffering = true

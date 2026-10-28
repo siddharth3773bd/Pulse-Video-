@@ -95,7 +95,11 @@ class ExoPlayerController(
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || mediaItem == null) return
+            if (mediaItem == null) return
+            // Moves on by itself (autoplay), or because the next button jumped to the queued video.
+            val auto = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+            if (!auto && !skippingToQueued) return
+            skippingToQueued = false
             val player = exoPlayer ?: return
             // The queued video is now playing: it becomes "the" video.
             val config = mediaItem.localConfiguration
@@ -116,7 +120,8 @@ class ExoPlayerController(
                     cues = emptyList()
                 )
             }
-            _autoAdvanced.tryEmit(mediaItem.mediaId)
+            // (When the next button caused it, the view model does its own bookkeeping.)
+            if (auto) _autoAdvanced.tryEmit(mediaItem.mediaId)
         }
 
         override fun onRenderedFirstFrame() {
@@ -208,6 +213,7 @@ class ExoPlayerController(
         title: String?
     ) {
         val player = ensurePlayer(decoderMode)
+        skippingToQueued = false
         currentTitle = title
         _state.update {
             it.copy(
@@ -245,6 +251,20 @@ class ExoPlayerController(
     private var currentTitle: String? = null
     private var pendingNext: MediaItem? = null
     private var queueJob: Job? = null
+    private var skippingToQueued = false
+
+    override fun skipToQueuedNext(uri: Uri): Boolean {
+        val player = exoPlayer ?: return false
+        val queued = pendingNext ?: return false
+        if (queued.mediaId != uri.toString() || !player.hasNextMediaItem()) return false
+        skippingToQueued = true
+        extraSubtitles.clear()
+        player.setPlaybackParameters(PlaybackParameters(1.0f))
+        player.seekToNextMediaItem()
+        player.playWhenReady = true
+        syncStateFromPlayer()
+        return true
+    }
 
     override fun queueNext(uri: Uri?, filePath: String?, title: String?) {
         queueJob?.cancel()

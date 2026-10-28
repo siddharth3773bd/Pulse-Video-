@@ -1201,7 +1201,24 @@ class VideoPlayerViewModel : ViewModel() {
         val idx = list.indexOfFirst { it.id == current.id }
         if (idx == -1) return
         val nextIdx = (idx + offset).mod(list.size)
-        startVideoPlaybackAt(list[nextIdx], startPositionMs = 0L, context = context)
+        val target = list[nextIdx]
+        // Next: the video is usually already waiting inside the player (lined up for autoplay),
+        // so jump straight to it instead of loading it again from scratch (no black gap).
+        if (offset == 1 && controller != null && controller.skipToQueuedNext(target.contentUri)) {
+            pauseAudioSession()
+            controller.setVolume(1f)
+            recordVideoPlaybackHistory(
+                videoId = target.id,
+                positionMs = 0L,
+                durationMs = target.durationMs,
+                forcePersist = true,
+                moveToTop = true,
+                context = context
+            )
+            _uiState.update { it.copy(playingVideo = target, resumedFromMs = 0L) }
+            return
+        }
+        startVideoPlaybackAt(target, startPositionMs = 0L, context = context)
     }
 
     /**
