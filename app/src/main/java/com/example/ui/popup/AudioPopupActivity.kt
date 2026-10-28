@@ -27,7 +27,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -377,107 +376,19 @@ private fun AudioPopupContent(
             // two small tonal buttons, in an Expressive button group like the video player's: the
             // pressed button springs wider and squeezes its neighbours.
             Spacer(Modifier.height(12.dp))
-            val infoInteraction = remember { MutableInteractionSource() }
-            val playInteraction = remember { MutableInteractionSource() }
-            val openInteraction = remember { MutableInteractionSource() }
-            val togglePlay = {
-                if (isCurrent) manager.togglePlayPause() else manager.playQueue(listOf(track), 0)
-            }
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                ButtonGroup(
-                    overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
-                    // These buttons are small, so the default 15% growth is barely visible; 35%
-                    // gives the same clear "pressed button grows, neighbours squeeze" as the player.
-                    expandedRatio = 0.35f,
-                    horizontalArrangement = Arrangement.spacedBy(36.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    customItem(
-                        buttonGroupContent = {
-                            // The width effect goes on the tooltip box (the group's direct child);
-                            // the button inside simply fills it.
-                            TooltipBox(
-                                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                                tooltip = { PlainTooltip { Text("Song info") } },
-                                state = rememberTooltipState(),
-                                modifier = Modifier.animateWidth(infoInteraction)
-                            ) {
-                                FilledTonalIconButton(
-                                    onClick = { showInfo = true },
-                                    shapes = IconButtonDefaults.shapes(),
-                                    interactionSource = infoInteraction,
-                                    modifier = Modifier
-                                        .widthIn(min = 56.dp)
-                                        .fillMaxWidth()
-                                        .height(56.dp)
-                                        .testTag("audio_popup_info")
-                                ) { Icon(Symbols.Info, contentDescription = "Song info") }
-                            }
-                        },
-                        menuContent = { menuState ->
-                            DropdownMenuItem(text = { Text("Song info") }, onClick = { showInfo = true; menuState.dismiss() })
-                        }
-                    )
-                    customItem(
-                        buttonGroupContent = {
-                            FilledIconToggleButton(
-                                checked = !isPlaying,
-                                onCheckedChange = { togglePlay() },
-                                // Stays round for both play and pause; squishes to the pressed shape on touch.
-                                shapes = IconButtonDefaults.toggleableShapes(
-                                    shape = IconButtonDefaults.largeRoundShape,
-                                    pressedShape = IconButtonDefaults.largePressedShape,
-                                    checkedShape = IconButtonDefaults.largeRoundShape
-                                ),
-                                colors = IconButtonDefaults.filledIconToggleButtonColors(
-                                    containerColor = scheme.primary,
-                                    contentColor = scheme.onPrimary,
-                                    checkedContainerColor = scheme.primary,
-                                    checkedContentColor = scheme.onPrimary
-                                ),
-                                interactionSource = playInteraction,
-                                modifier = Modifier
-                                    .animateWidth(playInteraction)
-                                    .size(80.dp)
-                                    .testTag("audio_popup_play_pause")
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
-                                    contentDescription = if (isPlaying) "Pause" else "Play",
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                        },
-                        menuContent = { menuState ->
-                            DropdownMenuItem(text = { Text(if (isPlaying) "Pause" else "Play") }, onClick = { togglePlay(); menuState.dismiss() })
-                        }
-                    )
-                    customItem(
-                        buttonGroupContent = {
-                            TooltipBox(
-                                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                                tooltip = { PlainTooltip { Text("Open in Doppler") } },
-                                state = rememberTooltipState(),
-                                modifier = Modifier.animateWidth(openInteraction)
-                            ) {
-                                FilledTonalIconButton(
-                                    onClick = openInApp,
-                                    shapes = IconButtonDefaults.shapes(),
-                                    interactionSource = openInteraction,
-                                    modifier = Modifier
-                                        .widthIn(min = 56.dp)
-                                        .fillMaxWidth()
-                                        .height(56.dp)
-                                        .testTag("audio_popup_open_app")
-                                ) { Icon(Symbols.OpenInNew, contentDescription = "Open in Doppler") }
-                            }
-                        },
-                        menuContent = { menuState ->
-                            DropdownMenuItem(text = { Text("Open in Doppler") }, onClick = { openInApp(); menuState.dismiss() })
-                        }
-                    )
+            val togglePlay: () -> Unit = remember(manager, track, isCurrent) {
+                {
+                    if (isCurrent) manager.togglePlayPause() else manager.playQueue(listOf(track), 0)
+                    Unit
                 }
             }
+            PopupControls(
+                isPlaying = isPlaying,
+                onInfo = { showInfo = true },
+                onTogglePlay = togglePlay,
+                onOpenApp = openInApp,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 
@@ -493,5 +404,120 @@ private fun AudioPopupContent(
                 onStopAndClose()
             }
         )
+    }
+}
+
+/**
+ * Song info · Play/Pause · Open in Doppler, in an official Expressive button group like the video
+ * player's: the pressed button springs wider and squeezes its neighbours, and the shapes squish
+ * on press. It is its own composable (like the player's controls) so it doesn't get rebuilt on
+ * every playback tick, which would interrupt the press animation.
+ */
+@Composable
+private fun PopupControls(
+    isPlaying: Boolean,
+    onInfo: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onOpenApp: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    val infoInteraction = remember { MutableInteractionSource() }
+    val playInteraction = remember { MutableInteractionSource() }
+    val openInteraction = remember { MutableInteractionSource() }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        ButtonGroup(
+            overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState = menuState) },
+            // These buttons are small, so the default 15% growth is barely visible; 35% gives the
+            // same clear "pressed button grows, neighbours squeeze" as the player.
+            expandedRatio = 0.35f,
+            horizontalArrangement = Arrangement.spacedBy(36.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            customItem(
+                buttonGroupContent = {
+                    // A plain Box is the group's direct child (it carries the width effect); the
+                    // tooltip and the button inside simply fill it.
+                    Box(
+                        modifier = Modifier.animateWidth(infoInteraction).size(56.dp),
+                        propagateMinConstraints = true
+                    ) {
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                            tooltip = { PlainTooltip { Text("Song info") } },
+                            state = rememberTooltipState()
+                        ) {
+                            FilledTonalIconButton(
+                                onClick = onInfo,
+                                shapes = IconButtonDefaults.shapes(),
+                                interactionSource = infoInteraction,
+                                modifier = Modifier.fillMaxSize().testTag("audio_popup_info")
+                            ) { Icon(Symbols.Info, contentDescription = "Song info") }
+                        }
+                    }
+                },
+                menuContent = { menuState ->
+                    DropdownMenuItem(text = { Text("Song info") }, onClick = { onInfo(); menuState.dismiss() })
+                }
+            )
+            customItem(
+                buttonGroupContent = {
+                    FilledIconToggleButton(
+                        checked = !isPlaying,
+                        onCheckedChange = { onTogglePlay() },
+                        // Stays round for both play and pause; squishes to the pressed shape on touch.
+                        shapes = IconButtonDefaults.toggleableShapes(
+                            shape = IconButtonDefaults.largeRoundShape,
+                            pressedShape = IconButtonDefaults.largePressedShape,
+                            checkedShape = IconButtonDefaults.largeRoundShape
+                        ),
+                        colors = IconButtonDefaults.filledIconToggleButtonColors(
+                            containerColor = scheme.primary,
+                            contentColor = scheme.onPrimary,
+                            checkedContainerColor = scheme.primary,
+                            checkedContentColor = scheme.onPrimary
+                        ),
+                        interactionSource = playInteraction,
+                        modifier = Modifier
+                            .animateWidth(playInteraction)
+                            .size(80.dp)
+                            .testTag("audio_popup_play_pause")
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Symbols.Pause else Symbols.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                },
+                menuContent = { menuState ->
+                    DropdownMenuItem(text = { Text(if (isPlaying) "Pause" else "Play") }, onClick = { onTogglePlay(); menuState.dismiss() })
+                }
+            )
+            customItem(
+                buttonGroupContent = {
+                    Box(
+                        modifier = Modifier.animateWidth(openInteraction).size(56.dp),
+                        propagateMinConstraints = true
+                    ) {
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+                            tooltip = { PlainTooltip { Text("Open in Doppler") } },
+                            state = rememberTooltipState()
+                        ) {
+                            FilledTonalIconButton(
+                                onClick = onOpenApp,
+                                shapes = IconButtonDefaults.shapes(),
+                                interactionSource = openInteraction,
+                                modifier = Modifier.fillMaxSize().testTag("audio_popup_open_app")
+                            ) { Icon(Symbols.OpenInNew, contentDescription = "Open in Doppler") }
+                        }
+                    }
+                },
+                menuContent = { menuState ->
+                    DropdownMenuItem(text = { Text("Open in Doppler") }, onClick = { onOpenApp(); menuState.dismiss() })
+                }
+            )
+        }
     }
 }
