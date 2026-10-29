@@ -2,38 +2,25 @@
 
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.semantics
-import kotlin.math.absoluteValue
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -55,17 +42,40 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.model.AudioTrackItem
 import com.example.ui.icons.Symbols
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.sign
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /**
  * Mini player: a floating pill above the navigation bar while a song is loaded, styled like the
@@ -73,8 +83,11 @@ import com.example.ui.icons.Symbols
  * colours. Play/Pause is the one filled button; Previous and Next are plain icons.
  * Tap it, or drag it up, to open Now Playing.
  *
- * Swipe the cover and song name left/right to change song (the same idea as the cover on Now
- * Playing). A thin progress ring around the round cover shows how far the song is.
+ * Swipe the whole pill left (next song) or right (previous song): it follows your finger with a
+ * rubber-band feel, ticks when you've pulled far enough, and on release the song changes while the
+ * pill springs back. The new title slides in the way it does on Now Playing. With nothing to
+ * go to in that direction the pill only stretches a little and bounces back.
+ * A thin progress ring around the round cover shows how far the song is.
  */
 @Composable
 fun AudioMiniPlayer(
@@ -85,7 +98,7 @@ fun AudioMiniPlayer(
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
     modifier: Modifier = Modifier,
-    /** The play queue, in order. With it, swiping changes song. Empty: no swiping. */
+    /** The play queue, in order. Swiping needs it to know if there is a song before/after. */
     queue: List<AudioTrackItem> = emptyList(),
     queueIndex: Int = 0,
     onSkipToQueueItem: (Int) -> Unit = {},
@@ -94,73 +107,46 @@ fun AudioMiniPlayer(
 ) {
     val scheme = MaterialTheme.colorScheme
     val openLatest by rememberUpdatedState(onOpen)
-    val thresholdPx = with(LocalDensity.current) { 36.dp.toPx() }
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { 36.dp.toPx() }
     val haptic = LocalHapticFeedback.current
     val motion = MaterialTheme.motionScheme
+    val scope = rememberCoroutineScope()
 
-    // ---- Swipe to change song: a pager over the queue (same logic as ArtworkPager on Now Playing).
-    val tracks = if (queue.isEmpty()) listOf(track) else queue
-    val currentIndex = if (queue.isEmpty()) 0 else queueIndex.coerceIn(0, tracks.lastIndex)
-    val pagerState = rememberPagerState(initialPage = currentIndex, pageCount = { tracks.size })
-    val skipLatest by rememberUpdatedState(onSkipToQueueItem)
-    val currentIndexLatest by rememberUpdatedState(currentIndex)
-    val hasQueueLatest by rememberUpdatedState(queue.isNotEmpty())
-    val glideSpec = motion.defaultSpatialSpec<Float>()
-    // Snappy settle without a bounce (a bouncy snap can make a pager flip back).
-    val flingBehavior = PagerDefaults.flingBehavior(
-        state = pagerState,
-        snapAnimationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-    )
-    // Only a swipe by the user picks a song; covers that glide on their own never do.
-    var userSwiped by remember { mutableStateOf(false) }
-    LaunchedEffect(pagerState) {
-        pagerState.interactionSource.interactions.collect { if (it is DragInteraction.Start) userSwiped = true }
+    val queueLatest by rememberUpdatedState(queue)
+    val queueIndexLatest by rememberUpdatedState(queueIndex)
+    val skipNextLatest by rememberUpdatedState(onSkipNext)
+    val skipToLatest by rememberUpdatedState(onSkipToQueueItem)
+
+    // ---- Swipe: the whole pill follows the finger. ----
+    var widthPx by remember { mutableFloatStateOf(0f) }
+    var offsetPx by remember { mutableFloatStateOf(0f) }   // where the pill is drawn
+    var rawDrag by remember { mutableFloatStateOf(0f) }    // how far the finger went (before the rubber band)
+    var armed by remember { mutableStateOf(false) }        // pulled far enough to change song
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+
+    val minCommitPx = with(density) { 56.dp.toPx() }
+    val flingVelocityPx = with(density) { 700.dp.toPx() }
+    val minFlingDistancePx = with(density) { 20.dp.toPx() }
+    val rejectDistancePx = with(density) { 24.dp.toPx() }
+
+    fun canGoNext() = queueLatest.size > 1 && queueIndexLatest < queueLatest.lastIndex
+    fun canGoPrevious() = queueLatest.size > 1 && queueIndexLatest > 0
+    fun canGo(towardNext: Boolean) = if (towardNext) canGoNext() else canGoPrevious()
+    fun commitPx() = maxOf(widthPx * 0.2f, minCommitPx)
+    // 1:1 at first, then it gets heavier. Where there is no song to go to it stops much sooner.
+    fun displayed(raw: Float): Float {
+        val limit = widthPx * (if (canGo(towardNext = raw < 0f)) 0.45f else 0.12f)
+        return if (limit <= 0f) 0f else rubberBand(raw, limit)
     }
-    // A small tick each time the swipe passes halfway to another song.
-    LaunchedEffect(pagerState) {
-        var last = pagerState.currentPage
-        snapshotFlow { pagerState.currentPage }.collect { page ->
-            if (page != last) {
-                last = page
-                if (userSwiped) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
-            }
-        }
-    }
-    // Each page is keyed by its song, so reordering the queue keeps the pager on the same song.
-    val pageKeys = remember(tracks) {
-        val seen = HashMap<String, Int>()
-        tracks.map { t ->
-            val n = seen.getOrDefault(t.id, 0)
-            seen[t.id] = n + 1
-            "${t.id}#$n"
-        }
-    }
-    val currentSongId = tracks.getOrNull(currentIndex)?.id
-    var shownSongId by remember { mutableStateOf(currentSongId) }
-    // The song changed some other way (buttons, auto-advance): glide the pill along.
-    LaunchedEffect(currentIndex, currentSongId) {
-        val sameSong = currentSongId == shownSongId
-        shownSongId = currentSongId
-        val from = pagerState.currentPage
-        if (from != currentIndex && currentIndex < tracks.size) {
-            userSwiped = false
-            if (sameSong) {
-                pagerState.scrollToPage(currentIndex)
-                return@LaunchedEffect
-            }
-            if (kotlin.math.abs(currentIndex - from) > 1) {
-                pagerState.scrollToPage(if (currentIndex > from) currentIndex - 1 else currentIndex + 1)
-            }
-            pagerState.animateScrollToPage(currentIndex, animationSpec = glideSpec)
-        }
-    }
-    // The user swiped to another song and it settled: play that song.
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }.collect { page ->
-            if (userSwiped) {
-                userSwiped = false
-                if (hasQueueLatest && page != currentIndexLatest) skipLatest(page)
-            }
+
+    val dragState = rememberDraggableState { delta ->
+        rawDrag += delta
+        offsetPx = displayed(rawDrag)
+        val nowArmed = canGo(towardNext = rawDrag < 0f) && abs(offsetPx) >= commitPx()
+        if (nowArmed != armed) {
+            armed = nowArmed
+            if (nowArmed) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
         }
     }
 
@@ -170,8 +156,54 @@ fun AudioMiniPlayer(
         color = scheme.surfaceContainerHighest,
         contentColor = scheme.onSurface,
         shadowElevation = 4.dp,
+        // The drag sits outside the moving layer, so the finger and the touch area stay in step.
         // Grows into Now Playing and back (container transform); size modifiers come after it.
         modifier = modifier
+            .onSizeChanged { widthPx = it.width.toFloat() }
+            .draggable(
+                state = dragState,
+                orientation = Orientation.Horizontal,
+                onDragStarted = {
+                    settleJob?.cancel()
+                    rawDrag = offsetPx
+                    armed = false
+                },
+                onDragStopped = { velocity ->
+                    val towardNext = rawDrag < 0f
+                    val allowed = canGo(towardNext)
+                    val distance = abs(offsetPx)
+                    val flung = abs(velocity) > flingVelocityPx &&
+                        distance > minFlingDistancePx &&
+                        (velocity < 0f) == towardNext
+                    val commit = allowed && (distance >= commitPx() || flung)
+                    armed = false
+                    rawDrag = 0f
+                    if (commit) {
+                        haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                        if (towardNext) skipNextLatest() else skipToLatest(queueIndexLatest - 1)
+                    } else if (!allowed && distance > rejectDistancePx) {
+                        haptic.performHapticFeedback(HapticFeedbackType.Reject)
+                    }
+                    // Back to the middle with Material's spring; a little of the finger's speed is
+                    // carried over, so a quick flick overshoots a touch before settling.
+                    settleJob = scope.launch {
+                        Animatable(offsetPx).animateTo(
+                            targetValue = 0f,
+                            animationSpec = motion.defaultSpatialSpec<Float>(),
+                            initialVelocity = velocity * 0.3f
+                        ) { offsetPx = value }
+                    }
+                }
+            )
+            .graphicsLayer {
+                val width = widthPx.coerceAtLeast(1f)
+                val pulled = (abs(offsetPx) / commitPx()).coerceIn(0f, 1f)
+                translationX = offsetPx
+                rotationZ = offsetPx / width * 4f          // a very slight tilt, like a card
+                scaleX = 1f - 0.03f * pulled
+                scaleY = 1f - 0.03f * pulled
+                alpha = 1f - 0.12f * pulled
+            }
             .playerContainer()
             .fillMaxWidth()
             .height(MiniPlayerHeight)
@@ -200,97 +232,93 @@ fun AudioMiniPlayer(
             modifier = Modifier.padding(start = 7.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            HorizontalPager(
-                state = pagerState,
-                flingBehavior = flingBehavior,
-                beyondViewportPageCount = 1,
-                key = { page -> pageKeys.getOrElse(page) { "page#$page" } },
+            // Thin progress ring around the round cover: a faint full circle with the song's
+            // progress drawn over it from 12 o'clock (same look as Echo Music).
+            val ringProgress = animateFloatAsState(
+                targetValue = progress().coerceIn(0f, 1f),
+                animationSpec = tween(durationMillis = 250, easing = LinearEasing),
+                label = "miniPlayerRing"
+            )
+            val ringColor = scheme.primary
+            val ringTrackColor = scheme.outline.copy(alpha = 0.2f)
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .drawWithContent {
+                        drawContent()
+                        val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        // Inset by the line width so the ring stays inside its box.
+                        val diameter = size.minDimension - stroke.width
+                        val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+                        drawArc(
+                            color = ringTrackColor,
+                            startAngle = 0f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            topLeft = topLeft,
+                            size = Size(diameter, diameter),
+                            style = stroke
+                        )
+                        drawArc(
+                            color = ringColor,
+                            startAngle = -90f,
+                            sweepAngle = 360f * ringProgress.value,
+                            useCenter = false,
+                            topLeft = topLeft,
+                            size = Size(diameter, diameter),
+                            style = stroke
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                AudioArt(
+                    uri = track.contentUri,
+                    placeholderBackground = scheme.secondaryContainer,
+                    placeholderTint = scheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .playerCover()
+                        .size(40.dp)
+                        .border(1.dp, scheme.outline.copy(alpha = 0.3f), CircleShape),
+                    shape = CircleShape
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            // Material's lateral transition, the same as the title on Now Playing: the old names
+            // slide out and the new ones slide in from the side the song comes from (also for
+            // the Next and Previous buttons).
+            val slideSpec = motion.defaultSpatialSpec<IntOffset>()
+            val fadeInSpec = motion.defaultEffectsSpec<Float>()
+            val fadeOutSpec = motion.fastEffectsSpec<Float>()
+            val shiftPx = with(density) { 32.dp.roundToPx() }
+            AnimatedContent(
+                targetState = track,
+                contentKey = { it.id },
+                transitionSpec = {
+                    val direction = miniSkipDirection(queueLatest, initialState, targetState)
+                    (slideInHorizontally(slideSpec) { direction * shiftPx } + fadeIn(fadeInSpec)) togetherWith
+                        (slideOutHorizontally(slideSpec) { -direction * shiftPx } + fadeOut(fadeOutSpec)) using
+                        SizeTransform(clip = false)
+                },
+                // Keeps the sliding names from drawing over the buttons.
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-            ) { page ->
-                val pageTrack = tracks[page]
-                val isCurrent = page == currentIndex
-                // The song that's leaving fades and shrinks a little, the arriving one grows in.
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val distance = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
-                                .absoluteValue.coerceIn(0f, 1f)
-                            val scale = 0.9f + 0.1f * (1f - distance)
-                            scaleX = scale
-                            scaleY = scale
-                            alpha = 1f - 0.7f * distance
-                        },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Thin progress ring around the round cover: a faint full circle with the
-                    // song's progress drawn over it from 12 o'clock (same look as Echo Music).
-                    val ringProgress = animateFloatAsState(
-                        targetValue = if (isCurrent) progress().coerceIn(0f, 1f) else 0f,
-                        animationSpec = tween(durationMillis = 250, easing = LinearEasing),
-                        label = "miniPlayerRing"
+                    .clipToBounds(),
+                label = "miniPlayerTitle"
+            ) { shown ->
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = shown.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    val ringColor = scheme.primary
-                    val ringTrackColor = scheme.outline.copy(alpha = 0.2f)
-                    Box(
-                        modifier = Modifier
-                            .size(50.dp)
-                            .drawWithContent {
-                                drawContent()
-                                val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                                // Inset by the line width so the ring stays inside its box.
-                                val diameter = size.minDimension - stroke.width
-                                val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
-                                drawArc(
-                                    color = ringTrackColor,
-                                    startAngle = 0f,
-                                    sweepAngle = 360f,
-                                    useCenter = false,
-                                    topLeft = topLeft,
-                                    size = Size(diameter, diameter),
-                                    style = stroke
-                                )
-                                drawArc(
-                                    color = ringColor,
-                                    startAngle = -90f,
-                                    sweepAngle = 360f * ringProgress.value,
-                                    useCenter = false,
-                                    topLeft = topLeft,
-                                    size = Size(diameter, diameter),
-                                    style = stroke
-                                )
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AudioArt(
-                            uri = pageTrack.contentUri,
-                            placeholderBackground = scheme.secondaryContainer,
-                            placeholderTint = scheme.onSecondaryContainer,
-                            // Only the current song's cover is the one that grows into Now Playing.
-                            modifier = (if (isCurrent) Modifier.playerCover() else Modifier)
-                                .size(40.dp)
-                                .border(1.dp, scheme.outline.copy(alpha = 0.3f), CircleShape),
-                            shape = CircleShape
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = pageTrack.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = pageTrack.artist,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = shown.artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             // Official Expressive button group: the pressed button springs wider.
@@ -363,4 +391,15 @@ fun AudioMiniPlayer(
             }
         }
     }
+}
+
+/** Follows the finger 1:1 at first, then slows down towards [limit] (it never goes past it). */
+private fun rubberBand(raw: Float, limit: Float): Float =
+    sign(raw) * limit * (1f - exp(-abs(raw) / limit))
+
+/** +1 when [to] comes after [from] in the queue (Next), -1 for an earlier song (Previous). */
+private fun miniSkipDirection(queue: List<AudioTrackItem>, from: AudioTrackItem, to: AudioTrackItem): Int {
+    val a = queue.indexOfFirst { it.id == from.id }
+    val b = queue.indexOfFirst { it.id == to.id }
+    return if (a >= 0 && b >= 0 && b < a) -1 else 1
 }
