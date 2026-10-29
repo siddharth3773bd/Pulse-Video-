@@ -118,8 +118,8 @@ fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) 
  * - The bottom tray (shuffle, repeat, sleep timer, queue, ambient) sits one level lower: switched
  *   off it is a quiet surface container, switched on it is the secondary container, so the
  *   two rows are told apart by lightness while keeping the same hue.
- * - Lyrics uses the secondary container too, so it matches Previous / Next (the tertiary colour is
- *   the opposite hue of the cover and clashes). The audio-info pill is a quiet surface container.
+ * - Lyrics always matches Previous / Next, on every background (the tertiary colour is the
+ *   opposite hue of the cover and clashes). The audio-info pill is a quiet surface container.
  * - Black is a pitch-black screen with the same colours as the Colour background, with the
  *   switched-off tray buttons and the info pill on a very dark surface.
  * - Gradient and Blur backgrounds are dark, so the dark version of the colours is used
@@ -218,8 +218,10 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             onTray = Color.White.copy(alpha = 0.72f),
             trayChecked = scheme.secondary.copy(alpha = 0.28f),
             onTrayChecked = scheme.onSurface,
+            // Lyrics: the same veil and icon colour as Previous / Next (the tertiary colour is the
+            // opposite hue of the cover and clashed here).
             accent = soft,
-            onAccent = scheme.tertiary,
+            onAccent = scheme.onSurface,
             badge = soft,
             onBadge = Color.White.copy(alpha = 0.72f)
         )

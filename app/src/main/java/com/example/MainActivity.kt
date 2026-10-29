@@ -997,6 +997,30 @@ fun Material3VideoPlayerScreen(
                     }
                 }
 
+                // Behind the mini player: a soft fade to the screen colour, so list rows scrolling
+                // under it don't show through the gap between the pill and the navigation bar.
+                // It takes no touches (the list underneath still scrolls).
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = miniPlayerAllowed && miniTrack != null && !nowPlayingVisible,
+                    enter = fadeIn(motionScheme.defaultEffectsSpec()),
+                    exit = fadeOut(motionScheme.fastEffectsSpec()),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            // The pill plus the 12dp gap under it.
+                            .height(com.example.ui.components.MiniPlayerHeight + 12.dp)
+                            .background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    listOf(Color.Transparent, outerChromeBg)
+                                )
+                            )
+                    )
+                }
+
                 // Music mini player, floating just above the navigation bar. Switching tabs fades it
                 // in and out; opening Now Playing grows it into the full screen (and back).
                 androidx.compose.animation.AnimatedVisibility(

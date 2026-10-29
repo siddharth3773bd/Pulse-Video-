@@ -292,10 +292,10 @@ fun AudioMiniPlayer(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(50.dp)
+                            .size(RingBoxSize)
                             .drawWithContent {
                                 drawContent()
-                                val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                                val stroke = Stroke(width = RingStrokeWidth.toPx(), cap = StrokeCap.Round)
                                 // Inset by the line width so the ring stays inside its box.
                                 val diameter = size.minDimension - stroke.width
                                 val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
@@ -325,7 +325,7 @@ fun AudioMiniPlayer(
                             placeholderBackground = scheme.secondaryContainer,
                             placeholderTint = scheme.onSecondaryContainer,
                             modifier = (if (isShown) Modifier.playerCover() else Modifier)
-                                .size(40.dp)
+                                .size(CoverSize)
                                 .border(1.dp, scheme.outline.copy(alpha = 0.3f), CircleShape),
                             shape = CircleShape
                         )
@@ -384,7 +384,9 @@ fun AudioMiniPlayer(
                             interactionSource = playInteraction,
                             modifier = Modifier
                                 .animateWidth(playInteraction)
-                                .size(48.dp)
+                                // 42dp leaves 11dp above and below in the 64dp pill, about the
+                                // 12dp the round cover has (48dp nearly touched the edges).
+                                .size(42.dp)
                                 .testTag("mini_player_play_pause")
                         ) {
                             Icon(
@@ -419,6 +421,14 @@ fun AudioMiniPlayer(
         }
     }
 }
+
+// Round cover and its progress ring. The ring sits inside its box, so the free space between the
+// ring's inner edge and the cover is: (box - 2 x stroke - cover) / 2 = 2.5dp. That keeps bright
+// cover edges from touching the progress arc.
+private val RingBoxSize = 50.dp
+private val RingStrokeWidth = 3.dp
+private val RingCoverGap = 2.5.dp
+private val CoverSize = RingBoxSize - RingStrokeWidth * 2 - RingCoverGap * 2
 
 /** Follows the finger 1:1 at first, then slows down towards [limit] (it never goes past it). */
 private fun rubberBand(raw: Float, limit: Float): Float =
