@@ -112,8 +112,11 @@ fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) 
 /**
  * Colours of the Now Playing screens, following Material 3 colour roles so nothing clashes.
  * The colours come from "Colours from" (album art or the app's wallpaper / theme colours):
- * - Play, the seek bar and switched-on buttons use the primary colour (the most important action).
- * - Previous / Next and switched-off buttons use the tonal secondary container.
+ * - Play and the seek bar use the primary colour (the most important action).
+ * - Previous / Next use the tonal secondary container.
+ * - The bottom tray (shuffle, repeat, sleep timer, queue, ambient) sits one level lower: switched
+ *   off it is a quiet surface container, switched on it is the secondary container, so the
+ *   two rows are told apart by lightness while keeping the same hue.
  * - Gradient, Blur and Black backgrounds are dark, so the dark version of the colours is used
  *   there (light, soft accents) and the text is white. On the "Colour" background (the primary
  *   container) the text uses its matching on-colour and the other buttons a tint of the primary.
@@ -128,9 +131,15 @@ data class NowPlayingColors(
     /** Play button, seek bar, switched-on toggles. */
     val main: Color,
     val onMain: Color,
-    /** Previous / Next and switched-off toggles. */
+    /** Previous / Next, and other soft buttons. */
     val soft: Color,
     val onSoft: Color,
+    /** Switched-off buttons of the bottom tray. */
+    val tray: Color,
+    val onTray: Color,
+    /** Switched-on buttons of the bottom tray. */
+    val trayChecked: Color,
+    val onTrayChecked: Color,
     /** Lyrics button, so it stands apart from the transport buttons. */
     val accent: Color,
     val onAccent: Color
@@ -150,6 +159,11 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             onMain = scheme.onPrimary,
             soft = scheme.secondaryContainer,
             onSoft = scheme.onSecondaryContainer,
+            // Highest, not High: on a light screen High is almost the same as the background.
+            tray = scheme.surfaceContainerHighest,
+            onTray = scheme.onSurfaceVariant,
+            trayChecked = scheme.secondaryContainer,
+            onTrayChecked = scheme.onSecondaryContainer,
             accent = scheme.tertiaryContainer,
             onAccent = scheme.onTertiaryContainer
         )
@@ -166,6 +180,12 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             onMain = scheme.onPrimary,
             soft = soft,
             onSoft = scheme.onSurface,
+            // Same two levels on the dark backgrounds, where the surface and secondary containers
+            // would melt into the cover colours: a lighter veil off, the (light) secondary on.
+            tray = scheme.onSurface.copy(alpha = 0.10f),
+            onTray = Color.White.copy(alpha = 0.72f),
+            trayChecked = scheme.secondary,
+            onTrayChecked = scheme.onSecondary,
             accent = soft,
             onAccent = scheme.tertiary
         )
@@ -845,10 +865,10 @@ private fun NowPlayingTray(
                             else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                         },
                         colors = ToggleButtonDefaults.colors(
-                            containerColor = colors.soft,
-                            contentColor = colors.onSoft,
-                            checkedContainerColor = colors.main,
-                            checkedContentColor = colors.onMain
+                            containerColor = colors.tray,
+                            contentColor = colors.onTray,
+                            checkedContainerColor = colors.trayChecked,
+                            checkedContentColor = colors.onTrayChecked
                         ),
                         contentPadding = PaddingValues(horizontal = 8.dp),
                         interactionSource = interaction,
@@ -894,10 +914,10 @@ private fun TrayToggle(
         onCheckedChange = { onClick() },
         shapes = IconButtonDefaults.toggleableShapes(),
         colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
-            containerColor = colors.soft,
-            contentColor = colors.onSoft,
-            checkedContainerColor = colors.main,
-            checkedContentColor = colors.onMain
+            containerColor = colors.tray,
+            contentColor = colors.onTray,
+            checkedContainerColor = colors.trayChecked,
+            checkedContentColor = colors.onTrayChecked
         ),
         modifier = Modifier
             .size(IconButtonDefaults.mediumContainerSize())

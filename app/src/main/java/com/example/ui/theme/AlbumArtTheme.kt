@@ -35,7 +35,9 @@ import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
 import com.google.android.material.color.utilities.QuantizerCelebi
+import com.google.android.material.color.utilities.SchemeFidelity
 import com.google.android.material.color.utilities.SchemeMonochrome
+import com.google.android.material.color.utilities.SchemeNeutral
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.Score
 import kotlinx.coroutines.Dispatchers
@@ -101,8 +103,29 @@ suspend fun albumArtColorsFor(context: Context, track: AudioTrackItem): AlbumArt
 }
 
 /**
- * Same pipeline Android uses for wallpaper colours: quantize the image (Celebi), score the
- * candidates to pick a seed, then build a Tonal Spot Material 3 scheme from that seed.
+ * Below this HCT chroma a colour is practically grey. Covers whose best colours are all below it
+ * (black, white, grey, sepia) get a neutral palette instead of a coloured one.
+ */
+private const val NEAR_NEUTRAL_CHROMA = 12.0
+
+/** Below this chroma a colour has no usable hue at all (pure black, white or grey). */
+private const val NO_HUE_CHROMA = 2.0
+
+/**
+ * Handed to [Score.score] as its "nothing was colourful enough" fallback, instead of its default
+ * Google Blue. It is not opaque, so it can never be a real colour from the cover, and when it
+ * comes back we know the cover has no colour.
+ */
+private const val NO_COLOUR_SENTINEL = 0x00ABCDEF
+
+/**
+ * Quantize the image (Celebi) and score the candidates to pick a seed, like Android does for
+ * wallpaper colours. Then:
+ * - A colourful cover gets a Fidelity scheme: the primary colours keep the real hue and
+ *   colourfulness of the artwork instead of being pulled to Tonal Spot's soft, pastel level.
+ * - A cover with no colour (mostly black, white or grey, or one where the scorer found nothing
+ *   colourful enough) gets a neutral scheme made from its most common colour. It never falls
+ *   back to Google Blue.
  */
 private fun extractAlbumArtColors(source: Bitmap): AlbumArtColors {
     val software = if (source.config == Bitmap.Config.HARDWARE) {
@@ -117,11 +140,27 @@ private fun extractAlbumArtColors(source: Bitmap): AlbumArtColors {
     small.getPixels(pixels, 0, width, 0, 0, width, height)
 
     val quantized = QuantizerCelebi.quantize(pixels, 128)
-    val seed = Score.score(quantized).firstOrNull() ?: 0xFF4285F4.toInt()
-    val hct = Hct.fromInt(seed)
+    val candidates = Score.score(quantized, 4, NO_COLOUR_SENTINEL).filter { it != NO_COLOUR_SENTINEL }
+    val maxChroma = candidates.maxOfOrNull { Hct.fromInt(it).chroma } ?: 0.0
 
-    val light = SchemeTonalSpot(hct, false, 0.0).toComposeColorScheme(isDark = false)
-    val dark = SchemeTonalSpot(hct, true, 0.0).toComposeColorScheme(isDark = true)
+    if (candidates.isEmpty() || maxChroma < NEAR_NEUTRAL_CHROMA) {
+        // Grey artwork: the most common colour of the cover, with its own slight tint if it has one.
+        // (These schemes use only its hue; tone and the light/dark theme decide the lightness.)
+        val dominant = quantized.maxByOrNull { it.value }?.key ?: 0xFF808080.toInt()
+        val hct = Hct.fromInt(dominant)
+        fun neutral(dark: Boolean): DynamicScheme =
+            if (hct.chroma < NO_HUE_CHROMA) SchemeMonochrome(hct, dark, 0.0) else SchemeNeutral(hct, dark, 0.0)
+        return AlbumArtColors(
+            light = neutral(dark = false).toComposeColorScheme(isDark = false),
+            dark = neutral(dark = true).toComposeColorScheme(isDark = true),
+            gradient = gradientColors(small, dominant)
+        )
+    }
+
+    val seed = candidates.first()
+    val hct = Hct.fromInt(seed)
+    val light = SchemeFidelity(hct, false, 0.0).toComposeColorScheme(isDark = false)
+    val dark = SchemeFidelity(hct, true, 0.0).toComposeColorScheme(isDark = true)
 
     return AlbumArtColors(light = light, dark = dark, gradient = gradientColors(small, seed))
 }
