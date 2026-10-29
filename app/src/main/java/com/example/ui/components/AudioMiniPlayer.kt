@@ -9,17 +9,22 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -69,7 +74,7 @@ import com.example.ui.icons.Symbols
  * Tap it, or drag it up, to open Now Playing.
  *
  * Swipe the cover and song name left/right to change song (the same idea as the cover on Now
- * Playing). A wavy Expressive progress ring around the round cover shows how far the song is.
+ * Playing). A thin progress ring around the round cover shows how far the song is.
  */
 @Composable
 fun AudioMiniPlayer(
@@ -191,8 +196,8 @@ fun AudioMiniPlayer(
             }
     ) {
         Row(
-            // 4dp on the left keeps the ring centred in the pill's round end.
-            modifier = Modifier.padding(start = 4.dp, end = 8.dp),
+            // 7dp on the left keeps the 50dp ring centred in the pill's round end.
+            modifier = Modifier.padding(start = 7.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             HorizontalPager(
@@ -220,32 +225,53 @@ fun AudioMiniPlayer(
                         },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Wavy Expressive progress ring around the round cover. The wave settles
-                    // flat while paused.
-                    val ringProgress by animateFloatAsState(
+                    // Thin progress ring around the round cover: a faint full circle with the
+                    // song's progress drawn over it from 12 o'clock (same look as Echo Music).
+                    val ringProgress = animateFloatAsState(
                         targetValue = if (isCurrent) progress().coerceIn(0f, 1f) else 0f,
                         animationSpec = tween(durationMillis = 250, easing = LinearEasing),
                         label = "miniPlayerRing"
                     )
-                    val ringWave by animateFloatAsState(
-                        targetValue = if (isCurrent && isPlaying) 1f else 0f,
-                        animationSpec = motion.defaultEffectsSpec<Float>(),
-                        label = "miniPlayerRingWave"
-                    )
-                    Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                        CircularWavyProgressIndicator(
-                            progress = { ringProgress },
-                            modifier = Modifier.fillMaxSize(),
-                            color = scheme.primary,
-                            trackColor = scheme.outlineVariant,
-                            amplitude = { ringWave }
-                        )
+                    val ringColor = scheme.primary
+                    val ringTrackColor = scheme.outline.copy(alpha = 0.2f)
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .drawWithContent {
+                                drawContent()
+                                val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                                // Inset by the line width so the ring stays inside its box.
+                                val diameter = size.minDimension - stroke.width
+                                val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+                                drawArc(
+                                    color = ringTrackColor,
+                                    startAngle = 0f,
+                                    sweepAngle = 360f,
+                                    useCenter = false,
+                                    topLeft = topLeft,
+                                    size = Size(diameter, diameter),
+                                    style = stroke
+                                )
+                                drawArc(
+                                    color = ringColor,
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * ringProgress.value,
+                                    useCenter = false,
+                                    topLeft = topLeft,
+                                    size = Size(diameter, diameter),
+                                    style = stroke
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
                         AudioArt(
                             uri = pageTrack.contentUri,
                             placeholderBackground = scheme.secondaryContainer,
                             placeholderTint = scheme.onSecondaryContainer,
                             // Only the current song's cover is the one that grows into Now Playing.
-                            modifier = (if (isCurrent) Modifier.playerCover() else Modifier).size(42.dp),
+                            modifier = (if (isCurrent) Modifier.playerCover() else Modifier)
+                                .size(40.dp)
+                                .border(1.dp, scheme.outline.copy(alpha = 0.3f), CircleShape),
                             shape = CircleShape
                         )
                     }
