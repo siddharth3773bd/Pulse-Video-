@@ -247,12 +247,54 @@ object LyricsRepository {
     }
 
 
-    /** Reads a picked .lrc / .txt file as text. */
+    /** Lyrics files the app understands. */
+    private val lyricsExtensions = setOf("lrc", "txt")
+
+    /** The picked file's name, or null if the provider doesn't say. */
+    fun displayName(context: Context, uri: Uri): String? = runCatching {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    }.getOrNull()
+
+    /** True for a .lrc / .txt name (and when the name is unknown: the content is checked instead). */
+    fun isLyricsFileName(name: String?): Boolean =
+        name == null || name.substringAfterLast('.', "").lowercase(Locale.ROOT) in lyricsExtensions
+
+    /** A lyrics file is small text; anything bigger than this is not one (audio, video, photo…). */
+    private const val MAX_LYRICS_BYTES = 1_000_000
+
+    /** Reads a picked .lrc / .txt file as text; null if it is too big or isn't text at all. */
     suspend fun readTextFile(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
         runCatching {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@runCatching null
+            val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                // Read at most one byte more than allowed, so a huge file is never loaded whole.
+                val buffer = ByteArray(MAX_LYRICS_BYTES + 1)
+                var total = 0
+                while (total < buffer.size) {
+                    val read = input.read(buffer, total, buffer.size - total)
+                    if (read < 0) break
+                    total += read
+                }
+                if (total > MAX_LYRICS_BYTES) null else buffer.copyOf(total)
+            } ?: return@runCatching null
+            if (looksBinary(bytes)) return@runCatching null
             decode(bytes)
         }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    /** Text has (almost) no control characters or zero bytes; audio, video and photos are full of them. */
+    private fun looksBinary(bytes: ByteArray): Boolean {
+        val utf16 = bytes.size >= 2 &&
+            ((bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) || (bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()))
+        if (utf16) return false
+        val n = minOf(bytes.size, 4096)
+        var bad = 0
+        for (i in 0 until n) {
+            val v = bytes[i].toInt() and 0xFF
+            if (v == 0) return true
+            if (v < 9 || v in 14..31) bad++
+        }
+        return bad * 100 > n
     }
 
     // ---------------------------------------------------------------- storage

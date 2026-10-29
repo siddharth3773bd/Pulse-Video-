@@ -1506,8 +1506,14 @@ private fun SubtitleSheet(
         if (uri != null) {
             val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
                 ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "Subtitles.srt"
-            onLoadFile(uri, name)
-            onDismiss()
+            // Only real subtitle files; audio, video, photos and the like are turned away.
+            val ext = name.substringAfterLast('.', "").lowercase()
+            if (ext in setOf("srt", "vtt", "ass", "ssa", "ttml", "xml", "dfxp")) {
+                onLoadFile(uri, name)
+                onDismiss()
+            } else {
+                android.widget.Toast.makeText(context, "That isn't a subtitle file (.srt, .vtt, .ass, .ssa or .ttml)", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
     }
     val scheme = MaterialTheme.colorScheme

@@ -136,6 +136,11 @@ fun LyricsScreen(
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
+                // Only .lrc / .txt: audio, video, photos and anything else is turned away.
+                if (!LyricsRepository.isLyricsFileName(LyricsRepository.displayName(context, uri))) {
+                    Toast.makeText(context, "That isn't a lyrics file. Pick a .lrc or .txt file.", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
                 val text = LyricsRepository.readTextFile(context, uri)
                 if (text == null || LrcParser.parse(text).isEmpty) {
                     Toast.makeText(context, "Couldn't read lyrics from that file", Toast.LENGTH_SHORT).show()
@@ -146,7 +151,10 @@ fun LyricsScreen(
             }
         }
     }
-    val loadFile: () -> Unit = { filePicker.launch(arrayOf("*/*")) }
+    // The picker only offers text files (.lrc has no standard type, so it shows up as "any binary").
+    val loadFile: () -> Unit = {
+        filePicker.launch(arrayOf("text/plain", "text/*", "application/x-lrc", "application/octet-stream"))
+    }
 
     val colors = nowPlayingColors(background)
     // The controls step aside while the lyrics play; any touch brings them back.
