@@ -3,8 +3,6 @@
 package com.example.ui.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import androidx.compose.ui.platform.LocalDensity
@@ -182,9 +180,7 @@ fun VideoPlayerModal(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     /** True while the player is shrinking away after being closed. */
-    closing: Boolean = false,
-    /** True when closing flies into the video's thumbnail; false = the player closes on its own. */
-    flyingHome: Boolean = true
+    closing: Boolean = false
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -395,24 +391,7 @@ fun VideoPlayerModal(
     }
     // Android's predictive back: while the gesture is held the player shrinks and follows the
     // finger with the library showing behind it; letting go closes it.
-    // Flying home, the preview eases back to full size while the flight takes over. With no
-    // thumbnail to fly into it stays where the finger left it and just carries on shrinking.
-    val back = rememberPredictiveBack(enabled = !closing, settleAfterBack = flyingHome, onBack = closeAndPersist)
-    // The player's own closing motion (0 = open, 1 = gone) for when there is no thumbnail to land
-    // on. It continues from the back gesture's shrink, so there is no jump when you let go.
-    val exitPose = remember { Animatable(0f) }
-    LaunchedEffect(closing, flyingHome) {
-        if (closing && !flyingHome) {
-            exitPose.animateTo(1f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow))
-        }
-    }
-    LaunchedEffect(closing) {
-        if (!closing) {
-            // Opened again while still leaving: start fresh.
-            exitPose.snapTo(0f)
-            back.reset()
-        }
-    }
+    val back = rememberPredictiveBack(enabled = !closing, settleAfterBack = true, onBack = closeAndPersist)
     // While the back gesture is held or the player is closing, the buttons step aside so just the
     // picture shrinks away.
     val backInProgress by remember { derivedStateOf { back.progress > 0.01f } }
@@ -498,15 +477,7 @@ fun VideoPlayerModal(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .graphicsLayer {
-                val leaving = exitPose.value
-                applyPredictiveBack(
-                    back,
-                    cornerRadius = 28.dp,
-                    extraScale = 1f - 0.15f * leaving,
-                    extraCornerFraction = leaving
-                )
-            }
+            .graphicsLayer { applyPredictiveBack(back, cornerRadius = 28.dp) }
             .background(Color.Black)
             .onSizeChanged { size ->
                 surfaceWidthPx = size.width.coerceAtLeast(1)

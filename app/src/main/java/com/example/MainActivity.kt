@@ -734,8 +734,7 @@ fun Material3VideoPlayerScreen(
     SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
     val playerSharedScope = this
     // Video thumbnails in the lists take part in the player's open/close animation.
-    val thumbnailRegistry = com.example.ui.components.rememberThumbnailRegistry()
-    val videoTransition = VideoTransitionScope(playerSharedScope, uiState.playingVideo?.id, thumbnailRegistry)
+    val videoTransition = VideoTransitionScope(playerSharedScope, uiState.playingVideo?.id)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1386,28 +1385,14 @@ fun Material3VideoPlayerScreen(
         // growing in, and closes by shrinking away (carrying on from the back gesture's shrink).
         var lastPlayingVideo by remember { mutableStateOf<VideoItem?>(null) }
         if (uiState.playingVideo != null) lastPlayingVideo = uiState.playingVideo
-        // Can the player fly into its thumbnail? Only if that thumbnail is on screen (not when it
-        // was opened from search, or after next/previous moved on to a video that's scrolled off).
-        val flyHome = lastPlayingVideo?.id?.let { thumbnailRegistry.containsKey(it) } == true
         AnimatedVisibility(
             visible = uiState.playingVideo != null,
             // With its thumbnail on screen the player grows out of it and shrinks back into it
             // (the frame moves; these fades cross over to and from the thumbnail on the way).
             // Otherwise it simply fades in and out.
             enter = fadeIn(androidx.compose.animation.core.tween(durationMillis = 150)),
-            // Flying home: the picture stays solid while it flies and only hands over at the end.
-            // No thumbnail: it shrinks and fades away right at once (the old 300 ms wait here
-            // left the full-size player sitting still, then vanishing, which felt like a cut).
-            exit = if (flyHome) {
-                fadeOut(androidx.compose.animation.core.tween(durationMillis = 140, delayMillis = 300))
-            } else {
-                fadeOut(
-                    androidx.compose.animation.core.tween(
-                        durationMillis = 280,
-                        easing = androidx.compose.animation.core.FastOutLinearInEasing
-                    )
-                )
-            },
+            // Closing: the picture stays solid while it flies home and only hands over at the end.
+            exit = fadeOut(androidx.compose.animation.core.tween(durationMillis = 140, delayMillis = 300)),
             modifier = Modifier.fillMaxSize()
         ) {
             val activePlaying = uiState.playingVideo ?: lastPlayingVideo ?: return@AnimatedVisibility
@@ -1437,7 +1422,6 @@ fun Material3VideoPlayerScreen(
                 onUpdatePlaybackSettings = { transform -> viewModel.updatePlaybackSettings(context, transform) },
                 onClose = { if (uiState.playingVideo != null) viewModel.closeVideoPlayer(context) },
                 closing = uiState.playingVideo == null,
-                flyingHome = flyHome,
                 // Linked to a thumbnail only while opening or closing. Switching videos inside the
                 // player used to link it to the next video's thumbnail, which flashed that
                 // thumbnail over the picture.
