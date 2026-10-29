@@ -2,13 +2,12 @@ package com.example.ui.components
 
 import com.example.ui.icons.Symbols
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +23,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -144,12 +144,29 @@ fun ArtworkPager(
                 pagerState.animateScrollToPage(coverIndex, animationSpec = glideSpec)
             }
         }
-        // The user swiped to another cover: play that song.
+        // The user swiped to another cover: play that song. It starts as soon as the finger lets
+        // go past the halfway point (or, for a quick flick, as soon as the cover glides past it),
+        // so the title, background and seek bar change together with the motion, not after it.
+        // [committedPage] makes sure the same song isn't started twice (now and again at rest).
+        val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
+        var committedPage by remember { mutableIntStateOf(-1) }
+        LaunchedEffect(coverIndex) { committedPage = -1 }
+        val commit: (Int) -> Unit = { page ->
+            if (hasQueue && page != coverIndexLatest && page != committedPage) {
+                committedPage = page
+                skipLatest(page)
+            }
+        }
+        LaunchedEffect(pagerState) {
+            snapshotFlow { pagerState.currentPage to isDragged }.collect { (page, dragged) ->
+                if (userSwiped && !dragged) commit(page)
+            }
+        }
         LaunchedEffect(pagerState) {
             snapshotFlow { pagerState.settledPage }.collect { page ->
                 if (userSwiped) {
                     userSwiped = false
-                    if (hasQueue && page != coverIndexLatest) skipLatest(page)
+                    commit(page)
                 }
             }
         }
@@ -164,11 +181,8 @@ fun ArtworkPager(
                 }
             }
         }
-        // A snappier settle than Compose's default (no bounce: a bouncy snap can make a pager flip back).
-        val flingBehavior = PagerDefaults.flingBehavior(
-            state = pagerState,
-            snapAnimationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-        )
+        // The cover settles on the same Expressive spring as the glide above and the rest of the app.
+        val flingBehavior = PagerDefaults.flingBehavior(state = pagerState, snapAnimationSpec = glideSpec)
 
         HorizontalPager(
             state = pagerState,
@@ -181,15 +195,14 @@ fun ArtworkPager(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // Depth: the cover that's leaving shrinks and fades a little while the next
-                    // one grows in, following your finger. At rest it's full size.
+                    // Depth: the cover that's leaving shrinks a little while the next one grows to
+                    // full size, following your finger. At rest it's full size.
                     .graphicsLayer {
                         val distance = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
                             .absoluteValue.coerceIn(0f, 1f)
-                        val scale = 0.82f + 0.18f * (1f - distance)
+                        val scale = 0.92f + 0.08f * (1f - distance)
                         scaleX = scale
                         scaleY = scale
-                        alpha = 0.35f + 0.65f * (1f - distance)
                     }
                     .pointerInput(Unit) { detectTapGestures(onDoubleTap = { doubleTap() }) }
                     .testTag(testTag),

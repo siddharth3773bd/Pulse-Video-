@@ -6,7 +6,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,6 +22,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,6 +42,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +77,9 @@ import com.example.ui.icons.Symbols
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sign
+import kotlin.math.ln
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -85,8 +90,9 @@ import kotlinx.coroutines.launch
  *
  * Swipe the whole pill left (next song) or right (previous song): it follows your finger with a
  * rubber-band feel, ticks when you've pulled far enough, and on release the song changes while the
- * pill springs back. The new title slides in the way it does on Now Playing. With nothing to
- * go to in that direction the pill only stretches a little and bounces back.
+ * pill springs back on Material's Expressive spring. The cover and names slide to the new song the
+ * way they do on Now Playing, starting the moment you let go. With nothing to go to in that
+ * direction the pill only stretches a little and bounces back.
  * A thin progress ring around the round cover shows how far the song is.
  */
 @Composable
@@ -125,6 +131,13 @@ fun AudioMiniPlayer(
     var armed by remember { mutableStateOf(false) }        // pulled far enough to change song
     var settleJob by remember { mutableStateOf<Job?>(null) }
 
+    // The song we're about to show. Set the instant you let go (the real song follows a moment
+    // later), so the cover and names start sliding together with the pill instead of after it.
+    var pending by remember { mutableStateOf<AudioTrackItem?>(null) }
+    LaunchedEffect(track.id) { pending = null }               // the real song caught up
+    LaunchedEffect(pending) { if (pending != null) { delay(1500); pending = null } }
+    val shownTrack = pending ?: track
+
     val minCommitPx = with(density) { 56.dp.toPx() }
     val flingVelocityPx = with(density) { 700.dp.toPx() }
     val minFlingDistancePx = with(density) { 20.dp.toPx() }
@@ -134,9 +147,20 @@ fun AudioMiniPlayer(
     fun canGoPrevious() = queueLatest.size > 1 && queueIndexLatest > 0
     fun canGo(towardNext: Boolean) = if (towardNext) canGoNext() else canGoPrevious()
     fun commitPx() = maxOf(widthPx * 0.2f, minCommitPx)
+    fun limitFor(towardNext: Boolean) = widthPx * (if (canGo(towardNext)) 0.45f else 0.12f)
+    fun goNext() {
+        val q = queueLatest
+        if (q.size > 1) pending = q[(queueIndexLatest + 1) % q.size]
+        skipNextLatest()
+    }
+    fun swipeToPrevious() {
+        val index = queueIndexLatest - 1
+        queueLatest.getOrNull(index)?.let { pending = it }
+        skipToLatest(index)
+    }
     // 1:1 at first, then it gets heavier. Where there is no song to go to it stops much sooner.
     fun displayed(raw: Float): Float {
-        val limit = widthPx * (if (canGo(towardNext = raw < 0f)) 0.45f else 0.12f)
+        val limit = limitFor(towardNext = raw < 0f)
         return if (limit <= 0f) 0f else rubberBand(raw, limit)
     }
 
@@ -165,45 +189,45 @@ fun AudioMiniPlayer(
                 orientation = Orientation.Horizontal,
                 onDragStarted = {
                     settleJob?.cancel()
-                    rawDrag = offsetPx
+                    // Picking it up mid-spring: continue from exactly where it is (no jump).
+                    val limit = limitFor(towardNext = offsetPx < 0f)
+                    rawDrag = if (limit > 0f) unRubberBand(offsetPx, limit) else 0f
                     armed = false
                 },
                 onDragStopped = { velocity ->
-                    val towardNext = rawDrag < 0f
+                    val raw = rawDrag
+                    val towardNext = raw < 0f
                     val allowed = canGo(towardNext)
                     val distance = abs(offsetPx)
                     val flung = abs(velocity) > flingVelocityPx &&
                         distance > minFlingDistancePx &&
                         (velocity < 0f) == towardNext
                     val commit = allowed && (distance >= commitPx() || flung)
+                    // The finger's speed, as the pill itself moves (the rubber band slows it), and
+                    // only the part heading back to the middle: it never gets pushed further out.
+                    val limit = limitFor(towardNext)
+                    val slope = if (limit > 0f) exp(-abs(raw) / limit) else 0f
+                    val awayFromMiddle = offsetPx != 0f && (velocity > 0f) == (offsetPx > 0f)
+                    val releaseVelocity = if (awayFromMiddle) 0f else velocity * slope
                     armed = false
                     rawDrag = 0f
                     if (commit) {
                         haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-                        if (towardNext) skipNextLatest() else skipToLatest(queueIndexLatest - 1)
+                        if (towardNext) goNext() else swipeToPrevious()
                     } else if (!allowed && distance > rejectDistancePx) {
                         haptic.performHapticFeedback(HapticFeedbackType.Reject)
                     }
-                    // Back to the middle with Material's spring; a little of the finger's speed is
-                    // carried over, so a quick flick overshoots a touch before settling.
+                    // Back to the middle on Material's Expressive spring.
                     settleJob = scope.launch {
                         Animatable(offsetPx).animateTo(
                             targetValue = 0f,
                             animationSpec = motion.defaultSpatialSpec<Float>(),
-                            initialVelocity = velocity * 0.3f
+                            initialVelocity = releaseVelocity
                         ) { offsetPx = value }
                     }
                 }
             )
-            .graphicsLayer {
-                val width = widthPx.coerceAtLeast(1f)
-                val pulled = (abs(offsetPx) / commitPx()).coerceIn(0f, 1f)
-                translationX = offsetPx
-                rotationZ = offsetPx / width * 4f          // a very slight tilt, like a card
-                scaleX = 1f - 0.03f * pulled
-                scaleY = 1f - 0.03f * pulled
-                alpha = 1f - 0.12f * pulled
-            }
+            .graphicsLayer { translationX = offsetPx }
             .playerContainer()
             .fillMaxWidth()
             .height(MiniPlayerHeight)
@@ -211,7 +235,7 @@ fun AudioMiniPlayer(
             // Swiping isn't visible to screen readers, so offer the same thing as actions.
             .semantics {
                 customActions = listOf(
-                    CustomAccessibilityAction("Next song") { onSkipNext(); true },
+                    CustomAccessibilityAction("Next song") { goNext(); true },
                     CustomAccessibilityAction("Previous song") { onSkipPrevious(); true }
                 )
             }
@@ -232,66 +256,15 @@ fun AudioMiniPlayer(
             modifier = Modifier.padding(start = 7.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thin progress ring around the round cover: a faint full circle with the song's
-            // progress drawn over it from 12 o'clock (same look as Echo Music).
-            val ringProgress = animateFloatAsState(
-                targetValue = progress().coerceIn(0f, 1f),
-                animationSpec = tween(durationMillis = 250, easing = LinearEasing),
-                label = "miniPlayerRing"
-            )
-            val ringColor = scheme.primary
-            val ringTrackColor = scheme.outline.copy(alpha = 0.2f)
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .drawWithContent {
-                        drawContent()
-                        val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                        // Inset by the line width so the ring stays inside its box.
-                        val diameter = size.minDimension - stroke.width
-                        val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
-                        drawArc(
-                            color = ringTrackColor,
-                            startAngle = 0f,
-                            sweepAngle = 360f,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = Size(diameter, diameter),
-                            style = stroke
-                        )
-                        drawArc(
-                            color = ringColor,
-                            startAngle = -90f,
-                            sweepAngle = 360f * ringProgress.value,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = Size(diameter, diameter),
-                            style = stroke
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                AudioArt(
-                    uri = track.contentUri,
-                    placeholderBackground = scheme.secondaryContainer,
-                    placeholderTint = scheme.onSecondaryContainer,
-                    modifier = Modifier
-                        .playerCover()
-                        .size(40.dp)
-                        .border(1.dp, scheme.outline.copy(alpha = 0.3f), CircleShape),
-                    shape = CircleShape
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            // Material's lateral transition, the same as the title on Now Playing: the old names
-            // slide out and the new ones slide in from the side the song comes from (also for
-            // the Next and Previous buttons).
+            // Material's lateral transition, the same as the title on Now Playing: the cover (with
+            // its ring) and the names slide out together and the new ones slide in from the side
+            // the song comes from. It also plays for the Next button.
             val slideSpec = motion.defaultSpatialSpec<IntOffset>()
             val fadeInSpec = motion.defaultEffectsSpec<Float>()
             val fadeOutSpec = motion.fastEffectsSpec<Float>()
             val shiftPx = with(density) { 32.dp.roundToPx() }
             AnimatedContent(
-                targetState = track,
+                targetState = shownTrack,
                 contentKey = { it.id },
                 transitionSpec = {
                     val direction = miniSkipDirection(queueLatest, initialState, targetState)
@@ -299,26 +272,80 @@ fun AudioMiniPlayer(
                         (slideOutHorizontally(slideSpec) { -direction * shiftPx } + fadeOut(fadeOutSpec)) using
                         SizeTransform(clip = false)
                 },
-                // Keeps the sliding names from drawing over the buttons.
+                // Keeps the sliding content from drawing over the buttons.
                 modifier = Modifier
                     .weight(1f)
+                    .fillMaxHeight()
                     .clipToBounds(),
-                label = "miniPlayerTitle"
+                label = "miniPlayerSong"
             ) { shown ->
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = shown.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = shown.artist,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                // Only the song that stays is the one whose cover grows into Now Playing.
+                val isShown = shown.id == shownTrack.id
+                // Thin progress ring around the round cover: a faint full circle with the song's
+                // progress drawn over it from 12 o'clock (same look as Echo Music).
+                val ring = rememberRingProgress(progress, active = isShown)
+                val ringColor = scheme.primary
+                val ringTrackColor = scheme.outline.copy(alpha = 0.2f)
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .drawWithContent {
+                                drawContent()
+                                val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                                // Inset by the line width so the ring stays inside its box.
+                                val diameter = size.minDimension - stroke.width
+                                val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
+                                drawArc(
+                                    color = ringTrackColor,
+                                    startAngle = 0f,
+                                    sweepAngle = 360f,
+                                    useCenter = false,
+                                    topLeft = topLeft,
+                                    size = Size(diameter, diameter),
+                                    style = stroke
+                                )
+                                drawArc(
+                                    color = ringColor,
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * ring.value,
+                                    useCenter = false,
+                                    topLeft = topLeft,
+                                    size = Size(diameter, diameter),
+                                    style = stroke
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AudioArt(
+                            uri = shown.contentUri,
+                            placeholderBackground = scheme.secondaryContainer,
+                            placeholderTint = scheme.onSecondaryContainer,
+                            modifier = (if (isShown) Modifier.playerCover() else Modifier)
+                                .size(40.dp)
+                                .border(1.dp, scheme.outline.copy(alpha = 0.3f), CircleShape),
+                            shape = CircleShape
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = shown.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = shown.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
             // Official Expressive button group: the pressed button springs wider.
@@ -376,7 +403,7 @@ fun AudioMiniPlayer(
                 customItem(
                     buttonGroupContent = {
                         IconButton(
-                            onClick = onSkipNext,
+                            onClick = { goNext() },
                             shapes = IconButtonDefaults.shapes(),
                             interactionSource = nextInteraction,
                             modifier = Modifier
@@ -385,7 +412,7 @@ fun AudioMiniPlayer(
                         ) { Icon(Symbols.SkipNext, contentDescription = "Next") }
                     },
                     menuContent = { menuState ->
-                        DropdownMenuItem(text = { Text("Next") }, onClick = { onSkipNext(); menuState.dismiss() })
+                        DropdownMenuItem(text = { Text("Next") }, onClick = { goNext(); menuState.dismiss() })
                     }
                 )
             }
@@ -402,4 +429,34 @@ private fun miniSkipDirection(queue: List<AudioTrackItem>, from: AudioTrackItem,
     val a = queue.indexOfFirst { it.id == from.id }
     val b = queue.indexOfFirst { it.id == to.id }
     return if (a >= 0 && b >= 0 && b < a) -1 else 1
+}
+
+/** The reverse of [rubberBand]: how far the finger would have to be for the pill to be at [shown]. */
+private fun unRubberBand(shown: Float, limit: Float): Float {
+    val ratio = (abs(shown) / limit).coerceIn(0f, 0.999f)
+    return sign(shown) * -limit * ln(1f - ratio)
+}
+
+private class FloatHolder(var value: Float)
+
+/**
+ * How far the ring is drawn. It follows the song's progress smoothly, but a big step back (a new
+ * song starts) jumps instead of sweeping backwards; a song that is sliding out keeps the progress
+ * it had instead of rewinding.
+ */
+@Composable
+private fun rememberRingProgress(progress: () -> Float, active: Boolean): State<Float> {
+    val live = progress().coerceIn(0f, 1f)
+    val last = remember { FloatHolder(live) }
+    if (active) last.value = live
+    val target = last.value
+    val animated = remember { Animatable(target) }
+    LaunchedEffect(target) {
+        if (target < animated.value - 0.05f) {
+            animated.snapTo(target)
+        } else {
+            animated.animateTo(target, tween(durationMillis = 250, easing = LinearEasing))
+        }
+    }
+    return animated.asState()
 }
