@@ -8,8 +8,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -130,7 +133,16 @@ private class PlayerMorphShape(
 // ---------------------------------------------------------------------------------------------
 
 /** The shared transition for videos, and which video is open in the player (null = none). */
-class VideoTransitionScope(val shared: SharedTransitionScope, val openVideoId: String?)
+class VideoTransitionScope(
+    val shared: SharedTransitionScope,
+    val openVideoId: String?,
+    /** Videos whose thumbnail is on screen right now, with how many (see [rememberThumbnailRegistry]). */
+    val onScreenThumbnails: SnapshotStateMap<String, Int>
+)
+
+/** Remembers which video thumbnails are on screen, so the player knows if it can fly into one. */
+@Composable
+fun rememberThumbnailRegistry(): SnapshotStateMap<String, Int> = remember { mutableStateMapOf() }
 
 /** Set around the Videos list and grid; null elsewhere (those thumbnails don't take part). */
 val LocalVideoTransition = compositionLocalOf<VideoTransitionScope?> { null }
@@ -178,6 +190,16 @@ internal fun VideoThumbnailTransition(videoId: String, content: @Composable (Mod
         return
     }
     val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Rect>()
+    // Tell the player this thumbnail is on screen (even while it steps aside), so closing can
+    // fly into it. Without one, the player closes on its own (see VideoPlayerModal).
+    val registry = scope.onScreenThumbnails
+    DisposableEffect(videoId, registry) {
+        registry[videoId] = (registry[videoId] ?: 0) + 1
+        onDispose {
+            val left = (registry[videoId] ?: 1) - 1
+            if (left <= 0) registry.remove(videoId) else registry[videoId] = left
+        }
+    }
     androidx.compose.animation.AnimatedVisibility(
         visible = scope.openVideoId != videoId,
         // Comes back at the end of the flight, as the moving picture fades into it.
