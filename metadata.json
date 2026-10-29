@@ -1,6 +1,0 @@
-{
-  "name": "Videos",
-  "description": "Material 3 video and audio player powered by Media3 ExoPlayer with MediaStore scanning, dynamic color, playlists, playback history, and gesture controls.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
