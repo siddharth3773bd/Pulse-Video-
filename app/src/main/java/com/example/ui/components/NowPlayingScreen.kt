@@ -95,7 +95,6 @@ import com.example.model.NowPlayingBackground
 import com.example.model.formatDurationMs
 import com.example.ui.icons.Symbols
 import com.example.ui.theme.LocalAlbumArtGradient
-import com.example.ui.theme.playButtonColors
 import java.util.Locale
 
 fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) {
@@ -113,8 +112,8 @@ fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) 
 /**
  * Colours of the Now Playing screens, following Material 3 colour roles so nothing clashes.
  * The colours come from "Colours from" (album art or the app's wallpaper / theme colours):
- * - Play uses the primary colour (the most important action), a bit deeper on vivid covers in a
- *   dark theme so a red cover stays red; the seek bar and switched-on buttons use the primary.
+ * - Play and the seek bar use the primary colour (the most important action). For album-art
+ *   colours in a dark theme that primary is already kept deep enough to stay colourful.
  * - Previous / Next use the tonal secondary container.
  * - The bottom tray (shuffle, repeat, sleep timer, queue, ambient) sits one level lower: switched
  *   off it is a quiet surface container, switched on it is the secondary container, so the
@@ -130,12 +129,9 @@ data class NowPlayingColors(
     val content: Color,
     /** Secondary text (artist, times). */
     val contentVariant: Color,
-    /** Seek bar, and other primary-coloured controls. */
+    /** Play button, seek bar and other primary-coloured controls. */
     val main: Color,
     val onMain: Color,
-    /** Play / Pause button. */
-    val play: Color,
-    val onPlay: Color,
     /** Previous / Next, and other soft buttons. */
     val soft: Color,
     val onSoft: Color,
@@ -153,7 +149,6 @@ data class NowPlayingColors(
 @Composable
 fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
     val scheme = MaterialTheme.colorScheme
-    val (play, onPlay) = playButtonColors(scheme)
     return if (background == NowPlayingBackground.FOLLOW_THEME) {
         NowPlayingColors(
             background = background,
@@ -163,8 +158,6 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             contentVariant = scheme.onSurfaceVariant,
             main = scheme.primary,
             onMain = scheme.onPrimary,
-            play = play,
-            onPlay = onPlay,
             soft = scheme.secondaryContainer,
             onSoft = scheme.onSecondaryContainer,
             // Highest, not High: on a light screen High is almost the same as the background.
@@ -186,8 +179,6 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             contentVariant = Color.White.copy(alpha = 0.72f),
             main = scheme.primary,
             onMain = scheme.onPrimary,
-            play = play,
-            onPlay = onPlay,
             soft = soft,
             onSoft = scheme.onSurface,
             // Same two levels on the dark backgrounds, where the surface and secondary containers
@@ -785,7 +776,7 @@ internal fun NowPlayingControls(
                 FilledIconButton(
                     onClick = onPlayPause,
                     shapes = IconButtonDefaults.shapes(),
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.play, contentColor = colors.onPlay),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.main, contentColor = colors.onMain),
                     interactionSource = playInteraction,
                     modifier = Modifier
                         .weight(1.3f)

@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
@@ -45,6 +44,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Colours extracted from one song's album art. */
 data class AlbumArtColors(
@@ -125,6 +125,40 @@ private const val NO_HUE_CHROMA = 5.0
  */
 private const val NO_COLOUR_SENTINEL = 0x00ABCDEF
 
+/** In a dark theme the primary colour of a Fidelity scheme is kept between these tones. */
+private const val DARK_PRIMARY_MIN_TONE = 55.0
+private const val DARK_PRIMARY_MAX_TONE = 68.0
+
+/** Light content on the primary colour needs at least this contrast with it; below it, dark. */
+private const val LIGHT_ON_PRIMARY_CONTRAST = 3.5f
+
+private fun contrastRatio(a: Color, b: Color): Float {
+    val lighter = max(a.luminance(), b.luminance())
+    val darker = min(a.luminance(), b.luminance())
+    return (lighter + 0.05f) / (darker + 0.05f)
+}
+
+/**
+ * The dark Fidelity scheme of a cover, with its primary colour held between tones 55 and 68.
+ *
+ * Material fixes the dark primary at tone 80, which is too light for the sRGB gamut to hold a
+ * vivid colour: a strong red or orange turns into pastel pink or peach. Here the primary is taken
+ * from the same primary palette (the cover's hue and colourfulness) at the cover's own tone,
+ * kept between 55 and 68: not darker than 55, so a very dark cover still gets a button that
+ * stands out, and not lighter than 68, so a light cover stays a colour. [onPrimary] is light or
+ * dark, whichever contrasts better. Because it is the scheme's own primary, everything that uses
+ * it (Play, the seek bar, switched-on buttons) matches without special cases.
+ */
+private fun fidelityDarkScheme(seed: Hct): ColorScheme {
+    val scheme = SchemeFidelity(seed, true, 0.0)
+    val tone = seed.tone.coerceIn(DARK_PRIMARY_MIN_TONE, DARK_PRIMARY_MAX_TONE)
+    val primary = Color(scheme.primaryPalette.tone(tone.roundToInt()))
+    val lightContent = Color(Hct.from(seed.hue, 8.0, 98.0).toInt())
+    val darkContent = Color(Hct.from(seed.hue, 12.0, 10.0).toInt())
+    val onPrimary = if (contrastRatio(primary, lightContent) >= LIGHT_ON_PRIMARY_CONTRAST) lightContent else darkContent
+    return scheme.toComposeColorScheme(isDark = true).copy(primary = primary, onPrimary = onPrimary)
+}
+
 /**
  * Quantize the image (Celebi) and score the candidates to pick a seed, like Android does for
  * wallpaper colours. Then:
@@ -167,7 +201,7 @@ private fun extractAlbumArtColors(source: Bitmap): AlbumArtColors {
     val seed = candidates.first()
     val hct = Hct.fromInt(seed)
     val light = SchemeFidelity(hct, false, 0.0).toComposeColorScheme(isDark = false)
-    val dark = SchemeFidelity(hct, true, 0.0).toComposeColorScheme(isDark = true)
+    val dark = fidelityDarkScheme(hct)
 
     return AlbumArtColors(light = light, dark = dark, gradient = gradientColors(small, seed))
 }
@@ -321,39 +355,3 @@ fun AlbumArtTheme(
 
 private fun monochromeScheme(dark: Boolean): ColorScheme =
     SchemeMonochrome(Hct.fromInt(0xFF808080.toInt()), dark, 0.0).toComposeColorScheme(isDark = dark)
-
-/** Only a scheme this colourful gets the vivid Play button (Tonal Spot's primary tops out at 36). */
-private const val VIVID_CHROMA = 48.0
-private const val PLAY_MIN_TONE = 55.0
-private const val PLAY_MAX_TONE = 70.0
-/** Light content on the Play button needs at least this contrast with the button; below it, dark. */
-private const val PLAY_LIGHT_CONTENT_CONTRAST = 3.5f
-
-private fun contrastRatio(a: Color, b: Color): Float {
-    val lighter = max(a.luminance(), b.luminance())
-    val darker = min(a.luminance(), b.luminance())
-    return (lighter + 0.05f) / (darker + 0.05f)
-}
-
-/**
- * The Play/Pause button's fill and icon colour.
- *
- * In a dark theme the primary role is fixed at tone 80. For a vivid cover that is too light for
- * the sRGB gamut to hold the colour, so a strong red or orange turns into pastel pink or peach.
- * For those schemes (the primary container is very colourful, as with Fidelity on a vivid cover)
- * the button takes the primary container's hue and colourfulness instead, with its tone kept
- * between 55 and 70: not darker than 55, so it still stands out on a very dark cover, and not
- * lighter than 70, so it stays a colour. The icon is light or dark, whichever reads better.
- * Light themes, and calm schemes (Tonal Spot, greys) keep the normal primary.
- */
-fun playButtonColors(scheme: ColorScheme): Pair<Color, Color> {
-    val isDark = scheme.surface.luminance() < 0.5f
-    val container = Hct.fromInt(scheme.primaryContainer.toArgb())
-    if (!isDark || container.chroma < VIVID_CHROMA) return scheme.primary to scheme.onPrimary
-
-    val fill = Color(Hct.from(container.hue, container.chroma, container.tone.coerceIn(PLAY_MIN_TONE, PLAY_MAX_TONE)).toInt())
-    val lightContent = Color(Hct.from(container.hue, 8.0, 98.0).toInt())
-    val darkContent = Color(Hct.from(container.hue, 12.0, 10.0).toInt())
-    val content = if (contrastRatio(fill, lightContent) >= PLAY_LIGHT_CONTENT_CONTRAST) lightContent else darkContent
-    return fill to content
-}
