@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
@@ -42,6 +43,8 @@ import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.Score
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.max
+import kotlin.math.min
 
 /** Colours extracted from one song's album art. */
 data class AlbumArtColors(
@@ -108,8 +111,12 @@ suspend fun albumArtColorsFor(context: Context, track: AudioTrackItem): AlbumArt
  */
 private const val NEAR_NEUTRAL_CHROMA = 12.0
 
-/** Below this chroma a colour has no usable hue at all (pure black, white or grey). */
-private const val NO_HUE_CHROMA = 2.0
+/**
+ * Below this chroma a colour has no usable hue (black, white or grey). Pure sRGB greys are not
+ * exactly 0 in HCT: they come out at about 2.2 to 2.9 (at a hue near 209), so 5 (also where Score
+ * stops counting colours) is what catches them.
+ */
+private const val NO_HUE_CHROMA = 5.0
 
 /**
  * Handed to [Score.score] as its "nothing was colourful enough" fallback, instead of its default
@@ -314,3 +321,39 @@ fun AlbumArtTheme(
 
 private fun monochromeScheme(dark: Boolean): ColorScheme =
     SchemeMonochrome(Hct.fromInt(0xFF808080.toInt()), dark, 0.0).toComposeColorScheme(isDark = dark)
+
+/** Only a scheme this colourful gets the vivid Play button (Tonal Spot's primary tops out at 36). */
+private const val VIVID_CHROMA = 48.0
+private const val PLAY_MIN_TONE = 55.0
+private const val PLAY_MAX_TONE = 70.0
+/** Light content on the Play button needs at least this contrast with the button; below it, dark. */
+private const val PLAY_LIGHT_CONTENT_CONTRAST = 3.5f
+
+private fun contrastRatio(a: Color, b: Color): Float {
+    val lighter = max(a.luminance(), b.luminance())
+    val darker = min(a.luminance(), b.luminance())
+    return (lighter + 0.05f) / (darker + 0.05f)
+}
+
+/**
+ * The Play/Pause button's fill and icon colour.
+ *
+ * In a dark theme the primary role is fixed at tone 80. For a vivid cover that is too light for
+ * the sRGB gamut to hold the colour, so a strong red or orange turns into pastel pink or peach.
+ * For those schemes (the primary container is very colourful, as with Fidelity on a vivid cover)
+ * the button takes the primary container's hue and colourfulness instead, with its tone kept
+ * between 55 and 70: not darker than 55, so it still stands out on a very dark cover, and not
+ * lighter than 70, so it stays a colour. The icon is light or dark, whichever reads better.
+ * Light themes, and calm schemes (Tonal Spot, greys) keep the normal primary.
+ */
+fun playButtonColors(scheme: ColorScheme): Pair<Color, Color> {
+    val isDark = scheme.surface.luminance() < 0.5f
+    val container = Hct.fromInt(scheme.primaryContainer.toArgb())
+    if (!isDark || container.chroma < VIVID_CHROMA) return scheme.primary to scheme.onPrimary
+
+    val fill = Color(Hct.from(container.hue, container.chroma, container.tone.coerceIn(PLAY_MIN_TONE, PLAY_MAX_TONE)).toInt())
+    val lightContent = Color(Hct.from(container.hue, 8.0, 98.0).toInt())
+    val darkContent = Color(Hct.from(container.hue, 12.0, 10.0).toInt())
+    val content = if (contrastRatio(fill, lightContent) >= PLAY_LIGHT_CONTENT_CONTRAST) lightContent else darkContent
+    return fill to content
+}
