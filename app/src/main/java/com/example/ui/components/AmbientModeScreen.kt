@@ -2,6 +2,7 @@
 
 package com.example.ui.components
 
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.text.rememberTextMeasurer
 import kotlinx.coroutines.coroutineScope
@@ -257,29 +258,39 @@ fun AmbientModeScreen(
                     val wPx = constraints.maxWidth
                     val gapPx = with(density) { 14.dp.toPx() }
                     val tightPx = with(density) { 2.dp.toPx() }
-                    val longestInfoPx = with(density) { 120.dp.toPx() } // 2-line name + 2-line artist
-                    // The width the texts wrap at. It is never wider than the artwork can be.
-                    val wrapPx = (hPx - longestInfoPx).coerceAtLeast(longestInfoPx).coerceAtMost(wPx * 0.5f).roundToInt()
+                    val maxSidePx = minOf(hPx, (wPx * 0.5f).roundToInt())
+                    val minSidePx = minOf(with(density) { 120.dp.toPx() }.roundToInt(), maxSidePx)
 
-                    // How tall the song name and artist really are for THIS song: the artwork takes
-                    // the rest, so artwork + texts always fill the height exactly and the space above
-                    // and below is the same whatever the length of the names.
-                    val titleH = remember(track.title, wrapPx, titleStyle) {
-                        textMeasurer.measure(
-                            text = track.title, style = titleStyle, overflow = TextOverflow.Ellipsis,
-                            maxLines = 2, constraints = Constraints(maxWidth = wrapPx)
-                        ).size.height
+                    // The artwork takes whatever height the song name and artist leave, and the texts
+                    // wrap at exactly the artwork's width, so they use all the room they have. Both
+                    // depend on each other, so we settle it in a few steps: start with the widest
+                    // artwork, see how tall the texts are at that width, shrink the artwork to fit,
+                    // measure again at the new width... (it only ever shrinks, so it ends quickly).
+                    val targetSidePx = remember(track.title, track.artist, showTitle, showArtist, hPx, wPx, titleStyle, artistStyle) {
+                        fun infoAt(width: Int): Float {
+                            val c = Constraints(maxWidth = width)
+                            val titleH = if (showTitle) {
+                                gapPx + textMeasurer.measure(
+                                    text = track.title, style = titleStyle, overflow = TextOverflow.Ellipsis,
+                                    maxLines = 2, constraints = c
+                                ).size.height
+                            } else 0f
+                            val artistH = if (showArtist) {
+                                (if (showTitle) tightPx else gapPx) + textMeasurer.measure(
+                                    text = track.artist, style = artistStyle, overflow = TextOverflow.Ellipsis,
+                                    maxLines = 2, constraints = c
+                                ).size.height
+                            } else 0f
+                            return titleH + artistH
+                        }
+                        var side = maxSidePx
+                        repeat(8) {
+                            val next = (hPx - infoAt(side)).roundToInt().coerceIn(minSidePx, maxSidePx)
+                            if (next >= side) return@repeat
+                            side = next
+                        }
+                        side
                     }
-                    val artistH = remember(track.artist, wrapPx, artistStyle) {
-                        textMeasurer.measure(
-                            text = track.artist, style = artistStyle, overflow = TextOverflow.Ellipsis,
-                            maxLines = 2, constraints = Constraints(maxWidth = wrapPx)
-                        ).size.height
-                    }
-                    val infoPx = (if (showTitle) gapPx + titleH else 0f) +
-                        (if (showArtist) (if (showTitle) tightPx else gapPx) + artistH else 0f)
-                    val targetSidePx = (hPx - infoPx).coerceAtMost(wPx * 0.5f)
-                        .coerceAtLeast(minOf(wrapPx, (wPx * 0.5f).roundToInt()).toFloat()).roundToInt()
 
                     // Smooth by design: ONLY the artwork animates (one non-bouncy spring, read while
                     // laying out, so nothing is recomposed per frame). The text area under it simply
@@ -339,16 +350,24 @@ fun AmbientModeScreen(
                                         expandVertically(MaterialTheme.motionScheme.defaultEffectsSpec())
                                     val disappear = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) +
                                         shrinkVertically(MaterialTheme.motionScheme.defaultEffectsSpec())
-                                    val wrapDp = with(density) { wrapPx.toDp() }
-                                    Column {
+                                    val textWidth = with(density) { targetSidePx.toDp() }
+                                    // The texts keep their final width (so they don't re-wrap while the
+                                    // artwork animates) and sit in the middle of the artwork.
+                                    Column(
+                                        modifier = Modifier
+                                            .wrapContentWidth(Alignment.CenterHorizontally, unbounded = true)
+                                            .width(textWidth),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
                                         androidx.compose.animation.AnimatedVisibility(visible = showTitle, enter = appear, exit = disappear) {
                                             Text(
                                                 text = track.title,
                                                 color = colors.content,
                                                 style = titleStyle,
+                                                textAlign = TextAlign.Center,
                                                 maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.widthIn(max = wrapDp).padding(top = 14.dp)
+                                                modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
                                             )
                                         }
                                         androidx.compose.animation.AnimatedVisibility(visible = showArtist, enter = appear, exit = disappear) {
@@ -356,9 +375,10 @@ fun AmbientModeScreen(
                                                 text = track.artist,
                                                 color = colors.contentVariant,
                                                 style = artistStyle,
+                                                textAlign = TextAlign.Center,
                                                 maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.widthIn(max = wrapDp).padding(top = if (showTitle) 2.dp else 14.dp)
+                                                modifier = Modifier.fillMaxWidth().padding(top = if (showTitle) 2.dp else 14.dp)
                                             )
                                         }
                                     }
