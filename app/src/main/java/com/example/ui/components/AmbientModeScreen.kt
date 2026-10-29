@@ -2,8 +2,9 @@
 
 package com.example.ui.components
 
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.rememberTextMeasurer
 import kotlinx.coroutines.coroutineScope
-import androidx.compose.runtime.mutableFloatStateOf
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.layout
@@ -245,41 +246,63 @@ fun AmbientModeScreen(
                 )
             }
             landscape -> {
-                // How much of the height the artwork takes: all of it when nothing sits under it,
-                // less when the song name / artist do.
-                val targetFraction = when {
-                    showTitle && showArtist -> 0.64f
-                    showTitle -> 0.72f
-                    showArtist -> 0.84f
-                    else -> 1f
-                }
-                // Smooth by design: ONLY the artwork animates (one non-bouncy spring, read while
-                // laying out, so nothing is recomposed per frame). The text area under it simply
-                // takes the leftover height, so the group never wobbles. The lyrics don't follow the
-                // artwork frame by frame (that made them re-wrap and shake): they fade out, jump to
-                // their final place unseen, and fade back in once the artwork has settled.
-                val artFraction = remember { Animatable(targetFraction) }
-                var slotFraction by remember { mutableFloatStateOf(targetFraction) }
-                val lyricsAlpha = remember { Animatable(1f) }
-                val sizeSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
-                LaunchedEffect(targetFraction) {
-                    if (artFraction.targetValue == targetFraction) return@LaunchedEffect
-                    coroutineScope {
-                        launch { artFraction.animateTo(targetFraction, sizeSpec) }
-                        launch {
-                            lyricsAlpha.animateTo(0f, tween(90))
-                            slotFraction = targetFraction
-                            delay(170)
-                            lyricsAlpha.animateTo(1f, tween(240))
-                        }
-                    }
-                }
+                val density = LocalDensity.current
+                val textMeasurer = rememberTextMeasurer()
+                val titleStyle = MaterialTheme.typography.titleLargeEmphasized
+                val artistStyle = MaterialTheme.typography.titleMedium
                 BoxWithConstraints(
                     modifier = safe.padding(start = 36.dp, end = 48.dp, top = 32.dp, bottom = 32.dp)
                 ) {
                     val hPx = constraints.maxHeight
                     val wPx = constraints.maxWidth
-                    fun sideFor(f: Float) = minOf(hPx * f, wPx * 0.5f).roundToInt()
+                    val gapPx = with(density) { 14.dp.toPx() }
+                    val tightPx = with(density) { 2.dp.toPx() }
+                    val longestInfoPx = with(density) { 120.dp.toPx() } // 2-line name + 2-line artist
+                    // The width the texts wrap at. It is never wider than the artwork can be.
+                    val wrapPx = (hPx - longestInfoPx).coerceAtLeast(longestInfoPx).coerceAtMost(wPx * 0.5f).roundToInt()
+
+                    // How tall the song name and artist really are for THIS song: the artwork takes
+                    // the rest, so artwork + texts always fill the height exactly and the space above
+                    // and below is the same whatever the length of the names.
+                    val titleH = remember(track.title, wrapPx, titleStyle) {
+                        textMeasurer.measure(
+                            text = track.title, style = titleStyle, overflow = TextOverflow.Ellipsis,
+                            maxLines = 2, constraints = Constraints(maxWidth = wrapPx)
+                        ).size.height
+                    }
+                    val artistH = remember(track.artist, wrapPx, artistStyle) {
+                        textMeasurer.measure(
+                            text = track.artist, style = artistStyle, overflow = TextOverflow.Ellipsis,
+                            maxLines = 2, constraints = Constraints(maxWidth = wrapPx)
+                        ).size.height
+                    }
+                    val infoPx = (if (showTitle) gapPx + titleH else 0f) +
+                        (if (showArtist) (if (showTitle) tightPx else gapPx) + artistH else 0f)
+                    val targetSidePx = (hPx - infoPx).coerceAtMost(wPx * 0.5f)
+                        .coerceAtLeast(minOf(wrapPx, (wPx * 0.5f).roundToInt()).toFloat()).roundToInt()
+
+                    // Smooth by design: ONLY the artwork animates (one non-bouncy spring, read while
+                    // laying out, so nothing is recomposed per frame). The text area under it simply
+                    // takes the leftover height. The lyrics don't follow the artwork frame by frame
+                    // (that made them re-wrap and shake): they fade out, jump to their final place
+                    // unseen, and fade back in once the artwork has settled.
+                    val artSide = remember { Animatable(targetSidePx.toFloat()) }
+                    var slotSide by remember { mutableIntStateOf(targetSidePx) }
+                    val lyricsAlpha = remember { Animatable(1f) }
+                    val sizeSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+                    LaunchedEffect(targetSidePx) {
+                        if (artSide.targetValue == targetSidePx.toFloat()) return@LaunchedEffect
+                        coroutineScope {
+                            launch { artSide.animateTo(targetSidePx.toFloat(), sizeSpec) }
+                            launch {
+                                lyricsAlpha.animateTo(0f, tween(90))
+                                slotSide = targetSidePx
+                                delay(170)
+                                lyricsAlpha.animateTo(1f, tween(240))
+                            }
+                        }
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = if (showLyrics) Arrangement.Start else Arrangement.Center
@@ -288,7 +311,7 @@ fun AmbientModeScreen(
                         // lyrics don't move while the artwork animates); without lyrics it follows it.
                         Box(
                             modifier = Modifier.layout { measurable, c ->
-                                val w = sideFor(if (showLyrics) slotFraction else artFraction.value)
+                                val w = if (showLyrics) slotSide else artSide.value.roundToInt()
                                 val placeable = measurable.measure(Constraints.fixed(w, c.maxHeight))
                                 layout(w, c.maxHeight) { placeable.placeRelative(0, 0) }
                             }
@@ -296,7 +319,7 @@ fun AmbientModeScreen(
                             Column(modifier = Modifier.wrapContentSize(Alignment.TopStart, unbounded = true)) {
                                 art(
                                     Modifier.layout { measurable, _ ->
-                                        val side = sideFor(artFraction.value)
+                                        val side = artSide.value.roundToInt()
                                         val placeable = measurable.measure(Constraints.fixed(side, side))
                                         layout(side, side) { placeable.placeRelative(0, 0) }
                                     }
@@ -305,7 +328,7 @@ fun AmbientModeScreen(
                                 Box(
                                     modifier = Modifier
                                         .layout { measurable, _ ->
-                                            val side = sideFor(artFraction.value)
+                                            val side = artSide.value.roundToInt()
                                             val h = (hPx - side).coerceAtLeast(0)
                                             val placeable = measurable.measure(Constraints.fixed(side, h))
                                             layout(side, h) { placeable.placeRelative(0, 0) }
@@ -316,25 +339,26 @@ fun AmbientModeScreen(
                                         expandVertically(MaterialTheme.motionScheme.defaultEffectsSpec())
                                     val disappear = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) +
                                         shrinkVertically(MaterialTheme.motionScheme.defaultEffectsSpec())
+                                    val wrapDp = with(density) { wrapPx.toDp() }
                                     Column {
                                         androidx.compose.animation.AnimatedVisibility(visible = showTitle, enter = appear, exit = disappear) {
                                             Text(
                                                 text = track.title,
                                                 color = colors.content,
-                                                style = MaterialTheme.typography.titleLargeEmphasized,
+                                                style = titleStyle,
                                                 maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(top = 14.dp)
+                                                modifier = Modifier.widthIn(max = wrapDp).padding(top = 14.dp)
                                             )
                                         }
                                         androidx.compose.animation.AnimatedVisibility(visible = showArtist, enter = appear, exit = disappear) {
                                             Text(
                                                 text = track.artist,
                                                 color = colors.contentVariant,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                maxLines = 1,
+                                                style = artistStyle,
+                                                maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(top = if (showTitle) 2.dp else 14.dp)
+                                                modifier = Modifier.widthIn(max = wrapDp).padding(top = if (showTitle) 2.dp else 14.dp)
                                             )
                                         }
                                     }
