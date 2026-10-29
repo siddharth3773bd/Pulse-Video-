@@ -2,6 +2,8 @@ package com.example.ui.components
 
 import com.example.ui.icons.Symbols
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.example.model.AudioTrackItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 
 /**
  * Square album art you can swipe through (a HorizontalPager over the queue):
@@ -150,8 +154,25 @@ fun ArtworkPager(
             }
         }
 
+        // A small tick each time the swipe passes halfway to another song, so you feel it commit.
+        LaunchedEffect(pagerState) {
+            var last = pagerState.currentPage
+            snapshotFlow { pagerState.currentPage }.collect { page ->
+                if (page != last) {
+                    last = page
+                    if (userSwiped) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                }
+            }
+        }
+        // A snappier settle than Compose's default (no bounce: a bouncy snap can make a pager flip back).
+        val flingBehavior = PagerDefaults.flingBehavior(
+            state = pagerState,
+            snapAnimationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+        )
+
         HorizontalPager(
             state = pagerState,
+            flingBehavior = flingBehavior,
             pageSpacing = 16.dp,
             beyondViewportPageCount = 1,
             key = { page -> pageKeys.getOrElse(page) { "page#$page" } },
@@ -160,6 +181,16 @@ fun ArtworkPager(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    // Depth: the cover that's leaving shrinks and fades a little while the next
+                    // one grows in, following your finger. At rest it's full size.
+                    .graphicsLayer {
+                        val distance = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                            .absoluteValue.coerceIn(0f, 1f)
+                        val scale = 0.82f + 0.18f * (1f - distance)
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = 0.35f + 0.65f * (1f - distance)
+                    }
                     .pointerInput(Unit) { detectTapGestures(onDoubleTap = { doubleTap() }) }
                     .testTag(testTag),
                 contentAlignment = Alignment.Center

@@ -1027,7 +1027,15 @@ fun Material3VideoPlayerScreen(
                                     onOpen = { showNowPlaying = true },
                                     onTogglePlayPause = { viewModel.toggleAudioPlayPause() },
                                     onSkipPrevious = { viewModel.skipAudioPrevious() },
-                                    onSkipNext = { viewModel.skipAudioNext() }
+                                    onSkipNext = { viewModel.skipAudioNext() },
+                                    queue = audioState.queue,
+                                    queueIndex = audioState.queueIndex,
+                                    onSkipToQueueItem = { audioManager.skipToQueueItem(it) },
+                                    progress = {
+                                        if (audioState.durationMs > 0L) {
+                                            audioState.positionMs.toFloat() / audioState.durationMs
+                                        } else 0f
+                                    }
                                 )
                             }
                         }
