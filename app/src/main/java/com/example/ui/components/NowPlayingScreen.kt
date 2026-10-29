@@ -118,7 +118,11 @@ fun nowPlayingActionIcon(action: NowPlayingAction): ImageVector = when (action) 
  * - The bottom tray (shuffle, repeat, sleep timer, queue, ambient) sits one level lower: switched
  *   off it is a quiet surface container, switched on it is the secondary container, so the
  *   two rows are told apart by lightness while keeping the same hue.
- * - Gradient, Blur and Black backgrounds are dark, so the dark version of the colours is used
+ * - Lyrics uses the secondary container too, so it matches Previous / Next (the tertiary colour is
+ *   the opposite hue of the cover and clashes). The audio-info pill is a quiet surface container.
+ * - Black is a pitch-black screen with the same colours as the Colour background, with the
+ *   switched-off tray buttons and the info pill on a very dark surface.
+ * - Gradient and Blur backgrounds are dark, so the dark version of the colours is used
  *   there (light, soft accents) and the text is white. On the "Colour" background (the primary
  *   container) the text uses its matching on-colour and the other buttons a tint of the primary.
  */
@@ -141,9 +145,12 @@ data class NowPlayingColors(
     /** Switched-on buttons of the bottom tray. */
     val trayChecked: Color,
     val onTrayChecked: Color,
-    /** Lyrics button, so it stands apart from the transport buttons. */
+    /** Lyrics button. */
     val accent: Color,
-    val onAccent: Color
+    val onAccent: Color,
+    /** The audio-info pill (kHz, kbps, format): information, not a button. */
+    val badge: Color,
+    val onBadge: Color
 )
 
 @Composable
@@ -165,11 +172,33 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             onTray = scheme.onSurfaceVariant,
             trayChecked = scheme.secondaryContainer,
             onTrayChecked = scheme.onSecondaryContainer,
-            accent = scheme.tertiaryContainer,
-            onAccent = scheme.onTertiaryContainer
+            accent = scheme.secondaryContainer,
+            onAccent = scheme.onSecondaryContainer,
+            badge = scheme.surfaceContainerHigh,
+            onBadge = scheme.onSurfaceVariant
+        )
+    } else if (background == NowPlayingBackground.AMOLED) {
+        // Pitch-black screen, the cover's colours on the controls (the same roles as Colour).
+        // Switched-off tray buttons and the info pill sit quietly on a very dark surface.
+        NowPlayingColors(
+            background = background,
+            content = Color.White,
+            contentVariant = Color.White.copy(alpha = 0.72f),
+            main = scheme.primary,
+            onMain = scheme.onPrimary,
+            soft = scheme.secondaryContainer,
+            onSoft = scheme.onSecondaryContainer,
+            tray = scheme.surfaceContainerHigh,
+            onTray = scheme.onSurfaceVariant,
+            trayChecked = scheme.secondaryContainer,
+            onTrayChecked = scheme.onSecondaryContainer,
+            accent = scheme.secondaryContainer,
+            onAccent = scheme.onSecondaryContainer,
+            badge = scheme.surfaceContainerHigh,
+            onBadge = scheme.onSurfaceVariant
         )
     } else {
-        // Gradient / Blur / Black: the secondary container is dark too and nearly melts into the
+        // Gradient / Blur: the secondary container is dark too and nearly melts into the
         // background, so the soft buttons are the on-surface colour at 20%: a light veil that
         // shows over any cover colour.
         val soft = scheme.onSurface.copy(alpha = 0.20f)
@@ -181,7 +210,7 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             onMain = scheme.onPrimary,
             soft = soft,
             onSoft = scheme.onSurface,
-            // Same two levels on the dark backgrounds, where the surface and secondary containers
+            // Same two levels on Gradient and Blur, where the surface and secondary containers
             // would melt into the cover colours. Off: a faint veil (10%). On: a veil as dense as
             // Previous / Next (20% white, about as bright as 28% of the light secondary) with the
             // cover's tint, and the same icon colour as Previous / Next. Never brighter than them.
@@ -190,7 +219,9 @@ fun nowPlayingColors(background: NowPlayingBackground): NowPlayingColors {
             trayChecked = scheme.secondary.copy(alpha = 0.28f),
             onTrayChecked = scheme.onSurface,
             accent = soft,
-            onAccent = scheme.tertiary
+            onAccent = scheme.tertiary,
+            badge = soft,
+            onBadge = Color.White.copy(alpha = 0.72f)
         )
     }
 }
@@ -452,7 +483,7 @@ fun NowPlayingScreen(
                         ) { chip ->
                             if (!chip.isNullOrBlank()) {
                                 // A quiet pill so it reads as information, not a button.
-                                Surface(shape = CircleShape, color = colors.soft, contentColor = colors.contentVariant) {
+                                Surface(shape = CircleShape, color = colors.badge, contentColor = colors.onBadge) {
                                     Text(
                                         text = chip,
                                         style = MaterialTheme.typography.labelMedium,

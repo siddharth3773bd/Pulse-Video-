@@ -107,7 +107,7 @@ enum class NowPlayingBackground(val id: String, val label: String, val descripti
     FOLLOW_THEME("follow_theme", "Colour", "One solid colour from the cover"),
     GRADIENT("gradient", "Gradient", "A soft gradient of the cover's colours"),
     BLUR("blur", "Blur", "The album art, softly blurred"),
-    AMOLED("amoled", "Black", "Black and white, saves battery on OLED screens")
+    AMOLED("amoled", "Black", "Pitch-black background, saves battery on OLED screens")
 }
 
 /** Persisted settings of the Library screen. */

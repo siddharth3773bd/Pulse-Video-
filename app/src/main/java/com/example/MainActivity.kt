@@ -1135,7 +1135,6 @@ fun Material3VideoPlayerScreen(
             if (nowTrack != null) {
                 AlbumArtTheme(
                     track = nowTrack,
-                    monochrome = libraryPrefs.nowPlayingBackground == NowPlayingBackground.AMOLED,
                     // Gradient, blurred cover and black are always dark: use the dark colours there.
                     dark = libraryPrefs.nowPlayingBackground != NowPlayingBackground.FOLLOW_THEME
                 ) {
@@ -1217,7 +1216,6 @@ fun Material3VideoPlayerScreen(
                 // Same colours and background as Now Playing.
                 AlbumArtTheme(
                     track = lyricsTrack,
-                    monochrome = libraryPrefs.nowPlayingBackground == NowPlayingBackground.AMOLED,
                     // Gradient, blurred cover and black are always dark: use the dark colours there.
                     dark = libraryPrefs.nowPlayingBackground != NowPlayingBackground.FOLLOW_THEME
                 ) {

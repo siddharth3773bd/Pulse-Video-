@@ -307,8 +307,9 @@ private fun animateColorScheme(target: ColorScheme): ColorScheme {
 /**
  * Colours for the Now Playing screens (and lyrics, ambient, mini player): always the song's cover.
  *
- * @param monochrome the Black background: Material's official Monochrome scheme (black, white
- *   and greys), the neutral look.
+ * @param monochrome Material's official Monochrome scheme (black, white and greys) instead of the
+ *   cover's colours. Only Ambient mode's own black background (for the night) uses it; Now
+ *   Playing's Black background keeps the cover's colours on a pitch-black screen.
  * @param dark force the dark version of the colours, for backgrounds that are always dark
  *   (gradient, blurred cover, black); otherwise they follow the app's light / dark mode.
  */
