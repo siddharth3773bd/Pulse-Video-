@@ -9,7 +9,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.Animatable
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import androidx.compose.ui.platform.LocalDensity
 import com.example.ui.icons.Symbols
 import android.app.Activity
@@ -189,7 +191,14 @@ fun VideoPlayerModal(
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
-    val playerState by playerController.state.collectAsStateWithLifecycle()
+    // Everything about the player except WHERE it is in the video. The position changes four times
+    // a second; if this function read it, the whole player screen would re-run that often, even
+    // with the controls hidden.
+    val playerState by remember(playerController) {
+        playerController.state.map { it.copy(positionMs = 0L) }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = playerController.state.value.copy(positionMs = 0L))
+    // The position itself: read only where it is shown (the controls), never in this function's body.
+    val positionState = playerController.state.collectAsStateWithLifecycle()
     val playerTracks by playerController.tracks.collectAsStateWithLifecycle()
     // A video whose sound the phone can't decode would play in silence: tell the user, once.
     val unsupportedAudio = playerTracks.unsupportedAudio
@@ -401,7 +410,7 @@ fun VideoPlayerModal(
 
     val closeAndPersist = {
         val dur = playerState.durationMs.takeIf { it > 0L } ?: video.durationMs
-        onSavePosition(playerState.positionMs, dur, true)
+        onSavePosition(playerController.state.value.positionMs, dur, true)
         playerController.setBackgroundAudio(false)
         onClose()
     }
@@ -438,8 +447,6 @@ fun VideoPlayerModal(
 
 
     val effectiveDurationMs = playerState.durationMs.takeIf { it > 0L } ?: video.durationMs.coerceAtLeast(1000L)
-    val currentPositionMs = playerState.positionMs.coerceIn(0L, effectiveDurationMs)
-    val progressFraction = (currentPositionMs.toFloat() / effectiveDurationMs.toFloat()).coerceIn(0f, 1f)
     var seekPreviewFraction by remember { mutableStateOf<Float?>(null) }
     // The loading indicator only appears when loading really takes a while (a second), and never
     // while the seek bar is being dragged: the picture already shows where you are. The wait starts
@@ -454,11 +461,6 @@ fun VideoPlayerModal(
             showBuffering = false
         }
     }
-    val displayedPositionMs = seekPreviewFraction?.let { (it.coerceIn(0f, 1f) * effectiveDurationMs).toLong() }
-        ?: currentPositionMs
-    val rightTimeLabel = if (playbackSettings.showRemainingTime) {
-        "-${formatDurationMs((effectiveDurationMs - displayedPositionMs).coerceAtLeast(0L))}"
-    } else formatDurationMs(effectiveDurationMs)
     val configuration = LocalConfiguration.current
     // Sideways: play controls sit in the middle of the video and the bottom keeps just one row,
     // so the picture isn't covered by a tall block of buttons.
@@ -831,6 +833,15 @@ fun VideoPlayerModal(
                         onLock = { controlsLocked = true; poke() },
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
+                    // The position is read here, inside the controls, so while they are hidden
+                    // nothing re-runs four times a second.
+                    val currentPositionMs = positionState.value.positionMs.coerceIn(0L, effectiveDurationMs)
+                    val progressFraction = (currentPositionMs.toFloat() / effectiveDurationMs.toFloat()).coerceIn(0f, 1f)
+                    val displayedPositionMs = seekPreviewFraction?.let { (it.coerceIn(0f, 1f) * effectiveDurationMs).toLong() }
+                        ?: currentPositionMs
+                    val rightTimeLabel = if (playbackSettings.showRemainingTime) {
+                        "-${formatDurationMs((effectiveDurationMs - displayedPositionMs).coerceAtLeast(0L))}"
+                    } else formatDurationMs(effectiveDurationMs)
                     PlayerBottomBar(
                         isPlaying = playerState.isPlaying,
                         positionLabel = formatDurationMs(displayedPositionMs),

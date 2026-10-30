@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.media3.ui.compose.ContentFrame
-import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
+import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import kotlinx.coroutines.withContext
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -700,10 +700,10 @@ class ExoPlayerController(
         ContentFrame(
             player = activePlayerInstance,
             modifier = modifier,
-            // A TextureView is drawn as part of the screen, so the picture shrinks, fades and
-            // rounds its corners together with the player when it closes (a SurfaceView lags a
-            // frame behind and can't fade, which made closing look glitchy).
-            surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+            // Android's recommended surface: the video goes straight to the display hardware
+            // (less battery, full HDR, protected content). It used to be a TextureView, which is
+            // drawn like a normal view (easy to fade and clip) but copies every frame and loses HDR.
+            surfaceType = SURFACE_TYPE_SURFACE_VIEW,
             contentScale = contentScale,
             keepContentOnReset = true,
             shutter = {
