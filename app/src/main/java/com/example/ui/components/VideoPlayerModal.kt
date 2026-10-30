@@ -191,6 +191,17 @@ fun VideoPlayerModal(
     val activity = remember(context) { context.findActivity() }
     val playerState by playerController.state.collectAsStateWithLifecycle()
     val playerTracks by playerController.tracks.collectAsStateWithLifecycle()
+    // A video whose sound the phone can't decode would play in silence: tell the user, once.
+    val unsupportedAudio = playerTracks.unsupportedAudio
+    LaunchedEffect(video.id, unsupportedAudio) {
+        if (unsupportedAudio != null) {
+            android.widget.Toast.makeText(
+                context,
+                "Sound format ($unsupportedAudio) isn't supported for now. This video will play without sound.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     var controlsVisible by remember { mutableStateOf(true) }
     var controlsLocked by remember { mutableStateOf(false) }
@@ -469,6 +480,11 @@ fun VideoPlayerModal(
     var dragMode by remember { mutableStateOf("NONE") }
     var dragStartSeekMs by remember { mutableLongStateOf(0L) }
     var dragAccumulatedX by remember { mutableFloatStateOf(0f) }
+    // Where the sideways drag was when seeking began, so the video moves from there (not by the
+    // whole distance needed to start seeking).
+    var dragSeekOriginX by remember { mutableFloatStateOf(0f) }
+    // A sideways drag has to travel this far before it seeks, so a slip of the thumb doesn't jump.
+    val seekStartPx = with(density) { 40.dp.toPx() }
     var dragAccumulatedY by remember { mutableFloatStateOf(0f) }
     var dragStartX by remember { mutableFloatStateOf(0f) }
     var dragStartVolume by remember { mutableIntStateOf(0) }
@@ -560,6 +576,7 @@ fun VideoPlayerModal(
                         dragMode = if (fromSystemEdge) "IGNORE" else "NONE"
                         dragAccumulatedX = 0f
                         dragAccumulatedY = 0f
+                        dragSeekOriginX = 0f
                         dragStartX = start.x
                         dragStartSeekMs = playerController.state.value.positionMs
                         dragStartVolume = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
@@ -580,9 +597,10 @@ fun VideoPlayerModal(
                         dragAccumulatedX += amount.x
                         dragAccumulatedY += amount.y
                         if (dragMode == "NONE") {
-                            if (abs(dragAccumulatedX) > 24f && abs(dragAccumulatedX) > abs(dragAccumulatedY)) {
+                            if (abs(dragAccumulatedX) > seekStartPx && abs(dragAccumulatedX) > abs(dragAccumulatedY)) {
                                 if (playbackSettings.horizontalSwipeToSeek) {
                                     dragMode = "SEEK"
+                                    dragSeekOriginX = dragAccumulatedX
                                     playerController.setScrubbing(true)
                                 }
                             } else if (abs(dragAccumulatedY) > 24f && abs(dragAccumulatedY) > abs(dragAccumulatedX)) {
@@ -594,7 +612,7 @@ fun VideoPlayerModal(
                         when (dragMode) {
                             "SEEK" -> {
                                 val dur = playerController.state.value.durationMs.takeIf { it > 0L } ?: effectiveDurationMs
-                                val delta = ((dragAccumulatedX / surfaceWidthPx.toFloat()) * 90_000f).toLong()
+                                val delta = (((dragAccumulatedX - dragSeekOriginX) / surfaceWidthPx.toFloat()) * 90_000f).toLong()
                                 val target = (dragStartSeekMs + delta).coerceIn(0L, dur)
                                 playerController.seekTo(target)
                                 val sign = if (delta >= 0) "+" else "-"

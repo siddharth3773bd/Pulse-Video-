@@ -23,7 +23,9 @@ data class PlayerTrackOption(
 data class PlayerTracks(
     val audioTracks: List<PlayerTrackOption> = emptyList(),
     val subtitleTracks: List<PlayerTrackOption> = emptyList(),
-    val subtitlesEnabled: Boolean = true
+    val subtitlesEnabled: Boolean = true,
+    /** Name of the sound format (e.g. "DTS") when none of the video's sound tracks can be played. */
+    val unsupportedAudio: String? = null
 )
 
 @Immutable

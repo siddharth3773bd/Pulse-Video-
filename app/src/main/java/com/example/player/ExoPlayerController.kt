@@ -45,6 +45,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -528,11 +529,28 @@ class ExoPlayerController(
             }
         }
 
+        // Sound the phone can't decode (Dolby / DTS on many phones): the picture would play in
+        // silence, so say so. Only when no sound track at all can be played.
+        val audioGroups = currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO && it.length > 0 }
+        val unsupportedAudio = if (audioGroups.isNotEmpty() && audioGroups.none { it.isSupported(false) }) {
+            audioFormatName(audioGroups.first().getTrackFormat(0).sampleMimeType)
+        } else null
+
         _tracks.value = PlayerTracks(
             audioTracks = audioOptions,
             subtitleTracks = subtitleOptions,
-            subtitlesEnabled = !isTextDisabled
+            subtitlesEnabled = !isTextDisabled,
+            unsupportedAudio = unsupportedAudio
         )
+    }
+
+    private fun audioFormatName(mime: String?): String = when {
+        mime == null -> "unknown"
+        mime == "audio/ac3" -> "Dolby Digital (AC3)"
+        mime.startsWith("audio/eac3") -> "Dolby Digital Plus (EAC3)"
+        mime == "audio/true-hd" -> "Dolby TrueHD"
+        mime.startsWith("audio/vnd.dts") -> "DTS"
+        else -> mime.substringAfter('/').uppercase()
     }
 
     override fun selectAudioTrack(option: PlayerTrackOption) {
@@ -614,8 +632,14 @@ class ExoPlayerController(
         positionPollJob = scope.launch {
             while (isActive) {
                 syncStateFromPlayer()
-                // Paused, the position only moves by seeking (which updates it straight away).
-                delay(if (_state.value.isPlaying) 250L else 1_000L)
+                if (_state.value.isPlaying) {
+                    delay(250L)
+                } else {
+                    // Paused (or loading): nothing moves, so don't wake up at all. Seeking updates
+                    // the position straight away, and the player's own events (play, ready, ended)
+                    // update the state; this resumes the moment playing starts.
+                    _state.first { it.isPlaying }
+                }
             }
         }
     }
