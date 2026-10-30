@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.model.cleanArtistName
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
@@ -266,9 +267,7 @@ object MediaStoreScanner {
                     val rawTitle = cursor.getString(titleCol)?.takeIf { it.isNotBlank() }
                         ?: displayName.substringBeforeLast('.').ifBlank { "Audio_$mediaId" }
                     val ext = displayName.substringAfterLast('.', "mp3").lowercase(Locale.US)
-                    val artist = cursor.getString(artistCol)?.takeIf {
-                        it.isNotBlank() && it != "<unknown>"
-                    } ?: "Unknown artist"
+                    val artist = cleanArtistName(cursor.getString(artistCol))
                     val album = cursor.getString(albumCol)?.takeIf {
                         it.isNotBlank() && it != "<unknown>"
                     } ?: "Unknown album"

@@ -1,5 +1,6 @@
 package com.example.player
 
+import com.example.model.cleanArtistName
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
@@ -905,7 +906,7 @@ class AudioPlaybackManager private constructor(context: Context) {
         val uri = item.localConfiguration?.uri ?: return null
         val meta = item.mediaMetadata
         val title = meta.title?.toString()?.takeIf { it.isNotBlank() } ?: "Audio Track"
-        val artist = meta.artist?.toString()?.takeIf { it.isNotBlank() } ?: "Unknown artist"
+        val artist = cleanArtistName(meta.artist?.toString())
         val album = meta.albumTitle?.toString()?.takeIf { it.isNotBlank() } ?: "Unknown album"
         return AudioTrackItem(
             mediaId = item.mediaId.substringAfterLast('/', "0").toLongOrNull() ?: 0L,

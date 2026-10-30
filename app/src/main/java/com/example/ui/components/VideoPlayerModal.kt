@@ -2,6 +2,11 @@
 
 package com.example.ui.components
 
+import kotlin.math.max
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.Animatable
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
@@ -1054,6 +1059,51 @@ private fun PlayerIconButton(
     ) { content() }
 }
 
+/**
+ * The soft shade behind the top bar: 75% black at the very top easing out to clear over about
+ * 88dp (or the bar's own height, if that is taller). Several stops make the fade gradual, so
+ * there is no visible line where it ends. Drawn, not a view: it takes no touches, and it fades
+ * in and out with the controls.
+ */
+private fun Modifier.playerTopScrim(): Modifier = drawBehind {
+    val length = max(88.dp.toPx(), size.height)
+    drawRect(
+        brush = Brush.verticalGradient(
+            0f to Color.Black.copy(alpha = 0.75f),
+            0.25f to Color.Black.copy(alpha = 0.42f),
+            0.5f to Color.Black.copy(alpha = 0.19f),
+            0.75f to Color.Black.copy(alpha = 0.05f),
+            1f to Color.Transparent,
+            startY = 0f,
+            endY = length
+        ),
+        size = Size(size.width, length)
+    )
+}
+
+/**
+ * The shade behind the seek bar and the buttons below it: one gradient from about 72dp above
+ * the bar down to the bottom of the screen, not a box behind the seek bar. Clear at the top,
+ * easing through the seek bar to almost black behind the buttons, so there is no visible top
+ * line or step. It takes no touches (the picture above still gets its taps), and it fades in
+ * and out with the controls.
+ */
+private fun Modifier.playerBottomScrim(): Modifier = drawBehind {
+    val lift = 72.dp.toPx()
+    drawRect(
+        brush = Brush.verticalGradient(
+            0f to Color.Transparent,
+            0.35f to Color.Black.copy(alpha = 0.15f),
+            0.68f to Color.Black.copy(alpha = 0.55f),
+            1f to Color.Black.copy(alpha = 0.95f),
+            startY = -lift,
+            endY = size.height
+        ),
+        topLeft = Offset(0f, -lift),
+        size = Size(size.width, size.height + lift)
+    )
+}
+
 @Composable
 private fun PlayerTopBar(
     title: String,
@@ -1072,7 +1122,7 @@ private fun PlayerTopBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent)))
+            .playerTopScrim()
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1160,14 +1210,13 @@ private fun PlayerBottomBar(
             moreMenu()
         }
     }
-    val scrim = androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))
     if (compact) {
         // Sideways: one slim row (rotate, time, seek bar, time, ⋮). Play, previous and next are
         // in the middle of the video instead.
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .background(scrim)
+                .playerBottomScrim()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1216,7 +1265,7 @@ private fun PlayerBottomBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(scrim)
+            .playerBottomScrim()
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {

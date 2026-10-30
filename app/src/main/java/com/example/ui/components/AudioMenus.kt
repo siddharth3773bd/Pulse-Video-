@@ -2,6 +2,12 @@
 
 package com.example.ui.components
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.background
 import com.example.ui.icons.Symbols
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -193,6 +199,22 @@ fun PlaylistActionsMenu(
 // ---------------------------------------------------------------------------------------------
 
 /**
+ * A soft fade from clear to [color] (the screen colour) behind a selection pill, so list rows
+ * scrolling under it don't show through the gap around it. It takes no touches.
+ */
+@Composable
+fun SelectionPillScrim(color: Color, modifier: Modifier = Modifier) {
+    val navigationBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    Box(
+        modifier
+            .fillMaxWidth()
+            // The pill (64dp), the 16dp gap under it, the navigation bar, and a little fade above.
+            .height(64.dp + 16.dp + navigationBar + 24.dp)
+            .background(Brush.verticalGradient(listOf(Color.Transparent, color)))
+    )
+}
+
+/**
  * Actions for the selected songs: the official floating toolbar in its vibrant colours (same as
  * Videos), icon buttons with their names in tooltips.
  */
@@ -214,7 +236,12 @@ fun AudioSelectionToolbar(
         TooltipIconButton("Add to queue", Symbols.QueueMusic, onAddToQueue, Modifier.testTag("selection_add_queue"), tooltipAbove = true)
         TooltipIconButton("Add to playlist", Symbols.PlaylistAdd, onAddToPlaylist, Modifier.testTag("selection_add_playlist"), tooltipAbove = true)
         TooltipIconButton("Blacklist", Symbols.Block, onBlacklist, Modifier.testTag("selection_blacklist"), tooltipAbove = true)
-        TooltipIconButton("Delete from device", Symbols.DeleteOutline, onDelete, Modifier.testTag("selection_delete"), tooltipAbove = true)
+        TooltipIconButton(
+            "Delete from device", Symbols.DeleteOutline, onDelete,
+            Modifier.testTag("selection_delete"),
+            tooltipAbove = true,
+            tint = MaterialTheme.colorScheme.error
+        )
     }
 }
 

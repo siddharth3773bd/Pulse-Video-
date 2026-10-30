@@ -5,6 +5,7 @@ package com.example.ui.components
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.PlainTooltip
@@ -15,6 +16,7 @@ import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /** An official Expressive icon button with its name in a tooltip (shown on long-press). */
@@ -24,7 +26,9 @@ fun TooltipIconButton(
     icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    tooltipAbove: Boolean = false
+    tooltipAbove: Boolean = false,
+    /** The icon's colour; the surrounding content colour when null. */
+    tint: Color? = null
 ) {
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
@@ -34,7 +38,7 @@ fun TooltipIconButton(
         state = rememberTooltipState()
     ) {
         IconButton(onClick = onClick, shapes = IconButtonDefaults.shapes(), modifier = modifier) {
-            Icon(icon, contentDescription = label)
+            Icon(icon, contentDescription = label, tint = tint ?: LocalContentColor.current)
         }
     }
 }

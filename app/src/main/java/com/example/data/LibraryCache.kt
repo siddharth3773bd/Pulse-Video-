@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.model.cleanArtistName
 import android.content.Context
 import android.net.Uri
 import com.example.model.AudioTrackItem
@@ -134,7 +135,7 @@ object LibraryCache {
         id = readUTF(),
         contentUri = Uri.parse(readUTF()),
         title = readUTF(),
-        artist = readUTF(),
+        artist = cleanArtistName(readUTF()),
         album = readUTF(),
         ext = readUTF(),
         durationMs = readLong(),

@@ -1,5 +1,6 @@
 package com.example.player
 
+import com.example.model.cleanArtistName
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -167,7 +168,7 @@ object ExternalMedia {
             id = uri.toString(),
             contentUri = uri,
             title = title?.takeIf { it.isNotBlank() } ?: baseTitle,
-            artist = artist?.takeIf { it.isNotBlank() } ?: "Unknown artist",
+            artist = cleanArtistName(artist),
             album = album?.takeIf { it.isNotBlank() } ?: "Unknown album",
             ext = ext.ifBlank { "audio" },
             durationMs = durationMs,

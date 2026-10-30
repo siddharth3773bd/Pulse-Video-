@@ -834,6 +834,16 @@ fun AudioLibraryScreen(
                     }
                 }
 
+                // Behind the selection pill: a soft fade to the screen colour, so rows scrolling
+                // under it don't show through (same as behind the mini player).
+                AnimatedVisibility(
+                    visible = selectionMode,
+                    enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+                    exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    SelectionPillScrim(color = background)
+                }
                 if (selectionMode) {
                     AudioSelectionToolbar(
                         onPlayNext = {
@@ -1396,11 +1406,7 @@ private fun SongRow(
                 track = track,
                 playing = showPlaying,
                 animatePlaying = isAudioPlaying,
-                selection = when {
-                    !selectionMode -> ThumbSelection.NONE
-                    checked -> ThumbSelection.SELECTED
-                    else -> ThumbSelection.SELECTABLE
-                }
+                selection = if (selectionMode && checked) ThumbSelection.SELECTED else ThumbSelection.NONE
             )
         },
         trailingContent = {
@@ -1484,7 +1490,7 @@ internal fun SongArt(
             PlayingBadge(animate = animatePlaying)
         }
         AnimatedVisibility(
-            visible = selection != ThumbSelection.NONE,
+            visible = selected,
             enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
                 scaleIn(MaterialTheme.motionScheme.fastSpatialSpec(), initialScale = 0.6f),
             exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
@@ -1493,7 +1499,7 @@ internal fun SongArt(
                 .align(Alignment.TopStart)
                 .padding(2.dp)
         ) {
-            SelectionCheck(selected = selected)
+            SelectionCheck()
         }
     }
 }

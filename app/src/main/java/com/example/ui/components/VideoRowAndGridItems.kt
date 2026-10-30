@@ -14,7 +14,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.MediaStoreScanner
 import com.example.model.VideoItem
 import com.example.model.formatCompactDate
+import com.example.model.formatCompactSize
 
 /** Thumbnail width in the list. */
 private val ListThumbWidth = 112.dp
@@ -95,7 +95,8 @@ private fun VideoMenuSlot(
 
 /**
  * One video in the list: official Material 3 Expressive list item.
- * - Title (2 lines) over a quieter date line; the thumbnail carries the length.
+ * - Title (2 lines) over a quieter date line (the size, while sorted by size); the thumbnail
+ *   carries the length.
  * - Selection works like Gmail: the row is tinted and the thumbnail shows a check.
  *   Nothing else moves, so titles never reflow when selection starts.
  */
@@ -109,6 +110,8 @@ fun VideoListItem(
     onLongClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     episodeLabel: String? = null,
+    /** Show the file size in place of the date (while the list is sorted by size). */
+    showSize: Boolean = false,
     onMenuClick: (() -> Unit)? = null,
     menu: @Composable () -> Unit = {}
 ) {
@@ -122,11 +125,7 @@ fun VideoListItem(
             VideoThumbnailBox(
                 video = video,
                 episodeLabel = episodeLabel,
-                selection = when {
-                    !isSelectionMode -> ThumbSelection.NONE
-                    isSelected -> ThumbSelection.SELECTED
-                    else -> ThumbSelection.SELECTABLE
-                },
+                selection = if (isSelectionMode && isSelected) ThumbSelection.SELECTED else ThumbSelection.NONE,
                 modifier = Modifier
                     .width(ListThumbWidth)
                     .aspectRatio(16f / 9f)
@@ -137,7 +136,7 @@ fun VideoListItem(
         } else null,
         supportingContent = {
             Text(
-                text = formatCompactDate(video.dateStr),
+                text = if (showSize) formatCompactSize(video.sizeMB) else formatCompactDate(video.dateStr),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1
             )
@@ -169,7 +168,7 @@ fun VideoListItem(
 }
 
 /**
- * One video in the grid: a large rounded thumbnail with the title and date under it. No card
+ * One video in the grid: a large rounded thumbnail with the title and date (or size) under it. No card
  * around it; when selected, a tinted rounded container appears and the picture shows a check.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -183,6 +182,8 @@ fun VideoGridItem(
     onMenuClick: () -> Unit,
     modifier: Modifier = Modifier,
     episodeLabel: String? = null,
+    /** Show the file size in place of the date (while the list is sorted by size). */
+    showSize: Boolean = false,
     menu: @Composable () -> Unit = {}
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -210,11 +211,7 @@ fun VideoGridItem(
         VideoThumbnailBox(
             video = video,
             episodeLabel = episodeLabel,
-            selection = when {
-                !isSelectionMode -> ThumbSelection.NONE
-                isSelected -> ThumbSelection.SELECTED
-                else -> ThumbSelection.SELECTABLE
-            },
+            selection = if (isSelectionMode && isSelected) ThumbSelection.SELECTED else ThumbSelection.NONE,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
@@ -235,7 +232,7 @@ fun VideoGridItem(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = formatCompactDate(video.dateStr),
+                    text = if (showSize) formatCompactSize(video.sizeMB) else formatCompactDate(video.dateStr),
                     style = MaterialTheme.typography.bodySmall,
                     color = supporting,
                     maxLines = 1
@@ -247,7 +244,7 @@ fun VideoGridItem(
 }
 
 /** How a thumbnail shows selection. */
-enum class ThumbSelection { NONE, SELECTABLE, SELECTED }
+enum class ThumbSelection { NONE, SELECTED }
 
 /**
  * A video's thumbnail with its length (and episode number for a series). While it loads there's a
@@ -342,48 +339,41 @@ fun VideoThumbnailBox(
             }
         }
 
-        // Selection check (top-start), only while selecting.
+        // The filled check (top-start), on selected videos only.
         AnimatedVisibility(
-            visible = selection != ThumbSelection.NONE,
+            visible = selected,
             enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
                 scaleIn(MaterialTheme.motionScheme.fastSpatialSpec(), initialScale = 0.6f),
             exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
                 scaleOut(MaterialTheme.motionScheme.fastSpatialSpec(), targetScale = 0.6f),
             modifier = Modifier.align(Alignment.TopStart).padding(2.dp)
         ) {
-            SelectionCheck(selected = selected)
+            SelectionCheck()
         }
     }
 }
 
+/** The badge on a selected thumbnail: a filled circle with a check. Unselected ones show nothing. */
 @Composable
-internal fun SelectionCheck(selected: Boolean) {
+internal fun SelectionCheck() {
     val scheme = MaterialTheme.colorScheme
-    val container by animateColorAsState(
-        targetValue = if (selected) scheme.primary else Color.Black.copy(alpha = 0.35f),
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "checkBg"
-    )
     Box(
         modifier = Modifier
             .size(24.dp)
             .clip(CircleShape)
-            .background(container)
-            .then(if (selected) Modifier else Modifier.border(2.dp, Color.White, CircleShape))
+            .background(scheme.primary)
             .semantics {
                 role = Role.Checkbox
-                this.selected = selected
+                this.selected = true
             },
         contentAlignment = Alignment.Center
     ) {
-        if (selected) {
-            Icon(
-                Symbols.Check,
-                contentDescription = "Selected",
-                tint = scheme.onPrimary,
-                modifier = Modifier.size(16.dp)
-            )
-        }
+        Icon(
+            Symbols.Check,
+            contentDescription = "Selected",
+            tint = scheme.onPrimary,
+            modifier = Modifier.size(16.dp)
+        )
     }
 }
 

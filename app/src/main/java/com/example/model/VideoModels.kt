@@ -243,6 +243,31 @@ fun formatSizeLabel(sizeMB: Double): String {
     }
 }
 
+/** A short file size for list rows: "142 MB", "8.4 MB", "1.4 GB". */
+fun formatCompactSize(sizeMB: Double): String {
+    val mb = sizeMB.coerceAtLeast(0.0)
+    return when {
+        mb >= 1000.0 -> String.format(Locale.US, "%.1f GB", mb / 1024.0)
+        mb >= 10.0 -> String.format(Locale.US, "%.0f MB", mb)
+        else -> String.format(Locale.US, "%.1f MB", mb)
+    }
+}
+
+private val durationLikeRegex = Regex("""^\d{1,2}(:\d{2}){1,2}$""")
+
+/**
+ * The artist to show for a song: "Unknown artist" when the tag is empty or "<unknown>", or (some
+ * files) holds nothing but a time like "5:42", which is a length, not a name.
+ */
+fun cleanArtistName(raw: String?): String {
+    val name = raw?.trim().orEmpty()
+    return if (name.isEmpty() || name.equals("<unknown>", ignoreCase = true) || durationLikeRegex.matches(name)) {
+        "Unknown artist"
+    } else {
+        name
+    }
+}
+
 fun formatDurationMs(durationMs: Long): String {
     val totalSec = (durationMs / 1000L).coerceAtLeast(0L)
     val hours = totalSec / 3600L
@@ -255,6 +280,12 @@ fun formatDurationMs(durationMs: Long): String {
     }
 }
 
+private val seriesTrailingPunctuation = charArrayOf(',', '-', '.', '_', ':')
+
+/** A series name from the start of a file name: dots and underscores become spaces, and spaces and trailing punctuation go. */
+private fun cleanSeriesName(raw: String): String =
+    raw.replace(Regex("""[._]+"""), " ").trim().trimEnd { it.isWhitespace() || it in seriesTrailingPunctuation }
+
 private val sxxExxRegex = Regex("""(?i)^(.+?)[._\-\s]+S(\d{1,2})[._\-\s]*E(\d{1,3})\b""")
 private val nxnnRegex = Regex("""(?i)^(.+?)[._\-\s]+(\d{1,2})x(\d{1,3})\b""")
 private val epRegex = Regex("""(?i)^(.+?)[._\-\s]+(?:Ep|Episode|Part|Pt)[._\-\s]*(\d{1,3})\b""")
@@ -264,7 +295,7 @@ private val epRegex = Regex("""(?i)^(.+?)[._\-\s]+(?:Ep|Episode|Part|Pt)[._\-\s]
  */
 fun parseSeriesAndEpisode(rawTitle: String): Pair<String, Int>? {
     sxxExxRegex.find(rawTitle)?.let { match ->
-        val rawSeries = match.groupValues[1].replace(Regex("""[._]+"""), " ").trim()
+        val rawSeries = cleanSeriesName(match.groupValues[1])
         val seasonNum = match.groupValues[2].toIntOrNull() ?: 1
         val epNum = match.groupValues[3].toIntOrNull() ?: return null
         if (rawSeries.isNotEmpty()) {
@@ -272,7 +303,7 @@ fun parseSeriesAndEpisode(rawTitle: String): Pair<String, Int>? {
         }
     }
     nxnnRegex.find(rawTitle)?.let { match ->
-        val rawSeries = match.groupValues[1].replace(Regex("""[._]+"""), " ").trim()
+        val rawSeries = cleanSeriesName(match.groupValues[1])
         val seasonNum = match.groupValues[2].toIntOrNull() ?: 1
         val epNum = match.groupValues[3].toIntOrNull() ?: return null
         if (rawSeries.isNotEmpty()) {
@@ -280,7 +311,7 @@ fun parseSeriesAndEpisode(rawTitle: String): Pair<String, Int>? {
         }
     }
     epRegex.find(rawTitle)?.let { match ->
-        val rawSeries = match.groupValues[1].replace(Regex("""[._]+"""), " ").trim()
+        val rawSeries = cleanSeriesName(match.groupValues[1])
         val epNum = match.groupValues[2].toIntOrNull() ?: return null
         if (rawSeries.isNotEmpty()) {
             return rawSeries to epNum

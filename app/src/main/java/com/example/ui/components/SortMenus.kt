@@ -25,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import com.example.model.LayoutMode
 import com.example.model.LibrarySongSort
 import com.example.model.SortBy
@@ -156,7 +155,7 @@ fun VideoViewMenu(
                 onCheckedChange = { onToggleSmartGroups() },
                 text = { Text("Group series together") },
                 shapes = MenuDefaults.itemShape(index = 0, count = 1),
-                leadingIcon = { Icon(Symbols.AutoAwesome, contentDescription = null) },
+                leadingIcon = { Icon(Symbols.Layers, contentDescription = null) },
                 checkedLeadingIcon = { Icon(Symbols.Check, contentDescription = null) },
                 modifier = Modifier.testTag("smart_groups_toggle_card")
             )

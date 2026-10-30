@@ -1066,6 +1066,16 @@ fun Material3VideoPlayerScreen(
                     }
                 }
 
+                // Behind the selection pill: the same soft fade as behind the mini player.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isSelectionMode && uiState.bottomTab == BottomTab.VIDEOS,
+                    enter = fadeIn(motionScheme.fastEffectsSpec()),
+                    exit = fadeOut(motionScheme.fastEffectsSpec()),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    com.example.ui.components.SelectionPillScrim(color = outerChromeBg)
+                }
+
                 // Selected videos: official floating toolbar (replaces the navigation bar)
                 androidx.compose.animation.AnimatedVisibility(
                     visible = uiState.isSelectionMode && uiState.bottomTab == BottomTab.VIDEOS,
@@ -1679,6 +1689,7 @@ private fun VideosContentListOrGrid(
                         isSelected = v.id in uiState.selectedIds,
                         isSelectionMode = selecting,
                         episodeLabel = if (episodes) v.episode?.let { "EP $it" } else null,
+                        showSize = uiState.sortBy == SortBy.SIZE,
                         onClick = { onVideoClick(v) },
                         onLongClick = { onVideoLongClick(v) },
                         onMenuClick = { onVideoMenuClick(v) },
@@ -1727,6 +1738,7 @@ private fun VideosContentListOrGrid(
                         isSelected = v.id in uiState.selectedIds,
                         isSelectionMode = selecting,
                         episodeLabel = if (episodes) v.episode?.let { "EP $it" } else null,
+                        showSize = uiState.sortBy == SortBy.SIZE,
                         onClick = { onVideoClick(v) },
                         onLongClick = { onVideoLongClick(v) },
                         onMenuClick = { onVideoMenuClick(v) },
@@ -1828,7 +1840,12 @@ private fun SelectionToolbar(
     ) {
         TooltipIconButton("Share", Symbols.Share, onShare, Modifier.testTag("pill_share_btn"), tooltipAbove = true)
         TooltipIconButton("Add to playlist", Symbols.PlaylistAdd, onAddToPlaylist, Modifier.testTag("pill_add_to_btn"), tooltipAbove = true)
-        TooltipIconButton("Delete", Symbols.DeleteOutline, onDelete, Modifier.testTag("pill_delete_btn"), tooltipAbove = true)
+        TooltipIconButton(
+            "Delete", Symbols.DeleteOutline, onDelete,
+            Modifier.testTag("pill_delete_btn"),
+            tooltipAbove = true,
+            tint = MaterialTheme.colorScheme.error
+        )
     }
 }
 
