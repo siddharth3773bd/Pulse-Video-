@@ -30,6 +30,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.ScrubbingModeParameters
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
@@ -613,10 +614,13 @@ class ExoPlayerController(
         }
     }
 
-    override fun seekTo(positionMs: Long) {
+    override fun seekTo(positionMs: Long, approximate: Boolean) {
         val player = exoPlayer ?: return
         val dur = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
         val target = positionMs.coerceIn(0L, dur)
+        // An exact seek decodes from the keyframe before the spot up to it, which on videos with
+        // few keyframes is a visible wait. The seek bar doesn't need the exact frame.
+        player.setSeekParameters(if (approximate) SeekParameters.CLOSEST_SYNC else SeekParameters.EXACT)
         player.seekTo(target)
         _state.update { it.copy(positionMs = target) }
     }

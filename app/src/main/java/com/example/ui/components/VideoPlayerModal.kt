@@ -28,6 +28,7 @@ import android.media.AudioManager
 import android.provider.OpenableColumns
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -185,9 +186,7 @@ fun VideoPlayerModal(
     onPlaybackEnded: () -> Boolean,
     onUpdatePlaybackSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-    /** True while the player is shrinking away after being closed. */
-    closing: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -300,13 +299,6 @@ fun VideoPlayerModal(
         controller?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
     }
-    // The bars return as the player starts to shrink away (not at the very end of the flight),
-    // so the status/navigation bars don't pop in after the animation is over.
-    LaunchedEffect(closing) {
-        if (closing) {
-            activity?.window?.let { WindowCompat.getInsetsController(it, view).show(WindowInsetsCompat.Type.systemBars()) }
-        }
-    }
     DisposableEffect(activity) {
         val prev = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         onDispose { activity?.requestedOrientation = prev }
@@ -414,12 +406,9 @@ fun VideoPlayerModal(
         playerController.setBackgroundAudio(false)
         onClose()
     }
-    // Android's predictive back: while the gesture is held the player shrinks and follows the
-    // finger with the library showing behind it; letting go closes it.
-    val back = rememberPredictiveBack(enabled = !closing, settleAfterBack = true, onBack = closeAndPersist)
-    // While the back gesture is held or the player is closing, the buttons step aside so just the
-    // picture shrinks away.
-    val backInProgress by remember { derivedStateOf { back.progress > 0.01f } }
+    // Back (button or gesture) closes the player. No animation of its own for now: Android's
+    // standard back animation is used.
+    BackHandler(onBack = closeAndPersist)
 
     // ---- Picture-in-picture ----
     PictureInPictureSupport(
@@ -500,7 +489,6 @@ fun VideoPlayerModal(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .graphicsLayer { applyPredictiveBack(back, cornerRadius = 28.dp) }
             .background(Color.Black)
             .onSizeChanged { size ->
                 surfaceWidthPx = size.width.coerceAtLeast(1)
@@ -789,7 +777,7 @@ fun VideoPlayerModal(
 
         // 5. Controls
         AnimatedVisibility(
-            visible = controlsVisible && !inPip && !closing && !backInProgress,
+            visible = controlsVisible && !inPip,
             enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
             exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             modifier = Modifier.fillMaxSize()
@@ -860,7 +848,7 @@ fun VideoPlayerModal(
                         onSeekFinished = { f ->
                             seekPreviewFraction = null
                             playerController.setScrubbing(false)
-                            playerController.seekTo((f * effectiveDurationMs).toLong())
+                            playerController.seekTo((f * effectiveDurationMs).toLong(), approximate = true)
                             poke()
                         },
                         onPlayPause = { playerController.togglePlayPause(); poke() },

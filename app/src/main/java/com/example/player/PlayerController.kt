@@ -80,7 +80,11 @@ interface PlayerController {
     fun play()
     fun pause()
     fun togglePlayPause()
-    fun seekTo(positionMs: Long)
+    /**
+     * [approximate]: land on the nearest keyframe instead of the exact frame. Instant on every
+     * video, but may be a few seconds off; for the seek bar, where nobody needs the exact frame.
+     */
+    fun seekTo(positionMs: Long, approximate: Boolean = false)
     fun setSpeed(speed: Float)
     fun selectAudioTrack(option: PlayerTrackOption)
     fun selectSubtitleTrack(option: PlayerTrackOption)

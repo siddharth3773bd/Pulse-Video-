@@ -78,9 +78,7 @@ fun MeTabScreen(
     onToggleAmoledBlack: () -> Unit,
     onUpdatePlaybackSettings: ((PlaybackSettings) -> PlaybackSettings) -> Unit,
     onLibraryChanged: () -> Unit,
-    modifier: Modifier = Modifier,
-    /** History thumbnails take part in the video player's open/close animation. */
-    videoTransition: VideoTransitionScope? = null
+    modifier: Modifier = Modifier
 ) {
     val scheme = MaterialTheme.colorScheme
     val motion = MaterialTheme.motionScheme
@@ -148,15 +146,13 @@ fun MeTabScreen(
                             onAddVideosToPlaylist = onAddVideosToPlaylist,
                             onRemoveVideoFromPlaylist = onRemoveVideoFromPlaylist
                         )
-                        MeSubPage.HISTORY -> CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
-                            WatchHistoryPage(
-                                historyPairs = historyPairs,
-                                onBack = onCloseSubPage,
-                                onPlayVideo = onPlayVideo,
-                                onClearHistory = onClearHistory,
-                                onRemove = onRemoveFromHistory
-                            )
-                        }
+                        MeSubPage.HISTORY -> WatchHistoryPage(
+                            historyPairs = historyPairs,
+                            onBack = onCloseSubPage,
+                            onPlayVideo = onPlayVideo,
+                            onClearHistory = onClearHistory,
+                            onRemove = onRemoveFromHistory
+                        )
                         MeSubPage.APPEARANCE -> AppearancePage(
                             uiState = uiState,
                             onBack = onCloseSubPage,

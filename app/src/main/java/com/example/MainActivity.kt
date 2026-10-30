@@ -155,9 +155,6 @@ import com.example.ui.components.AudioMiniPlayer
 import com.example.ui.components.LocalPlayerTransition
 import com.example.ui.components.PlayerTransitionScopes
 import com.example.ui.components.playerContainer
-import com.example.ui.components.LocalVideoTransition
-import com.example.ui.components.VideoTransitionScope
-import com.example.ui.components.videoPlayerContainer
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.runtime.CompositionLocalProvider
 import com.example.player.AudioPlaybackManager
@@ -733,8 +730,6 @@ fun Material3VideoPlayerScreen(
     // Shared transitions (mini player ⇄ Now Playing) happen inside this layout.
     SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
     val playerSharedScope = this
-    // Video thumbnails in the lists take part in the player's open/close animation.
-    val videoTransition = VideoTransitionScope(playerSharedScope, uiState.playingVideo?.id)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -832,7 +827,6 @@ fun Material3VideoPlayerScreen(
                         viewModel.updatePlaybackSettings(context, transform)
                     },
                     onLibraryChanged = { viewModel.refreshPermissionsAndScan(context) },
-                    videoTransition = videoTransition,
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -927,21 +921,17 @@ fun Material3VideoPlayerScreen(
                                     uiState.viewMode == ViewMode.TREE &&
                                         uiState.selectedFolderFilter == null &&
                                         uiState.selectedPlaylistFilter == null -> {
-                                        CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
-                                            TreeHierarchyView(
-                                                videos = uiState.filteredAndSortedVideos,
-                                                expandedNodes = uiState.expandedTreeNodes,
-                                                onToggleNode = { viewModel.toggleTreeNode(it) },
-                                                onPlayVideo = { viewModel.playVideo(it, context) },
-                                                onOpenMenu = { viewModel.openVideoMenu(it) },
-                                                menu = videoMenu
-                                            )
-                                        }
+                                        TreeHierarchyView(
+                                            videos = uiState.filteredAndSortedVideos,
+                                            expandedNodes = uiState.expandedTreeNodes,
+                                            onToggleNode = { viewModel.toggleTreeNode(it) },
+                                            onPlayVideo = { viewModel.playVideo(it, context) },
+                                            onOpenMenu = { viewModel.openVideoMenu(it) },
+                                            menu = videoMenu
+                                        )
                                     }
 
-                                    else -> CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
-                                        videoList(uiState)
-                                    }
+                                    else -> videoList(uiState)
                                 }
                             }
                         }
@@ -989,9 +979,7 @@ fun Material3VideoPlayerScreen(
                                 sortMenu = { videoSortMenu(true) }
                             )
                             Box(Modifier.weight(1f).fillMaxWidth()) {
-                                CompositionLocalProvider(LocalVideoTransition provides videoTransition) {
-                                    videoList(shown)
-                                }
+                                videoList(shown)
                             }
                         }
                     }
@@ -1413,21 +1401,10 @@ fun Material3VideoPlayerScreen(
             )
         }
 
-        // 5. Fullscreen Video Player Modal (Media3 ExoPlayer via PlayerController). It opens by
-        // growing in, and closes by shrinking away (carrying on from the back gesture's shrink).
-        var lastPlayingVideo by remember { mutableStateOf<VideoItem?>(null) }
-        if (uiState.playingVideo != null) lastPlayingVideo = uiState.playingVideo
-        AnimatedVisibility(
-            visible = uiState.playingVideo != null,
-            // With its thumbnail on screen the player grows out of it and shrinks back into it
-            // (the frame moves; these fades cross over to and from the thumbnail on the way).
-            // Otherwise it simply fades in and out.
-            enter = fadeIn(androidx.compose.animation.core.tween(durationMillis = 150)),
-            // Closing: the picture stays solid while it flies home and only hands over at the end.
-            exit = fadeOut(androidx.compose.animation.core.tween(durationMillis = 140, delayMillis = 300)),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            val activePlaying = uiState.playingVideo ?: lastPlayingVideo ?: return@AnimatedVisibility
+        // 5. Fullscreen Video Player Modal (Media3 ExoPlayer via PlayerController). It appears and
+        // disappears without an animation of its own for now.
+        val activePlaying = uiState.playingVideo
+        if (activePlaying != null) {
             val controller = viewModel.getOrCreatePlayerController(context)
             VideoPlayerModal(
                 video = activePlaying,
@@ -1453,15 +1430,7 @@ fun Material3VideoPlayerScreen(
                 onPlaybackEnded = { viewModel.playNextVideo(context) },
                 onUpdatePlaybackSettings = { transform -> viewModel.updatePlaybackSettings(context, transform) },
                 onClose = { if (uiState.playingVideo != null) viewModel.closeVideoPlayer(context) },
-                closing = uiState.playingVideo == null,
-                // Linked to a thumbnail only while opening or closing. Switching videos inside the
-                // player used to link it to the next video's thumbnail, which flashed that
-                // thumbnail over the picture.
-                modifier = Modifier.videoPlayerContainer(
-                    playerSharedScope,
-                    this,
-                    if (uiState.playingVideo == null || transition.isRunning) activePlaying.id else null
-                )
+                modifier = Modifier
             )
         }
     }

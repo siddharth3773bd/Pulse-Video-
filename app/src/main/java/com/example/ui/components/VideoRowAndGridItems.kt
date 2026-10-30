@@ -291,51 +291,48 @@ fun VideoThumbnailBox(
     )
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        // In the Videos list, the picture is where the player grows out of and shrinks back into.
-        VideoThumbnailTransition(videoId = video.id) { transition ->
-            Box(
-                modifier = transition
-                    .fillMaxSize()
-                    // The springy animation can overshoot a hair below 0 on the way back; padding must
-                    // never be negative (that crashed the app when a selection ended).
-                    .padding(inset.coerceAtLeast(0.dp))
-                    .clip(RoundedCornerShape(corner))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                contentAlignment = Alignment.Center
-            ) {
-                val loaded = bitmap
-                if (loaded != null) {
-                    val image = remember(loaded) { loaded.asImageBitmap() }
-                    Image(
-                        bitmap = image,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { this.alpha = alpha }
-                    )
-                } else if (failed) {
-                    Icon(
-                        imageVector = Symbols.Movie,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                // The springy animation can overshoot a hair below 0 on the way back; padding must
+                // never be negative (that crashed the app when a selection ended).
+                .padding(inset.coerceAtLeast(0.dp))
+                .clip(RoundedCornerShape(corner))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center
+        ) {
+            val loaded = bitmap
+            if (loaded != null) {
+                val image = remember(loaded) { loaded.asImageBitmap() }
+                Image(
+                    bitmap = image,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { this.alpha = alpha }
+                )
+            } else if (failed) {
+                Icon(
+                    imageVector = Symbols.Movie,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(26.dp)
+                )
+            }
 
-                if (episodeLabel != null) {
-                    ThumbPill(episodeLabel, Modifier.align(Alignment.BottomStart))
-                }
-                ThumbPill(video.durationLabel, Modifier.align(Alignment.BottomEnd))
-                if (watchedFraction > 0.01f) {
-                    Box(
-                        Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth(watchedFraction.coerceIn(0f, 1f))
-                            .height(3.dp)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                }
+            if (episodeLabel != null) {
+                ThumbPill(episodeLabel, Modifier.align(Alignment.BottomStart))
+            }
+            ThumbPill(video.durationLabel, Modifier.align(Alignment.BottomEnd))
+            if (watchedFraction > 0.01f) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(watchedFraction.coerceIn(0f, 1f))
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
             }
         }
 
