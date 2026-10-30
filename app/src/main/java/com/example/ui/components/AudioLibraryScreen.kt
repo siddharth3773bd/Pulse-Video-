@@ -1489,18 +1489,6 @@ internal fun SongArt(
         ) {
             PlayingBadge(animate = animatePlaying)
         }
-        AnimatedVisibility(
-            visible = selected,
-            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                scaleIn(MaterialTheme.motionScheme.fastSpatialSpec(), initialScale = 0.6f),
-            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                scaleOut(MaterialTheme.motionScheme.fastSpatialSpec(), targetScale = 0.6f),
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(2.dp)
-        ) {
-            SelectionCheck()
-        }
     }
 }
 

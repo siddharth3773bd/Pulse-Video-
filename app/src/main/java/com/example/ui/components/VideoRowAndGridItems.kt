@@ -335,42 +335,6 @@ fun VideoThumbnailBox(
                 )
             }
         }
-
-        // The filled check (top-start), on selected videos only.
-        AnimatedVisibility(
-            visible = selected,
-            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                scaleIn(MaterialTheme.motionScheme.fastSpatialSpec(), initialScale = 0.6f),
-            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) +
-                scaleOut(MaterialTheme.motionScheme.fastSpatialSpec(), targetScale = 0.6f),
-            modifier = Modifier.align(Alignment.TopStart).padding(2.dp)
-        ) {
-            SelectionCheck()
-        }
-    }
-}
-
-/** The badge on a selected thumbnail: a filled circle with a check. Unselected ones show nothing. */
-@Composable
-internal fun SelectionCheck() {
-    val scheme = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier
-            .size(24.dp)
-            .clip(CircleShape)
-            .background(scheme.primary)
-            .semantics {
-                role = Role.Checkbox
-                this.selected = true
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            Symbols.Check,
-            contentDescription = "Selected",
-            tint = scheme.onPrimary,
-            modifier = Modifier.size(16.dp)
-        )
     }
 }
 
